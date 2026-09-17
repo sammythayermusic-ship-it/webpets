@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeHitRegions, pillStripRect, roundRect } from './hitRegions';
+import { computeHitRegions, pillStripRect, rectEquals, roundRect } from './hitRegions';
 
 describe('pillStripRect', () => {
   it('extends the pill down to the habitat top so the gap is clickable', () => {
@@ -14,6 +14,17 @@ describe('pillStripRect', () => {
   it('rounds to integers', () => {
     const r = pillStripRect({ x: 10.4, y: 3.6, w: 50.5, h: 16 }, 24);
     expect(r).toEqual({ x: 10, y: 4, w: 51, h: 20 });
+  });
+});
+
+describe('rectEquals', () => {
+  it('is true only when every edge matches', () => {
+    const a = { x: 100, y: 4, w: 220, h: 16 };
+    expect(rectEquals(a, { ...a })).toBe(true);
+    // A longer name widens and re-centers the pill: x and w change, y and h do not.
+    expect(rectEquals(a, { ...a, x: 90, w: 240 })).toBe(false);
+    expect(rectEquals(a, { ...a, y: 5 })).toBe(false);
+    expect(rectEquals(a, { ...a, h: 17 })).toBe(false);
   });
 });
 

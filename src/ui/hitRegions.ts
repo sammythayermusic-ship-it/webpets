@@ -19,6 +19,11 @@ export function pillStripRect(pill: Rect, habitatTop: number): Rect {
   };
 }
 
+/** True when both rects have identical x/y/w/h (used to decide whether hit regions must be resent). */
+export function rectEquals(a: Rect, b: Rect): boolean {
+  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+}
+
 /** Integer-rounded rect, never negative in size. */
 export function roundRect(r: Rect): Rect {
   return {

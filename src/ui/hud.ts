@@ -6,7 +6,7 @@ import type { Rect } from '../sim/types';
 import { WINDOW_PAD } from '../sim/constants';
 import type { HudHandle, UiDeps } from './types';
 import { button, el, rootSize, stopDrag } from './dom';
-import { pillStripRect } from './hitRegions';
+import { pillStripRect, rectEquals } from './hitRegions';
 import { captionText, toHudModel, type HudModel } from './model';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -110,6 +110,7 @@ export function mountHud(root: HTMLElement, deps: UiDeps): HudHandle {
     const py = Math.max(0, WINDOW_PAD - PILL_GAP - ph);
     pill.style.left = `${px}px`;
     pill.style.top = `${py}px`;
+    const prevPill = pillRect;
     pillRect = { x: px, y: py, w: pw, h: ph };
 
     const cw = caption.offsetWidth || 0;
@@ -120,9 +121,13 @@ export function mountHud(root: HTMLElement, deps: UiDeps): HudHandle {
     cy = Math.max(0, Math.min(Math.max(0, size.h - ch), cy));
     caption.style.left = `${cxp}px`;
     caption.style.top = `${cy}px`;
-    const prev = captionRect;
+    const prevCaption = captionRect;
     captionRect = { x: cxp, y: cy, w: cw, h: ch };
-    if (visible && (prev.x !== cxp || prev.w !== cw || prev.y !== cy)) deps.requestHitRegions();
+    // Resend whenever either rect moved or resized while visible (e.g. a longer pet name widens the pill and
+    // re-centers it; the FEED/MIN buttons would otherwise sit outside the stale strip rect held by Rust).
+    if (visible && (!rectEquals(prevPill, pillRect) || !rectEquals(prevCaption, captionRect))) {
+      deps.requestHitRegions();
+    }
   }
 
   function setVisible(b: boolean): void {

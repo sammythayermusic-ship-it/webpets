@@ -130,7 +130,9 @@ only ordering entries that share a slot. `memorial` is a `bg` variant shown inst
 - Hit regions (window-local CSS px) sent to Rust by `main.ts` only (`refreshHitRegions()`): the habitat opaque rect
   `(24 + opaqueRect.x·s, 24 + opaqueRect.y·s, opaqueRect.w·s, opaqueRect.h·s)` always; `hud.getRects()` while visible
   (pill rect extended down to the habitat top so the 4 px gap is not click-through, plus the caption rect);
-  `devPanel.getRect()` while open. Everything else is click-through. The bounding-box approximation of "opaque pixels"
+  `devPanel.getRect()` while open. Everything else is click-through. The HUD calls `deps.requestHitRegions()` on every
+  visibility toggle and whenever `relayout()` changes either the pill rect or the caption rect while visible (a longer
+  name widens and re-centers the pill, so the strip must follow it). The bounding-box approximation of "opaque pixels"
   is logged in DECISIONS.md.
 - Rust snaps to the work-area edges within `SNAP_PX = 16`, clamps inside the monitor work area, and saves the position
   per monitor key in `settings.json` under the top-level key `positions` (never inside `doc`).
