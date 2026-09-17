@@ -15,10 +15,13 @@ export interface DiagContext {
 
 export function installDiag(ctx: DiagContext): void {
   const hot = import.meta.hot;
-  if (!hot) return;
-  hot.on('webpets:snap', async (data: { name?: string }) => {
-    // Both the Tauri webview and any browser tab share the dev server's HMR channel; keep their files apart.
-    const name = `${data.name ?? 'snap'}-${ctx.platform.kind}`;
+  let lastHandled = '';
+
+  const capture = async (rawName: string): Promise<void> => {
+    // The Tauri webview and any browser tab both answer the same request; keep their files apart.
+    const name = `${rawName}-${ctx.platform.kind}`;
+    if (name === lastHandled) return; // both delivery paths may fire for one request
+    lastHandled = name;
     let png: string | undefined;
     try {
       png = await ctx.scene.snapshot();
@@ -62,5 +65,16 @@ export function installDiag(ctx: DiagContext): void {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name, png, state }),
     });
-  });
+  };
+
+  // Two delivery paths. The HMR push is instant, but the Tauri webview does not reliably receive
+  // Vite custom events on its first page load, so poll as well. Whichever arrives first wins;
+  // `lastHandled` makes the other a no-op.
+  hot?.on('webpets:snap', (data: { name?: string }) => void capture(data.name ?? 'snap'));
+  setInterval(() => {
+    void fetch('/__webpets/poll')
+      .then((r) => r.json() as Promise<{ name?: string }>)
+      .then((d) => (d.name ? capture(d.name) : undefined))
+      .catch(() => undefined);
+  }, 1000);
 }

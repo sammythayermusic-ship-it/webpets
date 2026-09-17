@@ -18,15 +18,26 @@ export function webpetsDiag(): Plugin {
     name: 'webpets-diag',
     apply: 'serve',
     configureServer(server) {
+      let pending: { name: string; expiresAt: number } | null = null;
       const dir = resolve(server.config.root, '.diag');
       mkdirSync(dir, { recursive: true });
       server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
         const url = new URL(req.url ?? '/', 'http://localhost');
         if (url.pathname === '/__webpets/snap') {
           const name = (url.searchParams.get('name') ?? 'snap').replace(/[^a-z0-9_-]/gi, '_');
+          // Two delivery paths on purpose. The HMR push is instant, but the Tauri webview does not
+          // reliably receive custom events on its initial page load, so clients also poll. The
+          // request stays claimable for a few seconds so every connected client (the Tauri webview
+          // and any browser tab) can answer it and write its own platform-suffixed file.
+          pending = { name, expiresAt: Date.now() + 5000 };
           server.ws.send({ type: 'custom', event: 'webpets:snap', data: { name } });
           res.statusCode = 202;
           res.end(`requested ${name}\n`);
+          return;
+        }
+        if (url.pathname === '/__webpets/poll') {
+          res.setHeader('content-type', 'application/json');
+          res.end(JSON.stringify(pending && Date.now() < pending.expiresAt ? { name: pending.name } : {}));
           return;
         }
         if (url.pathname === '/__webpets/list') {
