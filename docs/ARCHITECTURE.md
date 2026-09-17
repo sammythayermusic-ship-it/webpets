@@ -135,7 +135,9 @@ only ordering entries that share a slot. `memorial` is a `bg` variant shown inst
 - Rust snaps to the work-area edges within `SNAP_PX = 16`, clamps inside the monitor work area, and saves the position
   per monitor key in `settings.json` under the top-level key `positions` (never inside `doc`).
 - `set_scale` keeps the bottom-right corner fixed; its first call after launch restores the saved position for the
-  current monitor or defaults to the bottom-right corner of the primary work area with a 24 px margin.
+  monitor recorded in `positions.last` (when that monitor is connected), else for the current monitor, else for any
+  connected monitor with a saved entry, or defaults to the bottom-right corner of the primary work area with a 24 px
+  margin.
 - The window is created hidden. Rust never shows it on its own except a 10 s safety fallback (so a frontend crash is
   visible). TS shows it at the end of boot unless minimized. Never call `set_focus`/`setFocus`; `show()` alone orders the
   window front without activating the app (Accessory policy: no Dock icon; the tray is the app's home).
@@ -200,7 +202,8 @@ bundled `.app` uses `com.sammythayer.webpets`. Document this in the README.
 Store files (Tauri store plugin, app-data dir): `pet.json`, `settings.json`, `graveyard.json`. TS reads/writes them
 through `platform.store` which only ever touches the key `"doc"`; it calls `store.set('doc', data)` immediately on
 every save and throttles `store.save()` to 500 ms (the plugin also saves on exit). Rust writes only the top-level key
-`positions` in `settings.json`.
+`positions` in `settings.json`: `{ "<monitorKey>": { "x", "y" }, "last": "<monitorKey>" }`, where `last` is the key
+persisted most recently (monitor keys always contain `@`, so `last` cannot collide).
 
 ## Browser mock (`src/platform/browser.ts`)
 

@@ -37,6 +37,9 @@ const SAFETY_SHOW_MS: u64 = 10_000;
 const SETTINGS_FILE: &str = "settings.json";
 /// Top-level key in settings.json owned by Rust. TS only ever writes the key `doc`.
 const POSITIONS_KEY: &str = "positions";
+/// Entry inside `positions` holding the monitor key that was persisted most recently. Monitor keys
+/// always contain `@`, so this name can never collide with one.
+const LAST_KEY: &str = "last";
 
 /// Mirrors `WindowGeometry` in `src/platform/types.ts`.
 #[derive(Debug, Clone, Serialize)]
@@ -201,7 +204,8 @@ fn read_positions(app: &AppHandle) -> Map<String, Value> {
         .unwrap_or_default()
 }
 
-/// Writes `positions[key] = {x, y}` keeping every other key of settings.json (including `doc`) intact.
+/// Writes `positions[key] = {x, y}` and `positions.last = key`, keeping every other key of
+/// settings.json (including `doc`) intact.
 fn persist_position(app: &AppHandle, key: &str, x: f64, y: f64) {
     let Some(store) = positions_store(app) else {
         return;
@@ -211,6 +215,7 @@ fn persist_position(app: &AppHandle, key: &str, x: f64, y: f64) {
         .and_then(|v| v.as_object().cloned())
         .unwrap_or_default();
     positions.insert(key.to_string(), json!({ "x": x, "y": y }));
+    positions.insert(LAST_KEY.to_string(), Value::String(key.to_string()));
     store.set(POSITIONS_KEY, Value::Object(positions));
     if let Err(e) = store.save() {
         eprintln!("[webpets] failed to save window position: {e}");
@@ -220,6 +225,24 @@ fn persist_position(app: &AppHandle, key: &str, x: f64, y: f64) {
 fn saved_position(positions: &Map<String, Value>, key: &str) -> Option<(f64, f64)> {
     let entry = positions.get(key)?.as_object()?;
     Some((entry.get("x")?.as_f64()?, entry.get("y")?.as_f64()?))
+}
+
+/// Picks which saved position to restore on first launch. `keys` are the connected monitors' keys
+/// in preference order (the window's current monitor first). The monitor recorded in
+/// `positions.last` wins when it is connected and has an entry; otherwise the first key in order
+/// with a saved entry. Returns the index into `keys` and the saved top-left.
+fn pick_restore(positions: &Map<String, Value>, keys: &[String]) -> Option<(usize, (f64, f64))> {
+    let last = positions.get(LAST_KEY).and_then(Value::as_str);
+    if let Some(last) = last {
+        if let Some(i) = keys.iter().position(|k| k == last) {
+            if let Some(p) = saved_position(positions, last) {
+                return Some((i, p));
+            }
+        }
+    }
+    keys.iter()
+        .enumerate()
+        .find_map(|(i, k)| saved_position(positions, k).map(|p| (i, p)))
 }
 
 /// Marks a programmatic geometry change so the resulting `Moved` events are ignored, then applies it.
@@ -247,9 +270,10 @@ fn apply_geometry(
 }
 
 /// `set_scale`: resize to `(160s+48, 120s+48)` keeping the bottom-right corner fixed. The first call
-/// after launch instead restores `positions[monitorKey]` (preferring the monitor the window is on,
-/// then any other connected monitor with a saved position) or defaults to the bottom-right corner of
-/// the primary work area with a 24 px margin. The result is clamped to the work area and persisted.
+/// after launch instead restores `positions[monitorKey]` (preferring the monitor recorded in
+/// `positions.last` when it is connected, then the monitor the window is on, then any other
+/// connected monitor with a saved position) or defaults to the bottom-right corner of the primary
+/// work area with a 24 px margin. The result is clamped to the work area and persisted.
 pub fn set_scale(app: &AppHandle, scale: u8) -> Result<WindowGeometry, String> {
     if !(2..=4).contains(&scale) {
         return Err(format!("invalid scale {scale}; expected 2, 3 or 4"));
@@ -273,11 +297,9 @@ pub fn set_scale(app: &AppHandle, scale: u8) -> Result<WindowGeometry, String> {
                 }
             }
         }
-        let restored = candidates
-            .iter()
-            .find_map(|m| saved_position(&positions, &monitor_key(m)).map(|p| (m.clone(), p)));
-        match restored {
-            Some((m, (x, y))) => (Some(m), x, y),
+        let keys: Vec<String> = candidates.iter().map(monitor_key).collect();
+        match pick_restore(&positions, &keys) {
+            Some((i, (x, y))) => (Some(candidates[i].clone()), x, y),
             None => {
                 let m = primary_or_first(app);
                 match &m {
@@ -492,5 +514,60 @@ mod tests {
     fn rounds_to_whole_pixels() {
         let r = LRect { x: 100.4, y: 100.6, w: 368.0, h: 288.0 };
         assert_eq!(snap_and_clamp(r, AREA), (100.0, 101.0));
+    }
+
+    fn positions(entries: &[(&str, f64, f64)], last: Option<&str>) -> Map<String, Value> {
+        let mut m = Map::new();
+        for (k, x, y) in entries {
+            m.insert((*k).to_string(), json!({ "x": x, "y": y }));
+        }
+        if let Some(l) = last {
+            m.insert(LAST_KEY.to_string(), Value::String(l.to_string()));
+        }
+        m
+    }
+
+    fn keys(ks: &[&str]) -> Vec<String> {
+        ks.iter().map(|k| (*k).to_string()).collect()
+    }
+
+    #[test]
+    fn restore_prefers_last_used_monitor_over_current_monitor() {
+        let p = positions(
+            &[("Built-in@1440x900", 1000.0, 600.0), ("LG@2560x1440", 2100.0, 1100.0)],
+            Some("LG@2560x1440"),
+        );
+        let ks = keys(&["Built-in@1440x900", "LG@2560x1440"]);
+        assert_eq!(pick_restore(&p, &ks), Some((1, (2100.0, 1100.0))));
+    }
+
+    #[test]
+    fn restore_falls_back_to_current_monitor_when_last_is_disconnected() {
+        let p = positions(
+            &[("Built-in@1440x900", 1000.0, 600.0), ("LG@2560x1440", 2100.0, 1100.0)],
+            Some("LG@2560x1440"),
+        );
+        let ks = keys(&["Built-in@1440x900"]);
+        assert_eq!(pick_restore(&p, &ks), Some((0, (1000.0, 600.0))));
+    }
+
+    #[test]
+    fn restore_falls_back_to_any_saved_monitor_without_last() {
+        let p = positions(&[("LG@2560x1440", 2100.0, 1100.0)], None);
+        let ks = keys(&["Built-in@1440x900", "LG@2560x1440"]);
+        assert_eq!(pick_restore(&p, &ks), Some((1, (2100.0, 1100.0))));
+    }
+
+    #[test]
+    fn restore_ignores_last_without_a_matching_entry() {
+        let p = positions(&[("Built-in@1440x900", 1000.0, 600.0)], Some("LG@2560x1440"));
+        let ks = keys(&["Built-in@1440x900", "LG@2560x1440"]);
+        assert_eq!(pick_restore(&p, &ks), Some((0, (1000.0, 600.0))));
+    }
+
+    #[test]
+    fn restore_returns_none_with_no_entries() {
+        let p = positions(&[], Some("LG@2560x1440"));
+        assert_eq!(pick_restore(&p, &keys(&["LG@2560x1440"])), None);
     }
 }
