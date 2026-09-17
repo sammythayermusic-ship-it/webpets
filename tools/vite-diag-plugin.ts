@@ -42,6 +42,7 @@ export function webpetsDiag(): Plugin {
           req.on('end', () => {
             try {
               const payload = JSON.parse(body) as { name?: string; png?: string; state?: unknown };
+              mkdirSync(dir, { recursive: true }); // the folder may have been cleaned since the server started
               const name = (payload.name ?? 'snap').replace(/[^a-z0-9_-]/gi, '_');
               if (typeof payload.png === 'string') {
                 const b64 = payload.png.replace(/^data:image\/png;base64,/, '');
