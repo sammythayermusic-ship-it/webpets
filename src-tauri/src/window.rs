@@ -599,25 +599,58 @@ mod contract_sync {
     const RS_PATH: &str = "src-tauri/src/window.rs";
     const CONF_PATH: &str = "src-tauri/tauri.conf.json";
 
+    /// `constants.ts` with every `//` and `/* */` comment blanked out (newlines kept so any future
+    /// line-number reporting stays honest). Scanning the raw text would let a commented-out stale
+    /// declaration shadow the live one and silently defeat every assertion below.
+    fn ts_source_without_comments() -> String {
+        let bytes = TS_CONSTANTS.as_bytes();
+        let mut out = String::with_capacity(TS_CONSTANTS.len());
+        let (mut i, mut line, mut block) = (0usize, false, false);
+        while i < bytes.len() {
+            let two = bytes.get(i..i + 2);
+            if !line && !block && two == Some(b"//") {
+                line = true;
+            } else if !line && !block && two == Some(b"/*") {
+                block = true;
+            } else if block && two == Some(b"*/") {
+                block = false;
+                out.push_str("  ");
+                i += 2;
+                continue;
+            }
+            let c = bytes[i] as char;
+            if c == '\n' {
+                line = false;
+                out.push(c);
+            } else {
+                out.push(if line || block { ' ' } else { c });
+            }
+            i += 1;
+        }
+        out
+    }
+
     /// The initialiser of `export const <name>` in constants.ts: the text between its `=` and its `;`.
-    /// Tolerates whitespace, a type annotation and comments elsewhere in the file, and panics with a
-    /// pointed message when the scan stops matching, so a reformat fails loudly instead of quietly
+    /// Tolerates whitespace and a type annotation, ignores anything inside a comment, and panics with
+    /// a pointed message when the scan stops matching, so a reformat fails loudly instead of quietly
     /// skipping the assertions below.
     fn ts_initializer(name: &str) -> String {
+        let source = ts_source_without_comments();
+        let ts_constants: &str = &source;
         let needle = format!("export const {name}");
         let mut from = 0usize;
-        while let Some(i) = TS_CONSTANTS[from..].find(&needle) {
+        while let Some(i) = ts_constants[from..].find(&needle) {
             let after = from + i + needle.len();
             from = after;
             // Skip a longer identifier that merely starts with `name` (e.g. GRID_W vs GRID_WIDTH).
-            if TS_CONSTANTS[after..]
+            if ts_constants[after..]
                 .chars()
                 .next()
                 .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '$')
             {
                 continue;
             }
-            let rest = &TS_CONSTANTS[after..];
+            let rest = &ts_constants[after..];
             let (Some(eq), Some(semi)) = (rest.find('='), rest.find(';')) else {
                 continue;
             };
