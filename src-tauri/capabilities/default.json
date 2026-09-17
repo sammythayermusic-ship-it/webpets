@@ -1,37 +1,19 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capabilities for the main habitat window",
+  "description": "Capabilities for the main habitat window: window drag/show/hide, events, and the store plugin. Everything else (tray, notifications, autostart, shortcut, positioning) goes through Rust commands.",
   "windows": [
     "main"
   ],
   "permissions": [
     "core:default",
-    "core:window:default",
     "core:window:allow-start-dragging",
-    "core:window:allow-set-position",
-    "core:window:allow-set-size",
-    "core:window:allow-hide",
     "core:window:allow-show",
-    "core:window:allow-set-ignore-cursor-events",
-    "core:window:allow-outer-position",
-    "core:window:allow-inner-position",
-    "core:window:allow-inner-size",
-    "core:window:allow-outer-size",
-    "core:window:allow-current-monitor",
-    "core:window:allow-available-monitors",
-    "core:window:allow-primary-monitor",
-    "core:window:allow-set-always-on-top",
-    "core:window:allow-is-visible",
-    "core:window:allow-scale-factor",
-    "core:tray:default",
-    "core:menu:default",
-    "core:event:default",
-    "core:app:default",
-    "store:default",
-    "notification:default",
-    "positioner:default",
-    "autostart:default",
-    "global-shortcut:default"
+    "core:window:allow-hide",
+    "store:allow-load",
+    "store:allow-get-store",
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-save"
   ]
 }
