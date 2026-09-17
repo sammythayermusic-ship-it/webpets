@@ -203,8 +203,9 @@ Notifications from `tauri dev` are posted under the Terminal identity (allow not
 bundled `.app` uses `com.sammythayer.webpets`. Document this in the README.
 
 Store files (Tauri store plugin, app-data dir): `pet.json`, `settings.json`, `graveyard.json`. TS reads/writes them
-through `platform.store` which only ever touches the key `"doc"`; it calls `store.set('doc', data)` immediately on
-every save and throttles `store.save()` to 500 ms (the plugin also saves on exit). Rust writes only the top-level key
+through `platform.store` (`PersistApi`: `load(file)`, `set(file, data)`, `save(file)`) which only ever touches the
+key `"doc"`; `src/app/persistence.ts` calls `set` (plugin `store.set('doc', data)`) immediately on every save and
+throttles `save` (plugin `store.save()`) to 500 ms, so the plugin's exit safety-save always writes the latest document. Rust writes only the top-level key
 `positions` in `settings.json`: `{ "<monitorKey>": { "x", "y" }, "last": "<monitorKey>" }`, where `last` is the key
 persisted most recently (monitor keys always contain `@`, so `last` cannot collide).
 

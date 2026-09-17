@@ -3,7 +3,11 @@ import type { Platform, PointerState, TrayAction, TrayMenuState, WindowGeometry 
 import type { Scale, TrayChipSize } from '../sim/constants';
 
 export interface FakePlatform extends Platform {
+  /** On-disk contents: updated only by `store.save`. */
   files: Map<string, unknown>;
+  /** The store plugin's in-memory documents: updated by `store.set`, read by `store.load`. */
+  cache: Map<string, unknown>;
+  setCount: number;
   saveCount: number;
   notifications: Array<{ title: string; body: string }>;
   scaleCalls: Scale[];
@@ -16,6 +20,7 @@ export interface FakePlatform extends Platform {
 
 export function createFakePlatform(seedFiles: Record<string, unknown> = {}): FakePlatform {
   const files = new Map<string, unknown>(Object.entries(seedFiles));
+  const cache = new Map<string, unknown>(files);
   const wakeListeners = new Set<() => void>();
   const toggleListeners = new Set<() => void>();
   const geometry = (): WindowGeometry => ({
@@ -29,6 +34,8 @@ export function createFakePlatform(seedFiles: Record<string, unknown> = {}): Fak
   const p: FakePlatform = {
     kind: 'browser',
     files,
+    cache,
+    setCount: 0,
     saveCount: 0,
     notifications: [],
     scaleCalls: [],
@@ -40,12 +47,18 @@ export function createFakePlatform(seedFiles: Record<string, unknown> = {}): Fak
     clock: async () => ({ wallMs: Date.now(), monoMs: Date.now() }),
     store: {
       load: async <T>(file: string): Promise<T | null> => {
-        const v = files.get(file);
+        const v = cache.get(file);
         return v === undefined ? null : (JSON.parse(JSON.stringify(v)) as T);
       },
-      save: async <T>(file: string, data: T): Promise<void> => {
+      set: async <T>(file: string, data: T): Promise<void> => {
+        p.setCount += 1;
+        cache.set(file, JSON.parse(JSON.stringify(data)));
+      },
+      save: async (file: string): Promise<void> => {
         p.saveCount += 1;
-        files.set(file, JSON.parse(JSON.stringify(data)));
+        const v = cache.get(file);
+        if (v === undefined) files.delete(file);
+        else files.set(file, JSON.parse(JSON.stringify(v)));
       },
     },
     window: {

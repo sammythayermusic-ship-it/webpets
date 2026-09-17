@@ -54,12 +54,18 @@ export interface TrayMenuState {
   hidden: boolean; // menu item reads "Show" when true, "Minimize" when false
 }
 
-/** Whole-document persistence. Each file holds one JSON document under the store key "doc". */
+/**
+ * Whole-document persistence. Each file holds one JSON document under the store key "doc".
+ * `set` updates the store's in-memory document (what the plugin's exit safety-save writes); `save` flushes that
+ * document to disk. src/app/persistence.ts calls `set` on every save and throttles `save`.
+ */
 export interface PersistApi {
   /** Returns null when the file does not exist yet. */
   load<T>(file: string): Promise<T | null>;
-  /** Sets key "doc" immediately; the underlying disk write may be throttled by the caller. */
-  save<T>(file: string, data: T): Promise<void>;
+  /** Replace key "doc" in the store's in-memory cache. Never throttled. */
+  set<T>(file: string, data: T): Promise<void>;
+  /** Write the store's current in-memory document to disk. */
+  save(file: string): Promise<void>;
 }
 
 export interface WindowApi {

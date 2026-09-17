@@ -24,18 +24,39 @@ describe('persistence', () => {
     const p = createFakePlatform();
     const store = createPersistence(p.store, 500);
     store.savePet(doc(1000));
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(p.setCount).toBe(1);
     expect(p.saveCount).toBe(1);
     store.savePet(doc(975));
     store.savePet(doc(950));
     store.savePet(doc(925));
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    // Every save reaches the store's in-memory document at once; only the disk write is throttled.
+    expect(p.setCount).toBe(4);
     expect(p.saveCount).toBe(1);
+    expect((p.cache.get(PET_FILE) as PetDoc).balance).toBe(925);
+    expect((p.files.get(PET_FILE) as PetDoc).balance).toBe(1000);
     await vi.advanceTimersByTimeAsync(499);
     expect(p.saveCount).toBe(1);
     await vi.advanceTimersByTimeAsync(1);
+    expect(p.setCount).toBe(4);
     expect(p.saveCount).toBe(2);
     expect((p.files.get(PET_FILE) as PetDoc).balance).toBe(925);
+  });
+
+  it('a save inside the throttle window updates the in-memory document before the trailing disk write', async () => {
+    const p = createFakePlatform();
+    const store = createPersistence(p.store, 500);
+    store.savePet(doc(1000));
+    await vi.advanceTimersByTimeAsync(100);
+    store.savePet(doc(975));
+    await vi.advanceTimersByTimeAsync(0);
+    // What the store plugin would write in its exit safety-save is already the new document.
+    expect((p.cache.get(PET_FILE) as PetDoc).balance).toBe(975);
+    expect(p.saveCount).toBe(1);
+    await vi.advanceTimersByTimeAsync(400);
+    expect(p.saveCount).toBe(2);
+    expect((p.files.get(PET_FILE) as PetDoc).balance).toBe(975);
   });
 
   it('flush writes what is pending without waiting', async () => {

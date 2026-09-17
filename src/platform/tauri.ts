@@ -74,8 +74,8 @@ function createStore(): PersistApi {
   const storeFor = (file: string): Promise<Store> => {
     let p = stores.get(file);
     if (!p) {
-      // Explicit saves only: `save()` is called right after every `set('doc')`; the plugin also saves
-      // every loaded store on exit, and Rust saves after writing `positions`.
+      // Explicit saves only: persistence.ts calls `set('doc')` on every change and a throttled `save()`;
+      // the plugin also saves every loaded store on exit, and Rust saves after writing `positions`.
       p = load(file, { autoSave: false });
       stores.set(file, p);
     }
@@ -87,9 +87,12 @@ function createStore(): PersistApi {
       const doc = await store.get<T>(DOC_KEY);
       return doc === undefined ? null : doc;
     },
-    async save<T>(file: string, data: T): Promise<void> {
+    async set<T>(file: string, data: T): Promise<void> {
       const store = await storeFor(file);
       await store.set(DOC_KEY, data);
+    },
+    async save(file: string): Promise<void> {
+      const store = await storeFor(file);
       await store.save();
     },
   };

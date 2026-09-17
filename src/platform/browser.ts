@@ -108,8 +108,12 @@ function createStore(storage: MockStorage): PersistApi {
         return Promise.resolve(null);
       }
     },
-    save<T>(file: string, data: T): Promise<void> {
+    set<T>(file: string, data: T): Promise<void> {
       storage.set(STORAGE_PREFIX + file, JSON.stringify(data));
+      return Promise.resolve();
+    },
+    // localStorage writes are synchronous, so `set` already persisted; nothing to flush.
+    save(): Promise<void> {
       return Promise.resolve();
     },
   };

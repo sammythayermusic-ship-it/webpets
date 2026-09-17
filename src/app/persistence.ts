@@ -1,5 +1,7 @@
-// Whole-document persistence over platform.store. `set` goes through immediately for the first save in a window;
-// bursts are coalesced into one trailing write 500 ms later. flush() drains everything pending.
+// Whole-document persistence over platform.store. Every save calls `store.set` immediately (so the store's
+// in-memory document, which the plugin also writes on exit, is never stale); the disk write (`store.save`) goes
+// through immediately for the first save in a window and bursts are coalesced into one trailing write 500 ms
+// later. flush() drains everything pending. All store calls for a file are sequenced through one promise chain.
 import type { PersistApi } from '../platform/types';
 import type { GraveyardDoc, PetDoc, SettingsDoc } from './types';
 import { SCALES, type Scale } from '../sim/constants';
@@ -111,35 +113,33 @@ interface Channel {
 
 function createChannel(store: PersistApi, file: string, throttleMs: number): Channel {
   let timer: ReturnType<typeof setTimeout> | null = null;
-  let pending: unknown = undefined;
-  let hasPending = false;
+  let dirty = false; // a `set` has happened since the last `save`
   let lastWrite = Number.NEGATIVE_INFINITY;
   let inflight: Promise<void> = Promise.resolve();
 
-  const write = (data: unknown): void => {
-    lastWrite = Date.now();
-    const p = store.save(file, data).catch((err: unknown) => {
-      console.warn(`[persistence] save ${file} failed`, err);
+  const enqueue = (what: string, op: () => Promise<void>): void => {
+    inflight = inflight.then(op).catch((err: unknown) => {
+      console.warn(`[persistence] ${what} ${file} failed`, err);
     });
-    inflight = inflight.then(() => p);
+  };
+  const write = (): void => {
+    lastWrite = Date.now();
+    dirty = false;
+    enqueue('save', () => store.save(file));
   };
   const fire = (): void => {
     timer = null;
-    if (!hasPending) return;
-    const data = pending;
-    pending = undefined;
-    hasPending = false;
-    write(data);
+    if (dirty) write();
   };
   return {
     save(data) {
+      enqueue('set', () => store.set(file, data));
+      dirty = true;
       const since = Date.now() - lastWrite;
       if (timer === null && since >= throttleMs) {
-        write(data);
+        write();
         return;
       }
-      pending = data;
-      hasPending = true;
       if (timer === null) timer = setTimeout(fire, Math.max(0, throttleMs - since));
     },
     async flush() {
