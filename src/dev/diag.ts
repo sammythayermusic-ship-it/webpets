@@ -27,7 +27,8 @@ export function installDiag(ctx: DiagContext): void {
     }
     const s = ctx.store.getState();
     const canvas = document.querySelector('canvas');
-    const hud = document.getElementById('hud');
+    // mountHud (src/ui/hud.ts) creates the pill and caption with class names only, no ids.
+    const hud = document.querySelector<HTMLElement>('.hud-pill');
     let geometry: unknown = null;
     try {
       geometry = await ctx.platform.window.getGeometry();
@@ -47,7 +48,7 @@ export function installDiag(ctx: DiagContext): void {
       hitRegions: ctx.hitRegions(),
       lastPointer: ctx.lastPointer(),
       hud: hud ? { className: hud.className, rect: hud.getBoundingClientRect().toJSON() as unknown, text: hud.textContent } : null,
-      caption: document.getElementById('caption')?.textContent ?? null,
+      caption: document.querySelector<HTMLElement>('.hud-caption')?.textContent ?? null,
       hunger: s.hunger,
       night: s.night,
       hidden: s.hidden,
