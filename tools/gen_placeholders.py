@@ -4,6 +4,11 @@ Outputs (all stamped with a tiny bitmap "PLACEHOLDER" label):
   assets/habitats/fish/bowl/{medium,decor_back,pantry,pantry_fill,decor_front,glass,night,memorial}.png  (160x120)
   assets/sprites/fish/{idle,eat,hungry,sleep,dead}.png  (80x80 strips, 4/4/4/2/2 frames)
 
+Stamp rule: every 160x120 layer carries the full word PLACEHOLDER (43x5 px in the 3x5 font). The word is
+abbreviated to `PH` in the STAMP colour only where it cannot fit: the fish strips (the stamp must stay inside
+the 28x14 body box, see `finish`) and `pantry_fill` (its opaque pixels must stay inside the 18x15 pantryRect,
+see `check_pantry_fill`). `src/render/placeholderStamps.test.ts` decodes the checked-in PNGs and asserts this.
+
 `bg` is the concept art `assets/habitats-160x120/fish-bowl.png` and is NOT regenerated.
 The geometry below must match assets/manifest.json and src/species/fish/layout.ts.
 
@@ -192,7 +197,7 @@ def gen_pantry() -> Image.Image:
                 outline=FEEDER_GRAY)
     d.rectangle((b['x'] + 16, b['y'] + b['h'], b['x'] + 19, b['y'] + b['h'] + 6), fill=FEEDER_GRAY)
     stamp(im, 125, 6, 'PANTRY')
-    stamp(im, 125, 12, 'PH')
+    stamp(im, 114, 12, 'PLACEHOLDER')  # right of the feeder box (x 92..111), ends at x 156
     return im
 
 
@@ -203,7 +208,9 @@ def gen_pantry_fill() -> Image.Image:
     for y in range(r['y'], r['y'] + r['h']):
         for x in range(r['x'], r['x'] + r['w']):
             px[x, y] = FLAKE_DARK if (x + y) % 3 == 0 else FLAKE_TAN
-    stamp(im, r['x'] + 1, r['y'] + 5, 'FILL', color=(120, 60, 20, 255))
+    # 18x15 cannot hold PLACEHOLDER (43 px); `PH` is the sanctioned abbreviation here (see module docstring)
+    stamp(im, r['x'] + 1, r['y'] + 2, 'PH', color=STAMP)
+    stamp(im, r['x'] + 1, r['y'] + 9, 'FILL', color=(120, 60, 20, 255))
     return im
 
 
@@ -217,7 +224,7 @@ def gen_decor_front() -> Image.Image:
             ly = 94 - h + 4 + k * 8
             d.rectangle((sx - 2, ly, sx + 3, ly + 1), fill=PLANT_GREEN)
     stamp(im, 96, 60, 'FRONT')
-    stamp(im, 96, 66, 'PH')
+    stamp(im, 78, 66, 'PLACEHOLDER')
     return im
 
 
@@ -233,7 +240,7 @@ def gen_glass() -> Image.Image:
             px[x, y] = SHEEN
             px[x + 1, y] = SHEEN
     stamp(im, 44, 26, 'GLASS', color=(255, 255, 255, 140))
-    stamp(im, 44, 32, 'PH', color=(255, 255, 255, 140))
+    stamp(im, 44, 32, 'PLACEHOLDER', color=(255, 255, 255, 140))
     return im
 
 
@@ -245,8 +252,10 @@ def gen_night() -> Image.Image:
     # the feeder/lamp area stays bright (white = unchanged under multiply)
     b = FEEDER_BOX
     d.rectangle((b['x'] - 2, b['y'] - 2, b['x'] + b['w'] + 1, b['y'] + b['h'] + 1), fill=WHITE)
-    stamp(im, 44, 100, 'NIGHT', color=(200, 210, 255, 255))
-    stamp(im, 44, 106, 'PLACEHOLDER', color=(200, 210, 255, 255))
+    # x 56..98: the alpha mask below clips this layer to the concept bowl, whose base is opaque at x 52..110 on
+    # these rows (a stamp at x 44 lost its first two glyphs)
+    stamp(im, 56, 100, 'NIGHT', color=(200, 210, 255, 255))
+    stamp(im, 56, 106, 'PLACEHOLDER', color=(200, 210, 255, 255))
     # Multiply over a transparent pixel yields opaque black (DST_COLOR * src + dst * (1 - srcA) with dst = 0,
     # alpha ONE * srcA), so the night layer must be transparent wherever the bowl itself is transparent.
     concept = Image.open(CONCEPT).convert('RGBA').load()
@@ -346,7 +355,8 @@ def body_box(ox: int = 0) -> tuple[int, int, int, int]:
 
 def finish(im: Image.Image, frames: int) -> Image.Image:
     # The stamp must sit inside the body box: behavior only keeps that box in the water, and the sprite is
-    # drawn with anchor 0.5, so anything outside it can land on the rim or in the transparent pad.
+    # drawn with anchor 0.5, so anything outside it can land on the rim or in the transparent pad. The box is
+    # 28x14, so the full word PLACEHOLDER (43 px) cannot fit; `PH` is the sanctioned abbreviation here.
     for i in range(frames):
         x0, y0, _, _ = body_box(i * FRAME)
         stamp(im, x0 + 11, y0 + 5, 'PH', color=STAMP, scale=1)  # 7x5 px over the middle of the body

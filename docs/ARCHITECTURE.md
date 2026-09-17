@@ -15,7 +15,7 @@ function signature here is binding. The shared type files are the source of trut
 | `src-tauri/**` | shell | Window, tray, click-through poller, notifications, clock, autostart, shortcut, single-instance. |
 | `src/render/**` | render | PixiJS scene, layers, sprite player, FX, scaling, tray chip painter. |
 | `src/species/fish/**` | render | Pure behavior state machine + bowl layout + speech line pools (`lines.ts`). No Pixi imports in `behavior.ts`. |
-| `tools/gen_placeholders.py`, `assets/manifest.json`, `assets/habitats/**`, `assets/sprites/fish/**` | render | Placeholder PNGs stamped PLACEHOLDER. |
+| `tools/gen_placeholders.py`, `assets/manifest.json`, `assets/habitats/**`, `assets/sprites/fish/**` | render | Placeholder PNGs stamped with the full word PLACEHOLDER; `PH` in the stamp colour only where the word cannot fit (fish body box, `pantry_fill`). Asserted by `src/render/placeholderStamps.test.ts`. |
 | `src/ui/**`, `src/audio/**` | ui | DOM HUD, dev panel, speech bubbles, pantry dialog, montage, memorial card, tray wiring, audio hooks. |
 | `src/main.ts` | integration | Boot sequence and all cross-module wiring. Written last. |
 | `vite.config.ts`, `index.html`, `package.json`, `tsconfig.json`, `vitest.config.ts` | integration | Already configured; changes require a contract edit. |
