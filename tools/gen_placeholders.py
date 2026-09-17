@@ -31,6 +31,7 @@ WATER = dict(cx=81, cy=58, rx=40, ry=42, surfaceY=23, floorY=96)
 PANTRY_RECT = dict(x=93, y=5, w=18, h=15)          # inner box of the clip-on feeder (fill lives here)
 FEEDER_BOX = dict(x=92, y=4, w=20, h=17)           # outline of the feeder as drawn in the concept art
 OPAQUE_RECT = dict(x=40, y=4, w=84, h=115)
+FISH_BODY = dict(w=28, h=14)                       # sprites.fish.body: the box behavior keeps inside the water
 
 # --- colours ---
 WATER_BLUE = (92, 168, 230, 90)
@@ -336,10 +337,31 @@ def strip(frames: int) -> Image.Image:
     return Image.new('RGBA', (FRAME * frames, FRAME), (0, 0, 0, 0))
 
 
+def body_box(ox: int = 0) -> tuple[int, int, int, int]:
+    """Inclusive (x0, y0, x1, y1) of the manifest body box centred in the frame at column offset `ox`."""
+    x0 = ox + FRAME // 2 - FISH_BODY['w'] // 2
+    y0 = FRAME // 2 - FISH_BODY['h'] // 2
+    return x0, y0, x0 + FISH_BODY['w'] - 1, y0 + FISH_BODY['h'] - 1
+
+
 def finish(im: Image.Image, frames: int) -> Image.Image:
+    # The stamp must sit inside the body box: behavior only keeps that box in the water, and the sprite is
+    # drawn with anchor 0.5, so anything outside it can land on the rim or in the transparent pad.
     for i in range(frames):
-        stamp(im, i * FRAME + 2, 2, 'PH', color=STAMP, scale=2)
+        x0, y0, _, _ = body_box(i * FRAME)
+        stamp(im, x0 + 11, y0 + 5, 'PH', color=STAMP, scale=1)  # 7x5 px over the middle of the body
+    check_stamp_in_body(im, frames)
     return im
+
+
+def check_stamp_in_body(im: Image.Image, frames: int) -> None:
+    px = im.load()
+    for i in range(frames):
+        x0, y0, x1, y1 = body_box(i * FRAME)
+        for y in range(FRAME):
+            for x in range(i * FRAME, (i + 1) * FRAME):
+                if px[x, y] == STAMP:
+                    assert x0 <= x <= x1 and y0 <= y <= y1, f'stamp pixel outside the body box at {x},{y}'
 
 
 def gen_idle() -> Image.Image:

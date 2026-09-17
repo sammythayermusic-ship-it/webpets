@@ -44,7 +44,8 @@ assets/
   manifest.json                     habitats + sprites index (schema = Manifest in src/render/types.ts)
   habitats/fish/bowl/<layer>.png    160x120 layers: medium decor_back pantry pantry_fill decor_front glass night memorial
   habitats-160x120/fish-bowl.png    concept art, used as the `bg` layer for the bowl until layered art exists
-  sprites/fish/<state>.png          80x80 strips: idle eat hungry sleep dead (frames left to right)
+  sprites/fish/<state>.png          80x80 strips: idle eat hungry sleep dead (frames left to right); the PH stamp
+                                    stays inside the centred `body` box (src/render/spriteStrips.test.ts checks it)
   sprites/strips-80/*.png           reference strips (gus-*, doink-idle) for validating the player
   fonts/PressStart2P-Regular.ttf    HUD font (OFL)
   audio/fish/{ambient,feed,alert,death}.ogg   optional; missing files are silently skipped
