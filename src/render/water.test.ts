@@ -22,6 +22,15 @@ describe('makeWaterBounds', () => {
     expect(bounds.floorY).toBe(96);
   });
 
+  it('rect is the surface..floor band the dead-phase fog is masked to, not the full ellipse extent', () => {
+    // The bowl ellipse overshoots the water (cy - ry < surfaceY and cy + ry > floorY); the fog mask must not.
+    const { cy, ry, surfaceY, floorY } = BOWL_WATER_SHAPE;
+    expect(cy - ry).toBeLessThan(surfaceY);
+    expect(cy + ry).toBeGreaterThan(floorY);
+    expect(bounds.rect.y).toBe(surfaceY);
+    expect(bounds.rect.y + bounds.rect.h).toBe(floorY);
+  });
+
   it('inside() respects the ellipse and the surface/floor clip', () => {
     expect(bounds.inside(81, 60)).toBe(true);
     expect(bounds.inside(81, 22)).toBe(false); // above the surface

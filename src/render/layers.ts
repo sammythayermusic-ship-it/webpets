@@ -4,6 +4,7 @@
 
 import { Container, Graphics, Rectangle, Sprite, Texture } from 'pixi.js';
 import type { LayerName, ManifestHabitat, ManifestLayer, ScenePhase } from './types';
+import { makeWaterBounds } from './water';
 
 /** Slot order bottom → top. */
 export const SLOT_ORDER = [
@@ -127,9 +128,17 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
   }
 
   // Programmatic white fog over the water for the dead phase (glass slot, above the glass art).
+  // The ellipse overshoots the water band (ry reaches above surfaceY and below floorY), so it is masked to
+  // surfaceY..floorY exactly like every other water-bounded element (see makeWaterBounds). The mask is a child
+  // of the fog so it shares its visibility and the glass slot's parallax offset.
   const ws = habitat.waterShape;
+  const band = makeWaterBounds(ws).rect;
   const fog = new Graphics({ label: 'fog' });
   fog.ellipse(ws.cx, ws.cy, ws.rx, ws.ry).fill({ color: 0xffffff, alpha: 1 });
+  const fogClip = new Graphics({ label: 'fog:clip' });
+  fogClip.rect(band.x, band.y, band.w, band.h).fill({ color: 0xffffff, alpha: 1 });
+  fog.addChild(fogClip);
+  fog.mask = fogClip;
   fog.alpha = FOG_ALPHA;
   fog.visible = false;
   slots.glass.addChild(fog);

@@ -315,7 +315,8 @@ no Pixi dependency; works with a manual pixel buffer so it runs in tests).
 
 Scene rules: layer slots as above inside the 160×120 RenderTexture; pet motion and the sprite player step at
 `PET_FPS = 8` via a `deltaMS` accumulator on the ticker; FX (bubbles) at ticker rate. `phase === 'dead'`: pet plays
-`dead` at `surfaceY + 6`, bubbles stop, a programmatic white fog (alpha 0.5) is added to the `glass` slot.
+`dead` at `surfaceY + 6`, bubbles stop, a programmatic white fog (alpha 0.5; the `waterShape` ellipse masked to
+`surfaceY..floorY`, i.e. `makeWaterBounds(waterShape).rect`) is added to the `glass` slot.
 `phase === 'memorial'`: pet hidden, `memorial` drawn instead of `bg`, fog off. Starving: `medium.tint` shifted 10 %
 toward green. `asleep`: fish still near the floor, `sleep` anim. Reduced motion: no idle bob, no parallax; state
 changes still animate. Glass sheen follows the pointer on the `glass` slot; `glass` and `decor_front` get a +2 px
