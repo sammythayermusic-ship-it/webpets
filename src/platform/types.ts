@@ -51,7 +51,7 @@ export interface TrayMenuState {
   hidden: boolean; // "Show" vs "Minimize" label
 }
 
-export interface StoreApi {
+export interface PersistApi {
   /** Returns null when the file does not exist yet. */
   load<T>(file: string): Promise<T | null>;
   save<T>(file: string, data: T): Promise<void>;
@@ -87,7 +87,7 @@ export interface TrayApi {
 export interface Platform {
   readonly kind: 'tauri' | 'browser';
   clock(): Promise<ClockReading>;
-  store: StoreApi;
+  store: PersistApi;
   window: WindowApi;
   tray: TrayApi;
   notify(title: string, body: string): Promise<void>;
