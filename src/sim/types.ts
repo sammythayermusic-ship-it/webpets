@@ -6,6 +6,14 @@ export type Personality = 'sarcastic' | 'anxious' | 'zen' | 'degen';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type HungerLabel = 'full' | 'peckish' | 'hungry' | 'starving';
 
+/** Axis-aligned rectangle. Lives here (zero-import module) so every layer can share it. */
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface PetState {
   id: string; // "#0421"
   name: string;
@@ -33,11 +41,11 @@ export interface PetState {
 /** Phase 0: LocalLedger (a number). Phase 2: ChainLedger. All amounts are whole $FEED. */
 export interface Ledger {
   balance(): number;
-  /** Destroy n from the wallet (feeding). Throws RangeError if balance < n. */
+  /** Destroy n from the wallet (feeding). Throws RangeError unless n is a non-negative integer <= balance. */
   burn(n: number): void;
-  /** Move n out of the wallet into the pantry. Throws RangeError if balance < n. */
+  /** Move n out of the wallet into the pantry. Throws RangeError unless n is a non-negative integer <= balance. */
   debit(n: number): void;
-  /** Move n back into the wallet from the pantry. */
+  /** Move n back into the wallet from the pantry. Throws RangeError unless n is a non-negative integer. */
   credit(n: number): void;
 }
 
@@ -64,7 +72,17 @@ export interface ReconcileResult {
 }
 
 export type FeedFailure = 'dead' | 'insufficient-balance';
-export type FeedResult = { ok: true; state: PetState } | { ok: false; state: PetState; reason: FeedFailure };
+/** Every mutator reconciles first; `events` carries the catch-up events (and any auto-feed at `now`) in order. */
+export type FeedResult =
+  | { ok: true; state: PetState; events: SimEvent[] }
+  | { ok: false; state: PetState; events: SimEvent[]; reason: FeedFailure };
+
+export interface PantryResult {
+  state: PetState;
+  /** Whole $FEED actually moved (deposit clamps to the wallet balance; 0 for a dead pet). */
+  moved: number;
+  events: SimEvent[];
+}
 
 export interface GraveRecord {
   pet: PetState;

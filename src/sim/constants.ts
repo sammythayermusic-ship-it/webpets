@@ -6,7 +6,7 @@ export const DEFAULT_CONSTANTS: Readonly<SimConstants> = Object.freeze({
   FEED_COST: 25,
   FEED_GAIN: 45,
   MAX_HUNGER: 100,
-  PANTRY_TRIGGER: 30,
+  PANTRY_TRIGGER: 30, // inclusive: auto-feed fires when hunger <= 30 (Blueprint says "drops below"; identical instant with continuous decay)
   DEATH_AFTER_ZERO_HOURS: 24,
 });
 
@@ -33,3 +33,11 @@ export const SCALES: readonly Scale[] = [2, 3, 4];
 /** Transparent padding around the habitat on every side, in CSS px: room for the HUD pill, caption and drop shadow. */
 export const WINDOW_PAD = 24;
 export const PET_FPS = 8;
+/** Pantry level (in $FEED) that fills the feeder sprite completely. */
+export const PANTRY_VISUAL_MAX = 500;
+/** Window snaps to a screen edge when within this many CSS px. */
+export const SNAP_PX = 16;
+/** Rust cursor poll interval for click-through hit testing. */
+export const POINTER_POLL_MS = 50;
+/** macOS status items are 18 pt tall; 36 px on Retina. */
+export type TrayChipSize = 18 | 36;

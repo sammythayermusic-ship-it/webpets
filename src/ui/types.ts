@@ -18,11 +18,15 @@ export interface UiDeps {
   platform: Platform;
   scene: HabitatScene;
   audio: AudioApi;
+  /** Ask main.ts to recompute and resend hit regions (call whenever your rects change). */
+  requestHitRegions(): void;
 }
 
 export interface HudHandle {
   setVisible(b: boolean): void;
-  /** Window-local CSS px rects that must receive mouse events while visible. */
+  /** Re-position for a new scale / canvas size. */
+  relayout(): void;
+  /** Window-local CSS px rects that must receive mouse events while visible (pill + strip down to the habitat top, caption). */
   getRects(): Rect[];
   destroy(): void;
 }
