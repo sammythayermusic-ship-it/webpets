@@ -351,7 +351,10 @@ computeHitRegions(scene, hud, devPanel): Rect[]   // habitat hit rect + visible 
 ```
 
 Caption: `PANTRY 475 $FEED · 21 DAYS` where days = `floor(pantryDays)`. FEED button label `FEED 25`, disabled when
-dead or balance < 25. HUD hunger ring colors: full green, peckish yellow, hungry orange, starving red.
+dead or balance < 25. Modal cards (pantry dialog, memorial) are `max(120, min(240, habitatHitRect.w - 8))` px wide,
+centred in `habitatHitRect`; `.modal .line` rows wrap (`white-space: normal; overflow-wrap: anywhere`) because
+Press Start 2P advances 8 px per glyph and a 26+ char line is wider than the card at S. The pantry hint is
+`PANTRY_HINT` = `Auto-feeds 25 at hunger 30` (26 chars = 208 px, one line at M/L). HUD hunger ring colors: full green, peckish yellow, hungry orange, starving red.
 Dev panel (⌥⌘D): +1h / +12h / +3d, set hunger / pantry / balance, force state, day/night, species/habitat (disabled
 except fish/bowl), FPS meter (`scene.fps()`), "Simulate 10-day absence with 500 in pantry" (dry run, prints events),
 "Skip 3d on next launch" (`dev.skipOnNextLaunch`), reset clock.

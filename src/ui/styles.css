@@ -331,7 +331,11 @@ body {
 }
 .modal .line {
   margin: 0 0 2px 0;
-  white-space: nowrap;
+  /* Press Start 2P advances 8 px per glyph; a 34-char line is 272 px, wider than the widest card (240 px).
+     Wrap instead of overflowing the border and drop shadow. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 10px;
 }
 .modal .row {
   display: flex;

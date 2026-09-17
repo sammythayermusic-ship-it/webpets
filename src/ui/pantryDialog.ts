@@ -15,6 +15,17 @@ export interface PantryDialogHandle {
 
 const DEFAULT_AMOUNT = 100;
 
+/** Card width: min(CARD_MAX_WIDTH, habitat hit width - 8), never below CARD_MIN_WIDTH; box-sizing border-box. */
+export const CARD_MIN_WIDTH = 120;
+export const CARD_MAX_WIDTH = 240;
+/** Widest possible text row: CARD_MAX_WIDTH minus 6 px padding and 1 px border on each side. */
+export const CARD_MAX_INNER_WIDTH = CARD_MAX_WIDTH - 2 * 6 - 2 * 1;
+/** Press Start 2P advances exactly 1 em (8 px at the modal's 8 px font-size) per glyph. */
+export const MODAL_GLYPH_PX = 8;
+
+/** Kept short enough to fit CARD_MAX_INNER_WIDTH on one line at M/L; wraps to two lines at S (`.modal .line`). */
+export const PANTRY_HINT = 'Auto-feeds 25 at hunger 30';
+
 export function mountPantryDialog(root: HTMLElement, deps: UiDeps): PantryDialogHandle {
   const { store, scene } = deps;
 
@@ -25,7 +36,7 @@ export function mountPantryDialog(root: HTMLElement, deps: UiDeps): PantryDialog
   const title = el('h2', '', 'Pantry');
   const balanceLine = el('div', 'line');
   const pantryLine = el('div', 'line');
-  const hint = el('div', 'line muted', 'Auto-feeds 25 when hunger hits 30');
+  const hint = el('div', 'line muted', PANTRY_HINT);
 
   const amountRow = el('div', 'row');
   const amountLabel = el('span', '', 'AMOUNT');
@@ -73,7 +84,7 @@ export function mountPantryDialog(root: HTMLElement, deps: UiDeps): PantryDialog
 
   function layout(): void {
     const hit = scene.habitatHitRect();
-    card.style.width = `${Math.max(120, Math.min(240, hit.w - 8))}px`;
+    card.style.width = `${Math.max(CARD_MIN_WIDTH, Math.min(CARD_MAX_WIDTH, hit.w - 8))}px`;
     centerIn(card, hit, root);
   }
 
