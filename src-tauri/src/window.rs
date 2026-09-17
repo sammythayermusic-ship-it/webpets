@@ -23,6 +23,10 @@ pub const MAIN_WINDOW: &str = "main";
 const GRID_W: f64 = 160.0;
 const GRID_H: f64 = 120.0;
 const WINDOW_PAD: f64 = 24.0;
+/// Lowest and highest integer scale accepted by `set_scale` (contract: `SCALES` in
+/// `src/sim/constants.ts`, which must stay a contiguous ascending run for this range to be equivalent).
+const MIN_SCALE: u8 = 2;
+const MAX_SCALE: u8 = 4;
 /// Snap to a work-area edge when within this many logical px (contract `SNAP_PX`).
 const SNAP_PX: f64 = 16.0;
 /// Default distance from the bottom-right corner of the primary work area on first launch.
@@ -72,7 +76,13 @@ fn err<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
 
-/// Window size for an integer scale: `(160s + 48) x (120s + 48)`.
+/// Whether `set_scale` accepts this scale, i.e. whether it is in the TS `SCALES` list.
+pub fn scale_supported(scale: u8) -> bool {
+    (MIN_SCALE..=MAX_SCALE).contains(&scale)
+}
+
+/// Window size for an integer scale: `(160s + 48) x (120s + 48)`. Mirrors `windowSizeForScale` in
+/// `src/sim/constants.ts`; `contract_sync` below fails the build if the two drift apart.
 pub fn window_size_for_scale(scale: u8) -> (f64, f64) {
     let s = f64::from(scale);
     (GRID_W * s + 2.0 * WINDOW_PAD, GRID_H * s + 2.0 * WINDOW_PAD)
@@ -275,7 +285,7 @@ fn apply_geometry(
 /// connected monitor with a saved position) or defaults to the bottom-right corner of the primary
 /// work area with a 24 px margin. The result is clamped to the work area and persisted.
 pub fn set_scale(app: &AppHandle, scale: u8) -> Result<WindowGeometry, String> {
-    if !(2..=4).contains(&scale) {
+    if !scale_supported(scale) {
         return Err(format!("invalid scale {scale}; expected 2, 3 or 4"));
     }
     let window = main_window(app)?;
@@ -569,5 +579,167 @@ mod tests {
     fn restore_returns_none_with_no_entries() {
         let p = positions(&[], Some("LG@2560x1440"));
         assert_eq!(pick_restore(&p, &keys(&["LG@2560x1440"])), None);
+    }
+}
+
+/// Pins the Rust constants above — and the pre-boot fallback size in `tauri.conf.json` — to the
+/// TypeScript source they mirror, by parsing `src/sim/constants.ts` at compile time. Nothing computes
+/// the window size from these numbers twice without this test noticing: if Rust and TS disagree the
+/// window is resized to one size while Pixi sizes its canvas to another, and the click-through hit
+/// regions stop matching the visible art. A future stage that changes the grid, the padding or the
+/// scale ladder must change TS, the constants here and `tauri.conf.json` together; these assertions
+/// are what catch a half-finished change.
+#[cfg(test)]
+mod contract_sync {
+    use super::*;
+
+    const TS_CONSTANTS: &str = include_str!("../../src/sim/constants.ts");
+    const TAURI_CONF: &str = include_str!("../tauri.conf.json");
+    const TS_PATH: &str = "src/sim/constants.ts";
+    const RS_PATH: &str = "src-tauri/src/window.rs";
+    const CONF_PATH: &str = "src-tauri/tauri.conf.json";
+
+    /// The initialiser of `export const <name>` in constants.ts: the text between its `=` and its `;`.
+    /// Tolerates whitespace, a type annotation and comments elsewhere in the file, and panics with a
+    /// pointed message when the scan stops matching, so a reformat fails loudly instead of quietly
+    /// skipping the assertions below.
+    fn ts_initializer(name: &str) -> String {
+        let needle = format!("export const {name}");
+        let mut from = 0usize;
+        while let Some(i) = TS_CONSTANTS[from..].find(&needle) {
+            let after = from + i + needle.len();
+            from = after;
+            // Skip a longer identifier that merely starts with `name` (e.g. GRID_W vs GRID_WIDTH).
+            if TS_CONSTANTS[after..]
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '$')
+            {
+                continue;
+            }
+            let rest = &TS_CONSTANTS[after..];
+            let (Some(eq), Some(semi)) = (rest.find('='), rest.find(';')) else {
+                continue;
+            };
+            if eq > semi {
+                continue;
+            }
+            return rest[eq + 1..semi].trim().to_string();
+        }
+        panic!(
+            "{TS_PATH}: could not find a `export const {name} = <value>;` declaration. \
+             This test parses that exact shape to keep {RS_PATH} in sync with it; if the declaration \
+             was renamed or reformatted, update `ts_initializer` in {RS_PATH} to match."
+        );
+    }
+
+    /// A numeric `export const` from constants.ts.
+    fn ts_number(name: &str) -> f64 {
+        let raw = ts_initializer(name);
+        raw.parse::<f64>().unwrap_or_else(|_| {
+            panic!(
+                "{TS_PATH}: `{name}` is `{raw}`, which is not a plain number literal. \
+                 {RS_PATH} mirrors it as a constant, so it has to stay a literal (or this test needs \
+                 a smarter parser)."
+            )
+        })
+    }
+
+    /// The `SCALES` list from constants.ts, e.g. `[2, 3, 4]`.
+    fn ts_scales() -> Vec<u8> {
+        let raw = ts_initializer("SCALES");
+        let inner = raw
+            .strip_prefix('[')
+            .and_then(|r| r.strip_suffix(']'))
+            .unwrap_or_else(|| {
+                panic!(
+                    "{TS_PATH}: `SCALES` is `{raw}`, not an array literal like `[2, 3, 4]`. \
+                     {RS_PATH} pins its accepted scale range to that list."
+                )
+            });
+        inner
+            .split(',')
+            .map(str::trim)
+            .filter(|t| !t.is_empty()) // tolerate a trailing comma
+            .map(|t| {
+                t.parse::<u8>().unwrap_or_else(|_| {
+                    panic!("{TS_PATH}: `SCALES` entry `{t}` is not an integer literal.")
+                })
+            })
+            .collect()
+    }
+
+    /// `width`/`height` of the `main` window entry in tauri.conf.json.
+    fn conf_main_window_size() -> (f64, f64) {
+        let conf: Value = serde_json::from_str(TAURI_CONF)
+            .unwrap_or_else(|e| panic!("{CONF_PATH} is not valid JSON: {e}"));
+        let windows = conf["app"]["windows"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{CONF_PATH}: `app.windows` is missing or not an array."));
+        let main = windows
+            .iter()
+            .find(|w| w["label"].as_str() == Some(MAIN_WINDOW))
+            .unwrap_or_else(|| {
+                panic!("{CONF_PATH}: no window entry with label \"{MAIN_WINDOW}\".")
+            });
+        let number = |key: &str| {
+            main[key].as_f64().unwrap_or_else(|| {
+                panic!("{CONF_PATH}: the \"{MAIN_WINDOW}\" window has no numeric `{key}`.")
+            })
+        };
+        (number("width"), number("height"))
+    }
+
+    #[test]
+    fn rust_grid_constants_match_typescript() {
+        for (name, rust) in [("GRID_W", GRID_W), ("GRID_H", GRID_H), ("WINDOW_PAD", WINDOW_PAD)] {
+            let ts = ts_number(name);
+            assert_eq!(
+                rust, ts,
+                "{name} is {rust} in {RS_PATH} but {ts} in {TS_PATH}. These must be equal: TS sizes \
+                 the Pixi canvas and the hit regions from its copy while Rust sizes the window from \
+                 this one. Fix by setting {name} in {RS_PATH} to {ts}."
+            );
+        }
+    }
+
+    #[test]
+    fn accepted_scale_range_matches_typescript_scales() {
+        let scales = ts_scales();
+        let first = *scales.first().expect("SCALES must not be empty");
+        let last = *scales.last().expect("SCALES must not be empty");
+        assert_eq!(
+            scales,
+            (first..=last).collect::<Vec<u8>>(),
+            "SCALES in {TS_PATH} is {scales:?}, which is not a contiguous ascending run. \
+             `set_scale` in {RS_PATH} validates with the range MIN_SCALE..=MAX_SCALE, which can only \
+             express such a run; replace that range with an explicit list before landing this."
+        );
+        for scale in 0u8..=9 {
+            assert_eq!(
+                scale_supported(scale),
+                scales.contains(&scale),
+                "`set_scale` in {RS_PATH} {} scale {scale}, but SCALES in {TS_PATH} is {scales:?}. \
+                 Fix by setting MIN_SCALE = {first} and MAX_SCALE = {last} in {RS_PATH} (and the \
+                 human-readable scale list in the `invalid scale` error message).",
+                if scale_supported(scale) { "accepts" } else { "rejects" }
+            );
+        }
+    }
+
+    #[test]
+    fn tauri_conf_fallback_size_matches_the_middle_scale() {
+        let scales = ts_scales();
+        let middle = scales[scales.len() / 2];
+        let expected = window_size_for_scale(middle);
+        assert_eq!(
+            conf_main_window_size(),
+            expected,
+            "{CONF_PATH} creates the \"{MAIN_WINDOW}\" window at {:?}, but the middle scale {middle} \
+             of SCALES {scales:?} is {expected:?}. That size is the pre-boot fallback the window is \
+             created with before TS calls `set_scale`, so a stale value makes the habitat visibly \
+             resize on every launch. Fix by setting width/height in {CONF_PATH} to {expected:?}.",
+            conf_main_window_size()
+        );
     }
 }

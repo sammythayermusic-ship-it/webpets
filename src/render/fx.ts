@@ -164,9 +164,20 @@ export function createSheen(): Sheen {
   };
 }
 
-/** ±2 px integer parallax toward the pointer; (0, 0) when reduced motion or no pointer. */
-export function parallaxOffset(gx: number | null, gy: number | null, reducedMotion: boolean): { dx: number; dy: number } {
+/**
+ * ±2 px integer parallax toward the pointer, measured from the centre of `grid` (the manifest habitat's
+ * `[w, h]`, the same way `createBubbles`/`createSheen` take their geometry from the manifest rather than
+ * importing constants); (0, 0) when reduced motion or no pointer.
+ */
+export function parallaxOffset(
+  grid: readonly [number, number],
+  gx: number | null,
+  gy: number | null,
+  reducedMotion: boolean,
+): { dx: number; dy: number } {
   if (reducedMotion || gx === null || gy === null) return { dx: 0, dy: 0 };
+  const cx = grid[0] / 2;
+  const cy = grid[1] / 2;
   const clamp2 = (v: number): number => Math.max(-2, Math.min(2, Math.round(v)));
-  return { dx: clamp2((gx - 80) / 30), dy: clamp2((gy - 60) / 25) };
+  return { dx: clamp2((gx - cx) / 30), dy: clamp2((gy - cy) / 25) };
 }

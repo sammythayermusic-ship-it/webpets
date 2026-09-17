@@ -1,12 +1,11 @@
 // Pure layout helpers shared by both platform implementations (and unit-tested without a DOM).
 
-import { GRID_H, GRID_W, WINDOW_PAD, type Scale } from '../sim/constants';
 import type { Rect } from '../sim/types';
 
-/** Contract window size for an integer scale: `(160s + 48) x (120s + 48)` CSS px. */
-export function windowSizeForScale(scale: Scale): { width: number; height: number } {
-  return { width: GRID_W * scale + 2 * WINDOW_PAD, height: GRID_H * scale + 2 * WINDOW_PAD };
-}
+// Contract window size for an integer scale: `(160s + 48) x (120s + 48)` CSS px. The formula itself
+// lives in `src/sim/constants.ts` (the single source of truth, mirrored by Rust); this module keeps
+// exporting it because `src/platform/browser.ts` and `geometry.test.ts` import it from here.
+export { windowSizeForScale } from '../sim/constants';
 
 /** Half-open containment test matching the Rust poller (`x < r.x + r.w`). */
 export function rectContains(r: Rect, x: number, y: number): boolean {

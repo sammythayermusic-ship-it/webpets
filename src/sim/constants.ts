@@ -32,6 +32,16 @@ export type Scale = 2 | 3 | 4;
 export const SCALES: readonly Scale[] = [2, 3, 4];
 /** Transparent padding around the habitat on every side, in CSS px: room for the HUD pill, caption and drop shadow. */
 export const WINDOW_PAD = 24;
+/**
+ * The only window-size formula in the codebase: the habitat grid at an integer scale plus `WINDOW_PAD`
+ * on every side, in CSS px. `src/platform/geometry.ts` re-exports it, `src/render/scene.ts` sizes the
+ * Pixi renderer with it, and `src-tauri/src/window.rs` mirrors it in Rust — a Rust unit test parses the
+ * constants above out of this file and fails the build if the two ever disagree.
+ */
+export function windowSizeForScale(scale: Scale): { width: number; height: number } {
+  return { width: GRID_W * scale + 2 * WINDOW_PAD, height: GRID_H * scale + 2 * WINDOW_PAD };
+}
+
 export const PET_FPS = 8;
 /** Pantry level (in $FEED) that fills the feeder sprite completely. */
 export const PANTRY_VISUAL_MAX = 500;

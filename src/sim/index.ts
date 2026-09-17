@@ -33,6 +33,7 @@ export {
   SNAP_PX,
   STARTING_BALANCE,
   WINDOW_PAD,
+  windowSizeForScale,
 } from './constants';
 export type { Scale, TrayChipSize } from './constants';
 export { hungerAt, hungerLabel, pantryDays, projectedDeathAt, zeroAt } from './hunger';

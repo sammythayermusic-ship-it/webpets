@@ -4,7 +4,7 @@
 // accumulator; bubbles, the pantry blink and the night fade run at ticker rate.
 
 import { Application, Container, RenderTexture, Sprite, type Ticker } from 'pixi.js';
-import { GRID_H, GRID_W, PET_FPS, WINDOW_PAD, type Scale } from '../sim/constants';
+import { GRID_H, GRID_W, PET_FPS, WINDOW_PAD, windowSizeForScale, type Scale } from '../sim/constants';
 import type { Rect, Rng } from '../sim/types';
 import { createFishBehavior } from '../species/fish/behavior';
 import { configureNearestTextures, loadTextures } from './assets';
@@ -21,8 +21,10 @@ const MAX_ACC_MS = 1000;
 const HABITAT_KEY = 'fish/bowl';
 const SPRITE_KEY = 'fish';
 
+/** `windowSizeForScale` from `src/sim/constants.ts` in the `{ w, h }` shape the scene uses internally. */
 export function windowSize(scale: Scale): { w: number; h: number } {
-  return { w: GRID_W * scale + 2 * WINDOW_PAD, h: GRID_H * scale + 2 * WINDOW_PAD };
+  const { width, height } = windowSizeForScale(scale);
+  return { w: width, h: height };
 }
 
 interface Mounted {
@@ -46,8 +48,14 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
   const spriteDef: ManifestSprite | undefined = manifest.sprites[SPRITE_KEY];
   if (!habitat) throw new Error(`manifest has no habitat "${HABITAT_KEY}"`);
   if (!spriteDef) throw new Error(`manifest has no sprite "${SPRITE_KEY}"`);
+  // The RenderTexture is sized from the manifest's grid, but the window geometry around it comes from
+  // the constants, so the two must agree: a manifest with a different grid would be drawn into a
+  // texture the window has no room for.
   const [gridW, gridH] = habitat.grid;
-  if (gridW !== GRID_W || gridH !== GRID_H) throw new Error(`habitat grid must be ${GRID_W}x${GRID_H}`);
+  if (gridW !== GRID_W || gridH !== GRID_H)
+    throw new Error(
+      `habitat grid ${gridW}x${gridH} must equal GRID_W x GRID_H (${GRID_W}x${GRID_H} in src/sim/constants.ts): the window size is derived from the constants`,
+    );
 
   let m: Mounted | null = null;
   let scale: Scale = 3;
@@ -81,7 +89,7 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
     const gx = pointer ? (pointer.x - WINDOW_PAD) / scale : null;
     const gy = pointer ? (pointer.y - WINDOW_PAD) / scale : null;
     m.sheen.setPointer(gx, gy, m.bounds);
-    const { dx, dy } = parallaxOffset(gx, gy, reduced);
+    const { dx, dy } = parallaxOffset(habitat.grid, gx, gy, reduced);
     m.layers.setParallax(dx, dy);
   };
 
@@ -177,8 +185,8 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       layers.slots.glass.addChild(sheen.sprite);
 
       const rt = RenderTexture.create({
-        width: GRID_W,
-        height: GRID_H,
+        width: gridW,
+        height: gridH,
         resolution: 1,
         scaleMode: 'nearest',
         antialias: false,

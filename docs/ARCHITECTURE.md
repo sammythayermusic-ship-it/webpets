@@ -115,6 +115,11 @@ only ordering entries that share a slot. `memorial` is a `bg` variant shown inst
 - Habitat grid 160×120, integer scale `s ∈ {2,3,4}`. Habitat CSS size = `160s × 120s`.
 - `WINDOW_PAD = 24` CSS px on every side. Window size = `(160s + 48) × (120s + 48)`: S 368×288, M 528×408, L 688×528.
   `tauri.conf.json` is 528×408 (the M fallback before TS boots).
+- That formula is written once, as `windowSizeForScale(scale: Scale): { width, height }` in `src/sim/constants.ts`
+  (re-exported by `src/platform/geometry.ts`, wrapped as `windowSize(scale): { w, h }` by `src/render/scene.ts`).
+  `src-tauri/src/window.rs` mirrors `GRID_W`/`GRID_H`/`WINDOW_PAD`/the scale range in Rust and pins them — plus the
+  `tauri.conf.json` fallback size — to `src/sim/constants.ts` in its `contract_sync` test (`include_str!` + a string
+  scan), so the grid, the padding and the scale ladder can only be changed in all four places at once.
 - Habitat origin inside the window = `(24, 24)`. HUD pill is centered horizontally above the habitat inside the top pad
   (its bottom edge 4 px above the habitat, sliding up 8 px on appear). Caption sits in the bottom pad.
 - **Pixel grid guarantee (structural, not roundPixels):** every layer except `shadow` is drawn into a 160×120
