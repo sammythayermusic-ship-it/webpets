@@ -53,7 +53,8 @@ Tauri build is needed. Recorded videos and traces are written under `test-result
 - Tray icon: left-click toggles the window, right-click opens the menu (feed, pantry, size,
   mute, notifications, day/night, launch at login, dev panel, new pet, show/hide, quit).
 - `⌘=` / `⌘−` change the window size (2x / 3x / 4x pixel scale) while the window has focus.
-- `⌥⌘D` opens the dev panel: advance time (+1h / +12h / +3d), set hunger, pantry and balance,
+- `⌥⌘D` opens the dev panel (macOS claims this chord for "Turn Dock Hiding On/Off"; if nothing happens,
+  use `⇧⌥⌘D` or the tray menu's **Dev panel** item, which do the same thing): advance time (+1h / +12h / +3d), set hunger, pantry and balance,
   force a state, toggle day/night, simulate a long absence, reset the clock.
 - `Cmd+Shift+P` is a global shortcut that shows or hides the pet from any app.
 

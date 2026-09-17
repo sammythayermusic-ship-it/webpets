@@ -34,3 +34,11 @@ describe('nextScale', () => {
     expect(nextScale(2, -1)).toBeNull();
   });
 });
+
+describe('dev panel fallback chord', () => {
+  it('also accepts Shift+Alt+Meta+KeyD, since macOS may swallow plain Alt+Meta+D', () => {
+    expect(commandFor({ code: 'KeyD', metaKey: true, altKey: true, ctrlKey: false })).toBe('dev-panel');
+    // Shift is not part of the match, so the Shift variant resolves to the same command.
+    expect(commandFor({ code: 'KeyD', metaKey: true, altKey: true, ctrlKey: false, shiftKey: true } as Parameters<typeof commandFor>[0])).toBe('dev-panel');
+  });
+});

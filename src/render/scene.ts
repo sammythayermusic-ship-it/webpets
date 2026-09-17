@@ -257,6 +257,10 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
 
     async snapshot() {
       if (!m) throw new Error('scene not mounted');
+      // Re-render the habitat into the RenderTexture first: a hidden tab or a suspended webview gets no
+      // ticker callbacks, so without this the extract would return whatever was last drawn.
+      m.app.renderer.render({ container: m.layers.root, target: m.rt });
+      m.app.render();
       return m.app.renderer.extract.base64({ target: m.app.stage, format: 'png' });
     },
 

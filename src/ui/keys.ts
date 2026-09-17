@@ -1,7 +1,10 @@
 // Keyboard shortcuts, matched on e.code with modifiers (contract "Pointer, hover and click-through rules" #5):
 //   Meta+Equal / Meta+NumpadAdd      scale up
 //   Meta+Minus / Meta+NumpadSubtract scale down
-//   Alt+Meta+KeyD                    dev panel toggle
+//   Alt+Meta+KeyD                    dev panel toggle (Shift is ignored, so Shift+Alt+Meta+KeyD works too;
+//                                   macOS claims plain Alt+Meta+D for "Turn Dock Hiding On/Off" and may
+//                                   swallow it before the webview sees it, so the Shift variant and the
+//                                   tray menu's "Dev panel" item are the documented fallbacks)
 
 import type { AppStore } from '../app/types';
 import { SCALES, type Scale } from '../sim/constants';
