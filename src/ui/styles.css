@@ -1,2 +1,395 @@
-html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
-#app { position: relative; width: 100vw; height: 100vh; }
+/* WebPets UI styles. Plain DOM over the Pixi canvas.
+   Rules (docs/ARCHITECTURE.md "Pointer, hover and click-through rules"):
+   - html/body/#app transparent; #ui absolute inset 0 with pointer-events none.
+   - pointer-events: auto only on interactive children (pill, caption, dev panel, dialogs).
+   - Pixel font: Press Start 2P, no smoothing, 8 px / 16 px, line-height 1, integer offsets. */
+
+@font-face {
+  font-family: 'Press Start 2P';
+  src: url('/fonts/PressStart2P-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app > canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+
+#ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  line-height: 1;
+  color: #000;
+  -webkit-font-smoothing: none;
+  text-rendering: optimizeSpeed;
+}
+
+#ui [hidden] {
+  display: none !important;
+}
+
+#ui img,
+#ui canvas {
+  image-rendering: pixelated;
+}
+
+#ui button,
+#ui input,
+#ui select,
+#ui textarea {
+  font-family: inherit;
+  font-size: 8px;
+  line-height: 1;
+  -webkit-font-smoothing: none;
+  text-rendering: optimizeSpeed;
+  border-radius: 0;
+  outline: none;
+  margin: 0;
+}
+
+#ui button {
+  height: 12px;
+  padding: 0 3px;
+  border: 1px solid #000;
+  background: #fff;
+  color: #000;
+  cursor: pointer;
+  box-shadow: 1px 1px 0 #000;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+#ui button:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: none;
+}
+#ui button:disabled {
+  color: #888;
+  border-color: #888;
+  box-shadow: 1px 1px 0 #888;
+  cursor: default;
+}
+
+#ui input,
+#ui select {
+  height: 12px;
+  padding: 0 2px;
+  border: 1px solid #000;
+  background: #fff;
+  color: #000;
+  box-sizing: border-box;
+}
+#ui input[type='number'] {
+  width: 56px;
+  -moz-appearance: textfield;
+}
+#ui input[type='number']::-webkit-inner-spin-button,
+#ui input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+
+/* ---------- Hover HUD ---------- */
+
+.hud-pill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 16px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  border: 1px solid #000;
+  background: #fff;
+  box-shadow: 2px 2px 0 #000;
+  white-space: nowrap;
+  pointer-events: auto;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    transform 120ms steps(4, end),
+    opacity 120ms steps(4, end),
+    visibility 0s linear 120ms;
+}
+.hud-pill.show {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    transform 120ms steps(4, end),
+    opacity 120ms steps(4, end),
+    visibility 0s linear 0s;
+}
+.hud-pill .ring {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  shape-rendering: crispEdges;
+}
+.hud-pill .ring-bg {
+  fill: none;
+  stroke: #ccc;
+  stroke-width: 3;
+}
+.hud-pill .ring-fg {
+  fill: none;
+  stroke-width: 3;
+  transform: rotate(-90deg);
+  transform-origin: 6px 6px;
+}
+.hud-pill .pct {
+  min-width: 32px;
+  text-align: right;
+}
+.hud-pill .name {
+  margin-left: 2px;
+  margin-right: 2px;
+}
+.hud-pill .id {
+  color: #666;
+}
+.hud-pill .dead .name {
+  color: #666;
+}
+.ring-full { stroke: #3ddc84; }
+.ring-peckish { stroke: #ffd23f; }
+.ring-hungry { stroke: #ff8c1a; }
+.ring-starving { stroke: #ff3b3b; }
+
+.hud-caption {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 12px;
+  box-sizing: border-box;
+  padding: 2px 3px;
+  background: #fff;
+  border: 1px solid #000;
+  box-shadow: 1px 1px 0 #000;
+  white-space: nowrap;
+  pointer-events: auto;
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 120ms steps(4, end),
+    visibility 0s linear 120ms;
+}
+.hud-caption.show {
+  visibility: visible;
+  opacity: 1;
+  transition:
+    opacity 120ms steps(4, end),
+    visibility 0s linear 0s;
+}
+.hud-caption.low {
+  color: #b00;
+}
+
+/* ---------- Speech bubble ---------- */
+
+.speech-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  max-width: 200px;
+  padding: 4px 5px;
+  background: #fff;
+  color: #000;
+  border: 1px solid #000;
+  box-shadow: 3px 3px 0 #000;
+  font-size: 8px;
+  line-height: 10px;
+  white-space: normal;
+  word-wrap: break-word;
+  pointer-events: none;
+  z-index: 5;
+}
+.speech-bubble::after {
+  /* little tail toward the pet, drawn as a solid pixel square */
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  background: #fff;
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #000;
+  transform: rotate(45deg);
+}
+
+/* ---------- Dev panel ---------- */
+
+.dev-panel {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  right: 4px;
+  bottom: 4px;
+  box-sizing: border-box;
+  padding: 6px;
+  overflow: auto;
+  background: rgba(16, 16, 24, 0.94);
+  color: #e8e8e8;
+  border: 1px solid #000;
+  box-shadow: 2px 2px 0 #000;
+  pointer-events: auto;
+  z-index: 20;
+  font-size: 8px;
+  line-height: 12px;
+}
+.dev-panel h2 {
+  margin: 0 0 4px 0;
+  font-size: 8px;
+  line-height: 12px;
+  color: #ffd23f;
+  text-transform: uppercase;
+}
+.dev-panel .row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 4px 0;
+}
+.dev-panel .row label {
+  min-width: 48px;
+  color: #aaa;
+}
+.dev-panel .status {
+  color: #9ee;
+  margin-bottom: 4px;
+  white-space: pre-wrap;
+}
+.dev-panel .note {
+  color: #ffd23f;
+}
+.dev-panel pre {
+  margin: 4px 0 0 0;
+  padding: 4px;
+  max-height: 120px;
+  overflow: auto;
+  background: #000;
+  color: #9f9;
+  font-family: inherit;
+  font-size: 8px;
+  line-height: 10px;
+  white-space: pre;
+}
+.dev-panel .fps {
+  color: #9f9;
+}
+
+/* ---------- Modal cards (pantry dialog, memorial, montage) ---------- */
+
+.modal {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  padding: 6px;
+  background: #fff;
+  color: #000;
+  border: 1px solid #000;
+  box-shadow: 3px 3px 0 #000;
+  pointer-events: auto;
+  z-index: 10;
+  font-size: 8px;
+  line-height: 12px;
+}
+.modal h2 {
+  margin: 0 0 4px 0;
+  font-size: 8px;
+  line-height: 12px;
+  text-transform: uppercase;
+}
+.modal .line {
+  margin: 0 0 2px 0;
+  white-space: nowrap;
+}
+.modal .row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+.modal .muted {
+  color: #666;
+}
+.modal .big {
+  font-size: 16px;
+  line-height: 18px;
+  margin-bottom: 4px;
+}
+
+.memorial-card .rip {
+  color: #b00;
+}
+
+.montage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+  z-index: 15;
+}
+.montage .modal {
+  position: absolute;
+}
+.montage ol {
+  margin: 0;
+  padding: 0 0 0 4px;
+  list-style: none;
+  max-height: 96px;
+  overflow: auto;
+}
+.montage li {
+  margin: 0 0 2px 0;
+  white-space: normal;
+  line-height: 10px;
+}
+.montage li .when {
+  color: #666;
+  margin-right: 4px;
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-pill,
+  .hud-pill.show,
+  .hud-caption,
+  .hud-caption.show {
+    transition: none;
+    transform: none;
+  }
+}

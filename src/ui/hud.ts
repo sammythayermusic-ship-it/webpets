@@ -1,0 +1,156 @@
+// Hover HUD: a pill above the habitat (hunger ring + %, name + id, FEED 25, MIN) and a caption below it.
+// The HUD model is derived locally from AppState (see model.ts); main.ts only drives visibility and relayout.
+
+import type { AppState } from '../app/types';
+import type { Rect } from '../sim/types';
+import { WINDOW_PAD } from '../sim/constants';
+import type { HudHandle, UiDeps } from './types';
+import { button, el, rootSize, stopDrag } from './dom';
+import { pillStripRect } from './hitRegions';
+import { captionText, toHudModel, type HudModel } from './model';
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const RING_R = 4.5;
+const RING_C = 2 * Math.PI * RING_R;
+/** Pill bottom edge sits this many px above the habitat grid top (WINDOW_PAD). */
+const PILL_GAP = 4;
+const PILL_H = 16;
+const CAPTION_GAP = 4;
+
+export function mountHud(root: HTMLElement, deps: UiDeps): HudHandle {
+  const { store, scene } = deps;
+
+  // ----- pill -----
+  const pill = el('div', 'hud-pill');
+  stopDrag(pill);
+
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', 'ring');
+  svg.setAttribute('viewBox', '0 0 12 12');
+  svg.setAttribute('width', '12');
+  svg.setAttribute('height', '12');
+  const ringBg = document.createElementNS(SVG_NS, 'circle');
+  ringBg.setAttribute('class', 'ring-bg');
+  ringBg.setAttribute('cx', '6');
+  ringBg.setAttribute('cy', '6');
+  ringBg.setAttribute('r', String(RING_R));
+  const ringFg = document.createElementNS(SVG_NS, 'circle');
+  ringFg.setAttribute('cx', '6');
+  ringFg.setAttribute('cy', '6');
+  ringFg.setAttribute('r', String(RING_R));
+  svg.append(ringBg, ringFg);
+
+  const pct = el('span', 'pct');
+  const name = el('span', 'name');
+  const nameText = document.createTextNode('');
+  const id = el('span', 'id');
+  name.append(nameText, id);
+
+  const feedBtn = button(
+    'FEED 25',
+    () => {
+      store.getState().actions.feed();
+    },
+    'feed',
+  );
+  feedBtn.title = 'Feed (burns 25 $FEED)';
+  const minBtn = button(
+    'MIN',
+    () => {
+      void store.getState().actions.setHidden(true);
+    },
+    'min',
+  );
+  minBtn.title = 'Minimize to the tray chip';
+
+  pill.append(svg, pct, name, feedBtn, minBtn);
+
+  // ----- caption -----
+  const caption = el('div', 'hud-caption');
+  stopDrag(caption);
+
+  root.append(pill, caption);
+
+  let visible = false;
+  let lastKey = '';
+  let pillRect: Rect = { x: 0, y: 0, w: 0, h: PILL_H };
+  let captionRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
+
+  function applyModel(m: HudModel): void {
+    const key = JSON.stringify(m);
+    if (key === lastKey) return;
+    lastKey = key;
+    const dash = (RING_C * m.hungerPct) / 100;
+    ringFg.setAttribute('class', `ring-fg ring-${m.label}`);
+    ringFg.setAttribute('stroke-dasharray', `${dash.toFixed(2)} ${RING_C.toFixed(2)}`);
+    pct.textContent = `${m.hungerPct}%`;
+    nameText.data = `${m.name} `;
+    id.textContent = m.id;
+    feedBtn.disabled = !m.canFeed;
+    feedBtn.title = m.alive ? (m.canFeed ? 'Feed (burns 25 $FEED)' : 'Not enough $FEED') : `${m.name} has died`;
+    pill.classList.toggle('dead', !m.alive);
+    caption.textContent = captionText(m);
+    caption.classList.toggle('low', m.pantry > 0 && m.pantryDays < 2);
+    relayout();
+  }
+
+  function render(s: AppState): void {
+    applyModel(toHudModel(s, s.actions.now()));
+  }
+
+  function relayout(): void {
+    const hit = scene.habitatHitRect();
+    const size = rootSize(root);
+    const cx = Math.round(hit.x + hit.w / 2);
+
+    const pw = pill.offsetWidth || 0;
+    const ph = pill.offsetHeight || PILL_H;
+    let px = Math.round(cx - pw / 2);
+    px = Math.max(0, Math.min(Math.max(0, size.w - pw), px));
+    const py = Math.max(0, WINDOW_PAD - PILL_GAP - ph);
+    pill.style.left = `${px}px`;
+    pill.style.top = `${py}px`;
+    pillRect = { x: px, y: py, w: pw, h: ph };
+
+    const cw = caption.offsetWidth || 0;
+    const ch = caption.offsetHeight || 0;
+    let cxp = Math.round(cx - cw / 2);
+    cxp = Math.max(0, Math.min(Math.max(0, size.w - cw), cxp));
+    let cy = Math.round(hit.y + hit.h + CAPTION_GAP);
+    cy = Math.max(0, Math.min(Math.max(0, size.h - ch), cy));
+    caption.style.left = `${cxp}px`;
+    caption.style.top = `${cy}px`;
+    const prev = captionRect;
+    captionRect = { x: cxp, y: cy, w: cw, h: ch };
+    if (visible && (prev.x !== cxp || prev.w !== cw || prev.y !== cy)) deps.requestHitRegions();
+  }
+
+  function setVisible(b: boolean): void {
+    if (b === visible) return;
+    visible = b;
+    if (b) relayout();
+    pill.classList.toggle('show', b);
+    caption.classList.toggle('show', b);
+    deps.requestHitRegions();
+  }
+
+  function getRects(): Rect[] {
+    if (!visible) return [];
+    const hit = scene.habitatHitRect();
+    return [pillStripRect(pillRect, hit.y), { ...captionRect }];
+  }
+
+  const unsub = store.subscribe((s) => render(s));
+  render(store.getState());
+
+  return {
+    setVisible,
+    relayout,
+    getRects,
+    destroy() {
+      unsub();
+      pill.remove();
+      caption.remove();
+    },
+  };
+}
