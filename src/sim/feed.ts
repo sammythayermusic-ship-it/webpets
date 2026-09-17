@@ -5,7 +5,11 @@ import { reconcile } from './reconcile';
 
 /**
  * Manual feed: reconcile to `now`, validate on the reconciled state, burn FEED_COST (the only ledger call), then
- * hungerAtLastFed = min(MAX, hunger + gain), lastFedAt = lastReconciledAt = now, meals++, feedBurned += cost.
+ * hungerAtLastFed = min(MAX, hunger + gain), lastFedAt = lastReconciledAt = t, meals++, feedBurned += cost, where
+ * t = max(now, lastReconciledAt). When the clock went backwards (dev.resetClock after a skip, or a system clock
+ * correction) reconcile is a no-op and the pet has already reached the hunger at lastReconciledAt, so the gain is
+ * applied on top of that hunger rather than on the anchor re-evaluated at `now` (which would burn $FEED for a gain
+ * that decays away before it is ever shown).
  */
 export function feed(state: PetState, now: number, ledger: Ledger, c: SimConstants = DEFAULT_CONSTANTS): FeedResult {
   const r = reconcile(state, now, c);
@@ -15,23 +19,28 @@ export function feed(state: PetState, now: number, ledger: Ledger, c: SimConstan
   }
   ledger.burn(c.FEED_COST);
   const s = r.state;
-  const hunger = hungerFrom(s.hungerAtLastFed, s.lastFedAt, now, c);
+  const t = effectiveNow(s, now);
+  const hunger = hungerFrom(s.hungerAtLastFed, s.lastFedAt, t, c);
   const next: PetState = {
     ...s,
     hungerAtLastFed: Math.min(c.MAX_HUNGER, hunger + c.FEED_GAIN),
-    lastFedAt: now,
-    // Keep lastReconciledAt >= lastFedAt even if the clock went backwards (reconcile was then a no-op).
-    lastReconciledAt: Math.max(now, s.lastReconciledAt),
+    lastFedAt: t,
+    lastReconciledAt: t,
     meals: s.meals + 1,
     feedBurned: s.feedBurned + c.FEED_COST,
   };
   return { ok: true, state: next, events: r.events };
 }
 
+/** The time a mutator acts at: never earlier than the pet's own clock (reconcile is a no-op before it). */
+function effectiveNow(state: PetState, now: number): number {
+  return Math.max(now, state.lastReconciledAt);
+}
+
 /**
  * Move up to n whole $FEED from the wallet into the pantry. Reconciles first; a dead pet moves 0 and leaves the
- * ledger untouched. moved = min(floor(n), balance) (0 for n <= 0 / NaN). Reconciles again at `now` so an
- * immediate auto-feed applies.
+ * ledger untouched. moved = min(floor(n), balance) (0 for n <= 0 / NaN). Reconciles again at
+ * max(now, lastReconciledAt) so an immediate auto-feed applies.
  */
 export function depositPantry(
   state: PetState,
@@ -47,7 +56,8 @@ export function depositPantry(
   const moved = Math.min(wanted, available);
   ledger.debit(moved);
   const funded: PetState = { ...r1.state, pantry: r1.state.pantry + moved };
-  const r2 = reconcile(funded, now, c);
+  // Reconcile at max(now, lastReconciledAt) so the deposit can auto-feed even when the clock went backwards.
+  const r2 = reconcile(funded, effectiveNow(funded, now), c);
   return { state: r2.state, moved, events: [...r1.events, ...r2.events] };
 }
 

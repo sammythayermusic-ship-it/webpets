@@ -74,4 +74,30 @@ describe('feed', () => {
     expect(r.state.lastFedAt).toBe(now);
     expect(r.state.lastReconciledAt).toBe(now);
   });
+
+  it('feed with a backwards clock applies the gain on top of the hunger already reached', () => {
+    // Skip 12 h (hunger 80), then the clock moves back to B (dev.resetClock or a system clock correction).
+    const skipped = reconcile(fresh(), B + 12 * H).state;
+    expect(hungerAt(skipped, B + 12 * H)).toBeCloseTo(80, 9);
+    const ledger = new LocalLedger(1000);
+    const r = feed(skipped, B, ledger);
+    expect(r.ok).toBe(true);
+    expect(ledger.balance()).toBe(975);
+    expect(r.state.meals).toBe(1);
+    // Anchored at lastReconciledAt, not at `now`: the meal is visible once real time catches up.
+    expect(r.state.lastFedAt).toBe(B + 12 * H);
+    expect(r.state.lastReconciledAt).toBe(B + 12 * H);
+    expect(r.state.hungerAtLastFed).toBe(100);
+    expect(hungerAt(r.state, B + 12 * H)).toBe(100);
+    expect(r.events).toEqual([]);
+  });
+
+  it('feed with a backwards clock gains from a partial hunger', () => {
+    const skipped = reconcile(fresh(), B + 42 * H).state; // hunger 30
+    const r = feed(skipped, B + 10 * H, new LocalLedger(1000));
+    expect(r.ok).toBe(true);
+    expect(r.state.hungerAtLastFed).toBeCloseTo(75, 9);
+    expect(r.state.lastFedAt).toBe(B + 42 * H);
+    expect(r.state.lastReconciledAt).toBe(B + 42 * H);
+  });
 });

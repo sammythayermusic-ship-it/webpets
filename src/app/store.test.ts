@@ -274,6 +274,21 @@ describe('app store', () => {
     expect(store.getState().hunger).toBeCloseTo(30, 6);
   });
 
+  it('feed after resetClock raises the shown hunger from where the pet already is', async () => {
+    const { store } = await bootStore();
+    const a = store.getState().actions;
+    a.dev.skip(42 * H); // hunger 30
+    a.dev.resetClock(); // now() is back at B, pet stays at B + 42 h
+    expect(a.feed().ok).toBe(true);
+    const s = store.getState();
+    expect(s.balance).toBe(975);
+    expect(s.pet.meals).toBe(1);
+    expect(s.pet.lastFedAt).toBe(B + 42 * H);
+    expect(s.pet.lastReconciledAt).toBe(B + 42 * H);
+    expect(s.hunger).toBeCloseTo(75, 6);
+    expect(s.lastFeedEvent?.kind).toBe('manual');
+  });
+
   it('setScale calls the platform then persists; setHidden hides/shows; setLaunchAtLogin', async () => {
     const { store, platform } = await bootStore();
     const a = store.getState().actions;

@@ -236,8 +236,8 @@ hungerLabel(h): HungerLabel                           // full if h > 60; peckish
 zeroAt(state, c): number                              // alive: lastFedAt + hungerAtLastFed / DECAY_PER_HOUR * HOUR_MS (ignores pantry); dead: diedAt - 24 h
 projectedDeathAt(state, now, c): number               // dead: diedAt; alive: simulate auto-feeds from now until pantry < FEED_COST, then zeroAt + 24 h
 reconcile(state, now, c): ReconcileResult             // see rules below; no-op (unchanged state, []) when now <= lastReconciledAt or the pet is dead
-feed(state, now, ledger, c): FeedResult               // reconcile first; validate; burn; hungerAtLastFed = min(MAX, hunger + gain); lastFedAt = lastReconciledAt = now; meals++; feedBurned += cost
-depositPantry(state, n, now, ledger, c): PantryResult // reconcile first; dead → moved 0, ledger untouched; moved = min(floor(n), balance) (0 for n <= 0 / NaN); ledger.debit(moved); reconcile again at now (may auto-feed at now)
+feed(state, now, ledger, c): FeedResult               // reconcile first; validate; burn; t = max(now, lastReconciledAt); hungerAtLastFed = min(MAX, hungerAt(t) + gain); lastFedAt = lastReconciledAt = t; meals++; feedBurned += cost
+depositPantry(state, n, now, ledger, c): PantryResult // reconcile first; dead → moved 0, ledger untouched; moved = min(floor(n), balance) (0 for n <= 0 / NaN); ledger.debit(moved); reconcile again at max(now, lastReconciledAt) (may auto-feed there)
 withdrawPantry(state, now, ledger, c): PantryResult   // reconcile first (alive only); moved = pantry; allowed on dead pets; ledger.credit(moved)
 pantryDays(pantry, c): number                         // (pantry / FEED_COST) * (FEED_GAIN / DECAY_PER_HOUR) / 24
 ageMs(state, now): number                             // (diedAt ?? now) - bornAt
@@ -249,7 +249,10 @@ class LocalLedger implements Ledger { constructor(balance: number); toJSON(): nu
 
 Invariants: `lastReconciledAt >= lastFedAt` always. Every mutator first reconciles to `now`, performs all validation
 on the reconciled state, calls exactly one Ledger method as its last side effect, then builds the new state; if the
-ledger throws, the mutator rethrows. `balance + pantry + feedBurned` is conserved across all operations (the store's
+ledger throws, the mutator rethrows. Mutators never move the pet's clock backwards: when `now < lastReconciledAt`
+(dev `resetClock` after a skip, or a system clock correction) reconcile is a no-op and `feed` / `depositPantry` act at
+`max(now, lastReconciledAt)`, so a manual feed raises the hunger the pet has already reached (the store shows hunger
+at that same time) instead of burning $FEED for a gain that decays away before real time catches up. `balance + pantry + feedBurned` is conserved across all operations (the store's
 `newPet` withdraws the pantry before replacing the pet). `pantry`, `balance`, `meals`, `feedBurned` are non-negative
 integers; hunger is the only float. Dead states are built by setting `alive: false` and adding `diedAt`; alive states
 never carry a `diedAt` key. `LocalLedger.burn/debit/credit` throw `RangeError` unless `Number.isInteger(n) && n >= 0`,
