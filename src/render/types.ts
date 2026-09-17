@@ -115,6 +115,8 @@ export interface HabitatScene {
   /** Rect of the habitat's opaque pixels inside the window, CSS px: (24 + opaqueRect.x*s, ...). */
   habitatHitRect(): Rect;
   fps(): number;
+  /** PNG data URL of the whole canvas (habitat + shadow) rendered right now; for tests and dev diagnostics. */
+  snapshot(): Promise<string>;
   destroy(): void;
 }
 

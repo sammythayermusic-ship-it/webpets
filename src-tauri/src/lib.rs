@@ -77,6 +77,11 @@ pub fn run() {
             // The window is created hidden (tauri.conf.json visible: false); TS shows it at the
             // end of boot. Rust never shows it on its own except the 10 s safety fallback.
             if let Some(w) = handle.get_webview_window(window::MAIN_WINDOW) {
+                // A corner pet belongs on every Space. On macOS this collection behavior also keeps
+                // Stage Manager from shrinking and re-arranging the window like an app window.
+                if let Err(e) = w.set_visible_on_all_workspaces(true) {
+                    eprintln!("[webpets] set_visible_on_all_workspaces failed: {e}");
+                }
                 let visible = w.is_visible().unwrap_or(false);
                 handle
                     .state::<ShellState>()

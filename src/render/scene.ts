@@ -255,6 +255,11 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       return m ? m.app.ticker.FPS : 0;
     },
 
+    async snapshot() {
+      if (!m) throw new Error('scene not mounted');
+      return m.app.renderer.extract.base64({ target: m.app.stage, format: 'png' });
+    },
+
     destroy() {
       if (!m) return;
       const cur = m;

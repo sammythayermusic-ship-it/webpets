@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { webpetsDiag } from './tools/vite-diag-plugin';
 
 // Tauri expects a fixed port and no screen clearing so Rust build output stays visible.
 // publicDir is the repo `assets/` folder so `assets/habitats/fish/bowl/bg.png` is served at `/habitats/fish/bowl/bg.png`.
@@ -21,6 +22,7 @@ export default defineConfig({
     assetsInlineLimit: 0,
   },
   plugins: [
+    webpetsDiag(),
     {
       // The 1024 px reference renders are for humans only; never ship them.
       name: 'webpets-strip-reference-art',

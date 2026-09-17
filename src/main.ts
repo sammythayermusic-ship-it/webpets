@@ -128,7 +128,9 @@ async function boot(platform: Platform): Promise<void> {
 
   // Pointer: HUD visible while inside (400 ms grace before hiding); the scene gets window-local CSS px.
   let grace: ReturnType<typeof setTimeout> | null = null;
+  let lastPointer: PointerState | null = null;
   platform.window.onPointer((p: PointerState) => {
+    lastPointer = p;
     if (p.inside) {
       if (grace !== null) {
         clearTimeout(grace);
@@ -167,6 +169,20 @@ async function boot(platform: Platform): Promise<void> {
   if (!store.getState().hidden) await platform.window.show();
   startScheduler(store, platform);
   setInterval(() => store.getState().actions.tick(), NIGHT_REFRESH_MS);
+
+  // Dev-only diagnostics bridge (tools/vite-diag-plugin.ts); tree-shaken out of production builds.
+  if (import.meta.env.DEV) {
+    const devPanelHandle = devPanel;
+    void import('./dev/diag').then((mod) =>
+      mod.installDiag({
+        store,
+        platform,
+        scene,
+        hitRegions: () => computeHitRegions(scene, hudHandle, devPanelHandle),
+        lastPointer: () => lastPointer,
+      }),
+    );
+  }
 
   // 5. "While you were gone" montage; recentEvents is read once, right after boot.
   const { recentEvents, pet } = store.getState();
