@@ -341,7 +341,7 @@ dead: `anim 'dead'`, `y = surfaceY + 6`. Positions are integers.
 ```ts
 mountHud(root, deps): HudHandle
 mountDevPanel(root, deps): DevPanelHandle
-mountSpeech(root, deps): SpeechHandle             // max 1 per 15 s, silent when dead
+mountSpeech(root, deps): SpeechHandle & { relayout(): void }   // max 1 per 15 s, silent when dead; relayout() re-anchors a visible bubble after a scale change
 mountPantryDialog(root, deps): { open(): void }
 mountMontage(root, deps): { play(events: SimEvent[], name: string): Promise<void> }
 mountMemorial(root, deps): { setDead(pet: PetState | null): void }   // DOM card only (name, id, age, meals, "New pet"); dismiss → actions.acknowledgeDeath()
@@ -363,7 +363,7 @@ except fish/bowl), FPS meter (`scene.fps()`), "Simulate 10-day absence with 500 
    (creates the canvas; main creates `#ui` after it). `audio = initAudio()`.
 3. Mount HUD, dev panel, speech, pantry dialog, montage, memorial; `wireTray`; subscribe `toSceneView` → `scene.setView`,
    `lastFeedEvent` → `scene.feed()` + `audio.play('feed')`, `settings.scale` → `scene.setScale`, `hud.relayout()`,
-   `refreshHitRegions()`; `platform.window.onMoved(g => scene.setResolution(g.scaleFactor))`; pointer wiring per the
+   `speech.relayout()`, `refreshHitRegions()`; `platform.window.onMoved(g => scene.setResolution(g.scaleFactor))`; pointer wiring per the
    rules above; keyboard; `contextmenu`; drag.
 4. `await platform.window.setScale(settings.scale)` (restores position), `refreshHitRegions()`, then
    `await platform.window.show()` unless hidden. Start the scheduler. Night refresh every 60 s.

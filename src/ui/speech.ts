@@ -12,6 +12,8 @@ export type SpeechPool = 'idle' | 'fed' | 'hungry' | 'starving' | 'wake';
 export interface SpeechHandleExt extends SpeechHandle {
   /** Pick a random line from one of the personality pools (used by main.ts for the 'wake' line after a montage). */
   sayFrom(pool: SpeechPool): void;
+  /** Re-position the bubble for a new scale / canvas size (no-op while hidden). */
+  relayout(): void;
   destroy(): void;
 }
 
@@ -151,10 +153,15 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
 
   scheduleIdle();
 
+  function relayout(): void {
+    if (!bubble.hidden) position();
+  }
+
   return {
     say,
     sayFrom,
     setMuted,
+    relayout,
     destroy() {
       offBite();
       unsub();

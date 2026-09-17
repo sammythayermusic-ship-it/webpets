@@ -112,6 +112,7 @@ async function boot(platform: Platform): Promise<void> {
       // actions.setScale awaited platform.window.setScale before committing, so the window is already resized.
       scene.setScale(s.settings.scale);
       hudHandle.relayout();
+      speech.relayout();
       refreshHitRegions();
     }
 
