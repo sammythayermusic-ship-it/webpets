@@ -1,42 +1,82 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clampScale,
   DEFAULT_SCALE,
   GRID_H,
   GRID_W,
-  SCALES,
+  MAX_SCALE,
+  MIN_SCALE,
   SCALE_L,
   SCALE_M,
   SCALE_S,
+  SCALE_STEPS_PER_UNIT,
+  scaleFactor,
   WINDOW_PAD,
   windowSizeForScale,
 } from './constants';
 
-// `SCALES` and `DEFAULT_SCALE` have to be plain literals so the Rust `contract_sync` test can parse
-// this file as text. That duplicates SCALE_S/M/L, so pin the two spellings to each other here.
-describe('the scale ladder', () => {
-  it('lists exactly S, M, L in ascending order', () => {
-    expect(SCALES).toEqual([SCALE_S, SCALE_M, SCALE_L]);
-    expect([...SCALES]).toEqual([...SCALES].sort((a, b) => a - b));
+// The scale used to be three named rungs, because only whole multiples of the grid were legal while
+// the renderer drew on a pixel grid. It is a continuous count of eighths now; what has to hold is that
+// every value of it produces a whole number of pixels, in this language and in Rust's copy.
+
+describe('the scale', () => {
+  it('divides the grid exactly, which is what lets two languages agree to the pixel', () => {
+    // The load-bearing property. If the grid were not divisible by the step count, a window size
+    // would be fractional and Rust and TypeScript would each need a rounding rule that matched the
+    // other's exactly -- and a one-pixel disagreement silently stops the click-through region
+    // matching the art, which reads as the window eating clicks meant for the app behind it.
+    expect(GRID_W % SCALE_STEPS_PER_UNIT).toBe(0);
+    expect(GRID_H % SCALE_STEPS_PER_UNIT).toBe(0);
   });
 
-  it('defaults to M', () => {
-    expect(DEFAULT_SCALE).toBe(SCALE_M);
+  it('produces whole pixel sizes at every legal value', () => {
+    for (let n = MIN_SCALE; n <= MAX_SCALE; n += 1) {
+      const { width, height } = windowSizeForScale(n);
+      expect(Number.isInteger(width), `width at scale ${n} is ${width}`).toBe(true);
+      expect(Number.isInteger(height), `height at scale ${n} is ${height}`).toBe(true);
+    }
   });
-});
 
-describe('windowSizeForScale', () => {
-  it('matches the contract sizes S/M/L', () => {
+  it('keeps the named rungs inside the range, in order, at the sizes they always were', () => {
+    expect([SCALE_S, SCALE_M, SCALE_L]).toEqual([...[SCALE_S, SCALE_M, SCALE_L]].sort((a, b) => a - b));
+    for (const rung of [SCALE_S, SCALE_M, SCALE_L]) {
+      expect(rung).toBeGreaterThanOrEqual(MIN_SCALE);
+      expect(rung).toBeLessThanOrEqual(MAX_SCALE);
+    }
+    // Small/Medium/Large are still 1x/2x/3x, so nobody's window changes size on upgrade.
     expect(windowSizeForScale(SCALE_S)).toEqual({ width: 368, height: 288 });
     expect(windowSizeForScale(SCALE_M)).toEqual({ width: 688, height: 528 });
     expect(windowSizeForScale(SCALE_L)).toEqual({ width: 1008, height: 768 });
   });
 
-  it('is the grid plus WINDOW_PAD on every side', () => {
-    for (const s of SCALES) {
-      expect(windowSizeForScale(s)).toEqual({
-        width: GRID_W * s + 2 * WINDOW_PAD,
-        height: GRID_H * s + 2 * WINDOW_PAD,
+  it('defaults to Medium', () => {
+    expect(DEFAULT_SCALE).toBe(SCALE_M);
+  });
+
+  it('is the grid at scaleFactor plus WINDOW_PAD on every side', () => {
+    for (const n of [MIN_SCALE, SCALE_S, 11, SCALE_M, 19, SCALE_L, MAX_SCALE]) {
+      expect(windowSizeForScale(n)).toEqual({
+        width: GRID_W * scaleFactor(n) + 2 * WINDOW_PAD,
+        height: GRID_H * scaleFactor(n) + 2 * WINDOW_PAD,
       });
+    }
+  });
+});
+
+describe('clampScale', () => {
+  it('rounds and clamps, because the scale now arrives from a drag as well as a menu', () => {
+    expect(clampScale(MIN_SCALE - 5)).toBe(MIN_SCALE);
+    expect(clampScale(MAX_SCALE + 5)).toBe(MAX_SCALE);
+    expect(clampScale(16.4)).toBe(16);
+    expect(clampScale(16.6)).toBe(17);
+  });
+
+  it('always returns something the window layer will accept', () => {
+    for (const raw of [-100, 0, 6.5, 17.2, 31.9, 1000, Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER]) {
+      const n = clampScale(raw);
+      expect(Number.isInteger(n), `clampScale(${raw}) = ${n}`).toBe(true);
+      expect(n).toBeGreaterThanOrEqual(MIN_SCALE);
+      expect(n).toBeLessThanOrEqual(MAX_SCALE);
     }
   });
 });

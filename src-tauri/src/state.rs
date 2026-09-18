@@ -26,6 +26,14 @@ impl HitRect {
 
 #[derive(Default)]
 pub struct ShellState {
+    /// While set and in the future, the webview owns the pointer and the cursor poller stands down.
+    ///
+    /// A DEADLINE rather than a flag, and renewed as the interaction continues, because the release is
+    /// the dangerous half: if a pointerup is swallowed -- Mission Control, a Space switch, a crash --
+    /// a boolean would leave the transparent padding permanently opaque and the user unable to click
+    /// their own desktop again. A stale deadline expires on its own.
+    pub interaction_lock_until: Mutex<Option<Instant>>,
+
     /// Regions that must receive mouse events; everything else is click-through. Empty = not ignoring.
     pub regions: Mutex<Vec<HitRect>>,
     /// Last value passed to `set_ignore_cursor_events`.

@@ -12,6 +12,7 @@ export interface FakePlatform extends Platform {
   notifications: Array<{ title: string; body: string }>;
   scaleCalls: Scale[];
   layeringCalls: Layering[];
+  interactionLockCalls: number[];
   visible: boolean;
   quitCalled: boolean;
   autostartEnabled: boolean;
@@ -40,6 +41,7 @@ export function createFakePlatform(seedFiles: Record<string, unknown> = {}): Fak
     notifications: [],
     scaleCalls: [],
     layeringCalls: [],
+    interactionLockCalls: [],
     visible: false,
     quitCalled: false,
     autostartEnabled: false,
@@ -80,6 +82,13 @@ export function createFakePlatform(seedFiles: Record<string, unknown> = {}): Fak
       isVisible: async () => p.visible,
       popupMenu: async () => undefined,
       onMoved: () => () => undefined,
+      setScaleLive: async (scale) => {
+        p.scaleCalls.push(scale);
+        return geometry();
+      },
+      setInteractionLock: async (ms) => {
+        p.interactionLockCalls.push(ms);
+      },
       setLayering: async (opts) => {
         p.layeringCalls.push({ ...opts });
       },

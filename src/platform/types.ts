@@ -106,6 +106,20 @@ export interface WindowApi {
    * and the collection behaviour — and reading-modifying-writing them independently races.
    */
   setLayering(opts: Layering): Promise<void>;
+  /**
+   * Resize during a drag. `live` skips the edge snapping, which would pull the window out from under
+   * the cursor, and skips writing the position to disk, which a drag would do every few pixels.
+   */
+  setScaleLive(scale: Scale, live: boolean): Promise<WindowGeometry>;
+  /**
+   * Hand the pointer to the webview for `ms`, renewable; 0 releases it.
+   *
+   * Needed because the window is click-through outside its hit regions, enforced by a cursor poller
+   * that toggles ignore-cursor-events. Mid-drag that would take the pointer away from the element that
+   * captured it and the drag would die halfway. A deadline rather than a flag, so a swallowed
+   * pointerup cannot leave the padding permanently opaque.
+   */
+  setInteractionLock(ms: number): Promise<void>;
 }
 
 /** How the habitat window relates to other windows, desktops and fullscreen apps. */

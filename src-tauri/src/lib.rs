@@ -56,6 +56,8 @@ pub fn run() {
             commands::clock_now,
             commands::set_scale,
             commands::set_layering,
+            commands::set_scale_live,
+            commands::set_interaction_lock,
             commands::set_hit_regions,
             commands::get_geometry,
             commands::show_window,

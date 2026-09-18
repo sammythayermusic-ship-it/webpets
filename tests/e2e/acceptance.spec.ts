@@ -6,6 +6,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
   BOOT_WINDOW,
+  BOOT_SCALE,
   BOWL_CENTER,
   collectErrors,
   gotoFresh,
@@ -13,7 +14,8 @@ import {
   mockToggleVisibility,
   waitForBoot,
 } from './support';
-import { SCALE_L, windowSizeForScale } from '../../src/sim/constants';
+import { windowSizeForScale } from '../../src/sim/constants';
+import { SCALE_STEP } from '../../src/ui/keys';
 
 /** Short pause so the recording shows a state before the script moves on. */
 const BEAT_MS = 1500;
@@ -219,13 +221,18 @@ test('Phase 0 acceptance walk-through', async ({ page }) => {
     await page.waitForTimeout(BEAT_MS);
   });
 
-  await test.step('Cmd+= / Cmd+- change the window size (M -> L -> M)', async () => {
-    const large = `${windowSizeForScale(SCALE_L).width}px`;
+  await test.step('Cmd+= / Cmd+- change the window size, a step at a time', async () => {
+    // The ladder is continuous now, so a press is a step rather than a jump to the next named rung.
     const boot = `${BOOT_WINDOW.width}px`;
+    const up = `${windowSizeForScale(BOOT_SCALE + SCALE_STEP).width}px`;
+    const upTwice = `${windowSizeForScale(BOOT_SCALE + 2 * SCALE_STEP).width}px`;
     await page.keyboard.press('Meta+Equal');
-    await expect(canvas).toHaveCSS('width', large);
-    await expect(page.locator('#app')).toHaveCSS('width', large);
+    await expect(canvas).toHaveCSS('width', up);
+    await expect(page.locator('#app')).toHaveCSS('width', up);
+    await page.keyboard.press('Meta+Equal');
+    await expect(canvas).toHaveCSS('width', upTwice);
     await page.waitForTimeout(BEAT_MS);
+    await page.keyboard.press('Meta+Minus');
     await page.keyboard.press('Meta+Minus');
     await expect(canvas).toHaveCSS('width', boot);
     await expect(page.locator('#app')).toHaveCSS('width', boot);

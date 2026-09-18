@@ -4,7 +4,7 @@
 // later. flush() drains everything pending. All store calls for a file are sequenced through one promise chain.
 import type { PersistApi } from '../platform/types';
 import type { GraveyardDoc, PetDoc, SettingsDoc } from './types';
-import { DEFAULT_SCALE, SCALES, SCALE_M, SCALE_S, type Scale } from '../sim/constants';
+import { clampScale, DEFAULT_SCALE, MAX_SCALE, MIN_SCALE, SCALE_L, SCALE_M, SCALE_S, type Scale } from '../sim/constants';
 import type { PetState } from '../sim/types';
 
 export const PET_FILE = 'pet.json';
@@ -41,7 +41,8 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isStr = (v: unknown): v is string => typeof v === 'string';
 const isBool = (v: unknown): v is boolean => typeof v === 'boolean';
-const isScale = (v: unknown): v is Scale => (SCALES as readonly number[]).includes(v as number);
+const isScale = (v: unknown): v is Scale =>
+  typeof v === 'number' && Number.isInteger(v) && v >= MIN_SCALE && v <= MAX_SCALE;
 
 export function isPetState(v: unknown): v is PetState {
   if (!isRecord(v)) return false;
@@ -85,29 +86,52 @@ export function isPetDoc(v: unknown): v is PetDoc {
  * under half the area is a worse surprise than an unexplained grow, and this keeps the invariant that
  * nothing ever shrinks and nothing jumps more than one rung.
  */
+/** Version-1 documents, when the ladder was 2/3/4 and the grid was half its current size. */
 const LEGACY_SCALE_MAP: Readonly<Record<number, Scale>> = Object.freeze({ 2: SCALE_S, 3: SCALE_M, 4: SCALE_M });
+/**
+ * Version-2 documents, when `scale` was a whole multiplier on a three-rung ladder. The field now counts
+ * EIGHTHS, so a stored `2` means 2x and must become 16 — read as-is it would be a quarter of a rung,
+ * a 128x108 window. Renaming the field rather than bumping the version keeps `normalizeSettings` off
+ * its "unknown version, return defaults" branch, which would have discarded every other preference.
+ */
+const RUNG_SCALE_MAP: Readonly<Record<number, Scale>> = Object.freeze({ 1: SCALE_S, 2: SCALE_M, 3: SCALE_L });
 
 /**
  * Settings are merged field by field over the defaults so a partially valid file still loads, and a
  * version-1 document is migrated rather than discarded — returning defaults there would silently wipe
  * the user's mute, day/night and launch-at-login preferences.
  */
+/**
+ * The on-disk shape. `scale` is written as `scaleSteps` because the number it holds changed meaning:
+ * it counts eighths now, where it used to be a whole multiplier on a three-rung ladder. Writing it
+ * under the old name would make a saved `24` read back as an unrecognised rung and silently reset the
+ * user's window size on every launch, which is exactly the class of bug the v1 migration exists for.
+ */
+export function toSettingsFile(doc: SettingsDoc): Record<string, unknown> {
+  const { scale, ...rest } = doc;
+  return { ...rest, scaleSteps: scale };
+}
+
 export function normalizeSettings(v: unknown): SettingsDoc {
   const d = defaultSettings();
   if (!isRecord(v)) return d;
   const version = v['version'];
   if (version !== 1 && version !== SETTINGS_VERSION) return d;
   const legacy = version === 1;
+  // Three generations of this field. `scaleSteps` is the current one and wins outright; a v2 `scale`
+  // is a whole multiplier on the old three-rung ladder; a v1 `scale` is a rung of the ladder before
+  // that, when the grid was half its current size. Each is mapped rather than discarded.
+  const rawSteps = v['scaleSteps'];
   const rawScale = v['scale'];
-  const scale = legacy
-    ? (typeof rawScale === 'number' ? LEGACY_SCALE_MAP[rawScale] : undefined) ?? d.scale
-    : isScale(rawScale)
-      ? rawScale
-      : d.scale;
+  const scale = isScale(rawSteps)
+    ? rawSteps
+    : legacy
+      ? ((typeof rawScale === 'number' ? LEGACY_SCALE_MAP[rawScale] : undefined) ?? d.scale)
+      : ((typeof rawScale === 'number' ? RUNG_SCALE_MAP[rawScale] : undefined) ?? d.scale);
   const dn = v['dayNight'];
   return {
     version: SETTINGS_VERSION,
-    scale,
+    scale: clampScale(scale),
     muted: isBool(v['muted']) ? v['muted'] : d.muted,
     notificationsMuted: isBool(v['notificationsMuted']) ? v['notificationsMuted'] : d.notificationsMuted,
     dayNight: dn === 'auto' || dn === 'day' || dn === 'night' ? dn : d.dayNight,
@@ -224,7 +248,7 @@ export function createPersistence(store: PersistApi, throttleMs: number = SAVE_T
       }
     },
     savePet: (doc) => pet.save(doc),
-    saveSettings: (doc) => settings.save(doc),
+    saveSettings: (doc) => settings.save(toSettingsFile(doc)),
     saveGraveyard: (doc) => graveyard.save(doc),
     async flush() {
       await Promise.all([pet.flush(), settings.flush(), graveyard.flush()]);

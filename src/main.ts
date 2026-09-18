@@ -18,6 +18,7 @@ import {
   mountPantryDialog,
   mountSpeech,
   wireTray,
+  mountResizeGrip,
 } from './ui';
 import type { DevPanelHandle, HudHandle } from './ui';
 import { hungerLabel } from './sim';
@@ -153,11 +154,13 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   };
   const deps = { store, platform, scene, audio, requestHitRegions: refreshHitRegions };
   hud = mountHud(ui, deps);
+  const grip = mountResizeGrip(ui, deps);
   devPanel = mountDevPanel(ui, deps);
   const speech = mountSpeech(ui, deps);
   const pantryDialog = mountPantryDialog(ui, deps);
   const montage = mountMontage(ui, deps);
   mountMemorial(ui, deps);
+  grip.relayout();
   wireTray({ ...deps, devPanel, pantryDialog });
   installKeys({ store, devPanel });
   audio.setAmbient(initial.pet.species, true);
@@ -176,6 +179,7 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
       // actions.setScale awaited platform.window.setScale before committing, so the window is already resized.
       scene.setScale(s.settings.scale);
       hudHandle.relayout();
+      grip.relayout();
       speech.relayout();
       refreshHitRegions();
     }
@@ -202,6 +206,7 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
         grace = null;
       }
       hudHandle.setVisible(true);
+      grip.setVisible(true);
       scene.setPointer(p.x, p.y);
       return;
     }
@@ -210,6 +215,7 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
       grace = setTimeout(() => {
         grace = null;
         hudHandle.setVisible(false);
+        grip.setVisible(false);
       }, HUD_GRACE_MS);
     }
   });

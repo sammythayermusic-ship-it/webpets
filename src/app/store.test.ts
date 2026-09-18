@@ -3,6 +3,7 @@ import { createAppStore } from './store';
 import { GRAVEYARD_FILE, PET_FILE, SETTINGS_FILE, defaultSettings } from './persistence';
 import { createFakePlatform, type FakePlatform } from './test-platform';
 import { B, H, fresh, mulberry32 } from '../sim/test-helpers';
+import { SCALE_L, SCALE_S } from '../sim/constants';
 import { DAY_MS } from '../sim/constants';
 import type { GraveyardDoc, PetDoc, SettingsDoc } from './types';
 import type { AppStore } from './types';
@@ -292,9 +293,9 @@ describe('app store', () => {
   it('setScale calls the platform then persists; setHidden hides/shows; setLaunchAtLogin', async () => {
     const { store, platform } = await bootStore();
     const a = store.getState().actions;
-    await a.setScale(3);
-    expect(platform.scaleCalls).toEqual([3]);
-    expect(store.getState().settings.scale).toBe(3);
+    await a.setScale(SCALE_L);
+    expect(platform.scaleCalls).toEqual([SCALE_L]);
+    expect(store.getState().settings.scale).toBe(SCALE_L);
     await a.setHidden(true);
     expect(platform.visible).toBe(false);
     expect(store.getState().hidden).toBe(true);
@@ -321,7 +322,7 @@ describe('app store', () => {
     a.feed();
     a.feed();
     a.setMuted(true);
-    await a.setScale(1);
+    await a.setScale(SCALE_S);
     const savesBefore = platform.saveCount;
     await a.quit();
     expect(platform.quitCalled).toBe(true);
@@ -329,7 +330,8 @@ describe('app store', () => {
     expect((platform.files.get(PET_FILE) as PetDoc).balance).toBe(950);
     const settings = platform.files.get(SETTINGS_FILE) as SettingsDoc;
     expect(settings.muted).toBe(true);
-    expect(settings.scale).toBe(1);
+    // On disk the scale lives under `scaleSteps`; `scale` is the in-memory name.
+    expect((settings as unknown as { scaleSteps: number }).scaleSteps).toBe(SCALE_S);
   });
 
   it('tick after a wake covering hours emits catch-up events', async () => {

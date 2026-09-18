@@ -169,6 +169,9 @@ export interface HabitatScene {
   on(event: SceneEvent, cb: () => void): () => void;
   /** Rect of the habitat's opaque pixels inside the window, CSS px: (24 + opaqueRect.x*s, ...). */
   habitatHitRect(): Rect;
+  /** The same rect in LOGICAL grid px, before any scaling. The resize handle needs it to turn cursor
+   * travel into a scale: the habitat's inset from the window edge scales along with everything else. */
+  habitatOpaqueRect(): Rect;
   fps(): number;
   /**
    * Dev-only snapshot of what the scene is actually drawing, for the diagnostics bridge. Reading it

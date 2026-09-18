@@ -23,15 +23,20 @@ pub const MAIN_WINDOW: &str = "main";
 const GRID_W: f64 = 320.0;
 const GRID_H: f64 = 240.0;
 const WINDOW_PAD: f64 = 24.0;
-/// The scale ladder (contract: `SCALE_S`/`SCALE_M`/`SCALE_L` in `src/sim/constants.ts`). `tray.rs`
-/// checks its size menu against these rather than against bare numbers.
-pub const SCALE_S: u8 = 1;
-pub const SCALE_M: u8 = 2;
-pub const SCALE_L: u8 = 3;
-/// Lowest and highest integer scale accepted by `set_scale` (contract: `SCALES` in
-/// `src/sim/constants.ts`, which must stay a contiguous ascending run for this range to be equivalent).
-const MIN_SCALE: u8 = SCALE_S;
-const MAX_SCALE: u8 = SCALE_L;
+/// The scale is an integer count of EIGHTHS of the grid (contract: `SCALE_STEPS_PER_UNIT` in
+/// `src/sim/constants.ts`). `GRID_W` and `GRID_H` are both divisible by it, so every window size comes
+/// out a whole number of pixels in both languages with no rounding rule to keep in step — which is the
+/// point, because a one-pixel disagreement silently stops the click-through region matching the art.
+const SCALE_STEPS_PER_UNIT: f64 = 8.0;
+/// The named rungs the tray's Size menu offers (contract: `SCALE_S`/`SCALE_M`/`SCALE_L`). `tray.rs`
+/// checks its menu against these rather than against bare numbers.
+pub const SCALE_S: u8 = 8;
+pub const SCALE_M: u8 = 16;
+pub const SCALE_L: u8 = 24;
+/// Lowest and highest scale accepted by `set_scale` (contract: `MIN_SCALE`/`MAX_SCALE`). 0.75x to 4x;
+/// the ceiling is where the habitat is drawn 1:1 with the resolution its art was rendered at.
+const MIN_SCALE: u8 = 6;
+const MAX_SCALE: u8 = 32;
 /// Snap to a work-area edge when within this many logical px (contract `SNAP_PX`).
 const SNAP_PX: f64 = 16.0;
 /// Default distance from the bottom-right corner of the primary work area on first launch.
@@ -91,7 +96,10 @@ pub fn scale_supported(scale: u8) -> bool {
 /// `src/sim/constants.ts`; `contract_sync` below fails the build if the two drift apart.
 pub fn window_size_for_scale(scale: u8) -> (f64, f64) {
     let s = f64::from(scale);
-    (GRID_W * s + 2.0 * WINDOW_PAD, GRID_H * s + 2.0 * WINDOW_PAD)
+    (
+        GRID_W * s / SCALE_STEPS_PER_UNIT + 2.0 * WINDOW_PAD,
+        GRID_H * s / SCALE_STEPS_PER_UNIT + 2.0 * WINDOW_PAD,
+    )
 }
 
 /// Whether the window at `scale` fits inside the work area of the monitor the window is currently on.
@@ -201,6 +209,15 @@ fn monitor_for(app: &AppHandle, window: &WebviewWindow<Wry>, rect: &LRect) -> Op
 
 /// Snap `rect` to the edges of `area` when within `SNAP_PX`, then clamp it inside `area`.
 /// Returns the new top-left corner (rounded to whole logical px).
+/// Keeps a rect inside the work area without snapping it to an edge.
+pub fn clamp_only(rect: LRect, area: LRect) -> (f64, f64) {
+    let max_x = area.x + area.w - rect.w;
+    let max_y = area.y + area.h - rect.h;
+    let x = if max_x < area.x { area.x } else { rect.x.clamp(area.x, max_x) };
+    let y = if max_y < area.y { area.y } else { rect.y.clamp(area.y, max_y) };
+    (x.round(), y.round())
+}
+
 pub fn snap_and_clamp(rect: LRect, area: LRect) -> (f64, f64) {
     let mut x = rect.x;
     let mut y = rect.y;
@@ -313,10 +330,19 @@ fn apply_geometry(
 /// connected monitor with a saved position) or defaults to the bottom-right corner of the primary
 /// work area with a 24 px margin. The result is clamped to the work area and persisted.
 pub fn set_scale(app: &AppHandle, scale: u8) -> Result<WindowGeometry, String> {
+    set_scale_inner(app, scale, false)
+}
+
+/// `live` means a resize drag is in flight: skip the edge snapping, which would yank the window out
+/// from under the cursor, and skip persisting, which writes to disk. Both happen once on release.
+pub fn set_scale_live(app: &AppHandle, scale: u8, live: bool) -> Result<WindowGeometry, String> {
+    set_scale_inner(app, scale, live)
+}
+
+fn set_scale_inner(app: &AppHandle, scale: u8, live: bool) -> Result<WindowGeometry, String> {
     if !scale_supported(scale) {
         return Err(format!(
-            "invalid scale {scale}; expected {MIN_SCALE}, {} or {MAX_SCALE}",
-            SCALE_M
+            "invalid scale {scale}; expected {MIN_SCALE}..={MAX_SCALE} eighths of the grid"
         ));
     }
     let window = main_window(app)?;
@@ -363,14 +389,20 @@ pub fn set_scale(app: &AppHandle, scale: u8) -> Result<WindowGeometry, String> {
 
     let (x, y, key) = match &monitor {
         Some(m) => {
-            let (x, y) = snap_and_clamp(LRect { x, y, w, h }, work_area(m));
+            let r = LRect { x, y, w, h };
+            let area = work_area(m);
+            // Clamp, but do not snap, while dragging: snapping moves the window by up to SNAP_PX,
+            // which detaches the handle from the cursor mid-drag.
+            let (x, y) = if live { clamp_only(r, area) } else { snap_and_clamp(r, area) };
             (x, y, monitor_key(m))
         }
         None => (x.round(), y.round(), "unknown@0x0".to_string()),
     };
 
     apply_geometry(app, &window, sf, x, y, Some((w, h)))?;
-    if monitor.is_some() {
+    // A live drag writes nothing: persist_position calls store.save(), and a drag produces a step
+    // every few pixels of travel.
+    if monitor.is_some() && !live {
         persist_position(app, &key, x, y);
     }
     Ok(WindowGeometry {
@@ -754,7 +786,6 @@ mod contract_sync {
         })
     }
 
-    /// The `SCALES` list from constants.ts, e.g. `[2, 3, 4]`.
     fn ts_scales() -> Vec<u8> {
         let raw = ts_initializer("SCALES");
         let inner = raw
@@ -814,23 +845,35 @@ mod contract_sync {
 
     #[test]
     fn accepted_scale_range_matches_typescript_scales() {
-        let scales = ts_scales();
-        let first = *scales.first().expect("SCALES must not be empty");
-        let last = *scales.last().expect("SCALES must not be empty");
+        let steps = ts_number("SCALE_STEPS_PER_UNIT");
         assert_eq!(
-            scales,
-            (first..=last).collect::<Vec<u8>>(),
-            "SCALES in {TS_PATH} is {scales:?}, which is not a contiguous ascending run. \
-             `set_scale` in {RS_PATH} validates with the range MIN_SCALE..=MAX_SCALE, which can only \
-             express such a run; replace that range with an explicit list before landing this."
+            SCALE_STEPS_PER_UNIT, steps,
+            "SCALE_STEPS_PER_UNIT is {SCALE_STEPS_PER_UNIT} in {RS_PATH} but {steps} in {TS_PATH}. \
+             The scale counts eighths of the grid; if the two sides disagree about how many, every \
+             window size disagrees too."
         );
-        for scale in 0u8..=9 {
+        // The assertion that makes "both languages agree to the pixel" a theorem rather than a hope.
+        // With the grid divisible by the step count, `window_size_for_scale` is whole-number
+        // arithmetic on both sides and there is no rounding rule that could drift.
+        for (name, grid) in [("GRID_W", GRID_W), ("GRID_H", GRID_H)] {
+            assert_eq!(
+                grid % SCALE_STEPS_PER_UNIT,
+                0.0,
+                "{name} ({grid}) is not divisible by SCALE_STEPS_PER_UNIT ({SCALE_STEPS_PER_UNIT}), \
+                 so a window size would be fractional and Rust and TypeScript would have to agree on \
+                 a rounding rule. Pick a step count that divides the grid instead."
+            );
+        }
+        let min = ts_number("MIN_SCALE");
+        let max = ts_number("MAX_SCALE");
+        assert_eq!(f64::from(MIN_SCALE), min, "MIN_SCALE differs between {RS_PATH} and {TS_PATH}");
+        assert_eq!(f64::from(MAX_SCALE), max, "MAX_SCALE differs between {RS_PATH} and {TS_PATH}");
+        for scale in 0u8..=(MAX_SCALE + 4) {
+            let ts_ok = f64::from(scale) >= min && f64::from(scale) <= max;
             assert_eq!(
                 scale_supported(scale),
-                scales.contains(&scale),
-                "`set_scale` in {RS_PATH} {} scale {scale}, but SCALES in {TS_PATH} is {scales:?}. \
-                 Fix by setting MIN_SCALE = {first} and MAX_SCALE = {last} in {RS_PATH} (and the \
-                 human-readable scale list in the `invalid scale` error message).",
+                ts_ok,
+                "`set_scale` in {RS_PATH} {} scale {scale}, but {TS_PATH} allows {min}..={max}.",
                 if scale_supported(scale) { "accepts" } else { "rejects" }
             );
         }
@@ -848,23 +891,21 @@ mod contract_sync {
                  puts the check mark on the wrong row. Fix by setting {name} in {RS_PATH} to {ts}."
             );
         }
-        let scales = ts_scales();
-        assert_eq!(
-            scales,
-            vec![SCALE_S, SCALE_M, SCALE_L],
-            "SCALES in {TS_PATH} is {scales:?}, but {RS_PATH} names exactly three rungs \
-             ({SCALE_S}, {SCALE_M}, {SCALE_L}). The tray Size submenu has three items; adding or \
-             removing a scale means adding or removing one there too."
-        );
+        for (name, rung) in [("SCALE_S", SCALE_S), ("SCALE_M", SCALE_M), ("SCALE_L", SCALE_L)] {
+            assert!(
+                scale_supported(rung),
+                "{name} is {rung}, which {RS_PATH} would reject. A rung the Size menu offers has to \
+                 be inside MIN_SCALE..=MAX_SCALE, or picking it fails."
+            );
+        }
     }
 
     #[test]
     fn tauri_conf_fallback_size_matches_the_default_scale() {
         let default_scale = ts_number("DEFAULT_SCALE");
-        let scales = ts_scales();
         assert!(
-            scales.iter().any(|s| f64::from(*s) == default_scale),
-            "DEFAULT_SCALE in {TS_PATH} is {default_scale}, which is not in SCALES {scales:?}."
+            default_scale >= ts_number("MIN_SCALE") && default_scale <= ts_number("MAX_SCALE"),
+            "DEFAULT_SCALE in {TS_PATH} is {default_scale}, which is outside the legal range."
         );
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let expected = window_size_for_scale(default_scale as u8);

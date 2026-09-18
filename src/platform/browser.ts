@@ -365,7 +365,10 @@ export function createBrowserPlatform(): Platform {
         return Promise.resolve();
       },
       onMoved: (cb) => movedSignal.on(cb),
-      // Nothing to do outside a real window manager, where there is one window and no desktops.
+      // The mock has one window, no window manager and no click-through, so a live resize is just a
+      // resize and there is no pointer to hand anywhere.
+      setScaleLive: (s: Scale): Promise<WindowGeometry> => platform.window.setScale(s),
+      setInteractionLock: async () => undefined,
       setLayering: async () => undefined,
     },
     tray: {

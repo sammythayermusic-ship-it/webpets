@@ -7,7 +7,7 @@ import {
   DAY_MS,
   DEFAULT_CONSTANTS,
   LocalLedger,
-  SCALES,
+  clampScale,
   STARTING_BALANCE,
   depositPantry as simDeposit,
   feed as simFeed,
@@ -353,8 +353,11 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
         savePet();
       },
 
-      async setScale(scale: Scale) {
-        if (!SCALES.includes(scale)) return;
+      async setScale(raw: Scale) {
+        // Clamped rather than rejected. The scale is continuous now and arrives from a drag as well as
+        // from the menu, so "out of range" is a cursor at the edge of its travel, not a caller bug.
+        const scale = clampScale(raw);
+        if (scale === get().settings.scale) return;
         await platform.window.setScale(scale);
         set({ settings: { ...get().settings, scale } });
         saveSettings();

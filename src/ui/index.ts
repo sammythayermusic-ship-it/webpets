@@ -11,3 +11,5 @@ export { installKeys, type KeyDeps } from './keys';
 export { computeHitRegions } from './hitRegions';
 export { initAudio } from '../audio';
 export type { AudioApi, DevPanelHandle, HudHandle, SfxName, SpeechHandle, UiDeps } from './types';
+export { mountResizeGrip, RESIZE_GRIP_SIZE } from './resizeGrip';
+export type { ResizeGripHandle } from './resizeGrip';

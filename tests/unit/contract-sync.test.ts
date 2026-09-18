@@ -16,10 +16,12 @@ import {
   DEFAULT_SCALE,
   GRID_H,
   GRID_W,
-  SCALES,
+  MAX_SCALE,
+  MIN_SCALE,
   SCALE_L,
   SCALE_M,
   SCALE_S,
+  SCALE_STEPS_PER_UNIT,
   WINDOW_PAD,
   windowSizeForScale,
 } from '../../src/sim/constants';
@@ -81,15 +83,26 @@ describe('grid contract: TypeScript vs Rust vs tauri.conf.json', () => {
     expect(rustConst('SCALE_L'), `SCALE_L must match ${RS_PATH}`).toBe(SCALE_L);
   });
 
-  it('accepts exactly the scales in SCALES', () => {
-    const min = rustConst('MIN_SCALE');
-    const max = rustConst('MAX_SCALE');
-    const scales = [...SCALES];
-    expect(min, `MIN_SCALE in ${RS_PATH} must be the smallest entry of SCALES`).toBe(Math.min(...scales));
-    expect(max, `MAX_SCALE in ${RS_PATH} must be the largest entry of SCALES`).toBe(Math.max(...scales));
-    // Rust expresses the ladder as a contiguous range, which can only represent a contiguous list.
-    const contiguous = scales.every((s, i) => i === 0 || s === (scales[i - 1] as number) + 1);
-    expect(contiguous, `SCALES ${JSON.stringify(scales)} must be contiguous and ascending, or ${RS_PATH} needs an explicit list instead of a range`).toBe(true);
+  it('mirrors the scale range and the step count', () => {
+    expect(rustConst('MIN_SCALE'), `MIN_SCALE must match ${RS_PATH}`).toBe(MIN_SCALE);
+    expect(rustConst('MAX_SCALE'), `MAX_SCALE must match ${RS_PATH}`).toBe(MAX_SCALE);
+    expect(rustConst('SCALE_STEPS_PER_UNIT'), `SCALE_STEPS_PER_UNIT must match ${RS_PATH}`).toBe(
+      SCALE_STEPS_PER_UNIT,
+    );
+  });
+
+  it('keeps the grid divisible by the step count, in both languages', () => {
+    // This is what turns "Rust and TypeScript agree to the pixel" from a hope into a theorem. With the
+    // grid divisible by the step count, `window_size_for_scale` is whole-number arithmetic on both
+    // sides and there is no rounding rule that could drift. It replaces the old contiguous-run check,
+    // which existed only because Rust expressed a three-rung ladder as a range.
+    for (const [name, grid] of [
+      ['GRID_W', GRID_W],
+      ['GRID_H', GRID_H],
+    ] as const) {
+      expect(grid % SCALE_STEPS_PER_UNIT, `${name} must divide by SCALE_STEPS_PER_UNIT`).toBe(0);
+      expect(rustConst(name) % rustConst('SCALE_STEPS_PER_UNIT'), `${name} in ${RS_PATH}`).toBe(0);
+    }
   });
 
   it('sizes the pre-boot window to the default scale', () => {
@@ -97,7 +110,8 @@ describe('grid contract: TypeScript vs Rust vs tauri.conf.json', () => {
     expect(main, `${CONF_PATH} must declare a window labelled "main"`).toBeDefined();
     // The config size is what the user sees for the instant before the frontend calls set_scale.
     // Anything but DEFAULT_SCALE's size shows as a visible resize jump on every launch.
-    expect(SCALES, 'DEFAULT_SCALE must be a rung of the ladder').toContain(DEFAULT_SCALE);
+    expect(DEFAULT_SCALE, 'DEFAULT_SCALE must be inside the legal range').toBeGreaterThanOrEqual(MIN_SCALE);
+    expect(DEFAULT_SCALE).toBeLessThanOrEqual(MAX_SCALE);
     const expected = windowSizeForScale(DEFAULT_SCALE);
     expect(
       { width: main?.width, height: main?.height },

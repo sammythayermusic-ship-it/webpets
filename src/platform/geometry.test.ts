@@ -3,9 +3,12 @@ import { pointerInside, rectContains, windowSizeForScale } from './geometry';
 
 describe('windowSizeForScale', () => {
   it('matches the contract sizes S/M/L', () => {
-    expect(windowSizeForScale(1)).toEqual({ width: 368, height: 288 });
-    expect(windowSizeForScale(2)).toEqual({ width: 688, height: 528 });
-    expect(windowSizeForScale(3)).toEqual({ width: 1008, height: 768 });
+    // The scale counts eighths of the grid: 8 is 1x, 16 is 2x, 24 is 3x.
+    expect(windowSizeForScale(8)).toEqual({ width: 368, height: 288 });
+    expect(windowSizeForScale(16)).toEqual({ width: 688, height: 528 });
+    expect(windowSizeForScale(24)).toEqual({ width: 1008, height: 768 });
+    // ...and every value in between is legal now, still landing on whole pixels.
+    expect(windowSizeForScale(17)).toEqual({ width: 728, height: 558 });
   });
 });
 

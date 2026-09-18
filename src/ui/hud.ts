@@ -6,6 +6,7 @@ import type { Rect } from '../sim/types';
 import { WINDOW_PAD } from '../sim/constants';
 import type { HudHandle, UiDeps } from './types';
 import { button, el, rootSize, stopDrag } from './dom';
+import { nextScale } from './keys';
 import { pillStripRect, rectEquals } from './hitRegions';
 import { captionText, toHudModel, type HudModel } from './model';
 
@@ -54,6 +55,29 @@ export function mountHud(root: HTMLElement, deps: UiDeps): HudHandle {
     'feed',
   );
   feedBtn.title = 'Feed (burns 25 $FEED)';
+  // Size, on the bar rather than buried in the tray menu. The keyboard shortcuts still work, but they
+  // only reach a window that has keyboard focus, and this one never takes focus.
+  const smallerBtn = button(
+    '\u2212',
+    () => {
+      const st = store.getState();
+      const next = nextScale(st.settings.scale, -1);
+      if (next !== null) void st.actions.setScale(next);
+    },
+    'smaller',
+  );
+  smallerBtn.title = 'Smaller';
+  const biggerBtn = button(
+    '+',
+    () => {
+      const st = store.getState();
+      const next = nextScale(st.settings.scale, 1);
+      if (next !== null) void st.actions.setScale(next);
+    },
+    'bigger',
+  );
+  biggerBtn.title = 'Bigger';
+
   const minBtn = button(
     'MIN',
     () => {
@@ -63,7 +87,7 @@ export function mountHud(root: HTMLElement, deps: UiDeps): HudHandle {
   );
   minBtn.title = 'Minimize to the tray chip';
 
-  pill.append(svg, pct, name, feedBtn, minBtn);
+  pill.append(svg, pct, name, feedBtn, smallerBtn, biggerBtn, minBtn);
 
   // ----- caption -----
   const caption = el('div', 'hud-caption');

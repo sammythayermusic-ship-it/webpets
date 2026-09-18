@@ -29,7 +29,7 @@
 
 use std::sync::atomic::Ordering;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
@@ -76,6 +76,24 @@ pub fn spawn(app: AppHandle) {
             let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
                 continue;
             };
+
+            // While the webview owns the pointer -- a resize drag in flight -- nothing below may run.
+            // Toggling ignore-cursor-events mid-drag takes the pointer away from the element that
+            // captured it, and the drag dies halfway with the window stuck at whatever size it reached.
+            let locked = state
+                .interaction_lock_until
+                .lock()
+                .ok()
+                .and_then(|g| *g)
+                .is_some_and(|t| Instant::now() < t);
+            if locked {
+                if state.ignoring.swap(false, Ordering::SeqCst) {
+                    if let Err(e) = window.set_ignore_cursor_events(false) {
+                        eprintln!("[webpets] set_ignore_cursor_events(false) failed: {e}");
+                    }
+                }
+                continue;
+            }
             if polls % PRIMARY_SF_REFRESH_POLLS == 1 {
                 if let Ok(Some(m)) = app.primary_monitor() {
                     primary_sf = m.scale_factor();

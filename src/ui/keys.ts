@@ -7,7 +7,7 @@
 //                                   tray menu's "Dev panel" item are the documented fallbacks)
 
 import type { AppStore } from '../app/types';
-import { SCALES, type Scale } from '../sim/constants';
+import { clampScale, SCALE_STEPS_PER_UNIT, type Scale } from '../sim/constants';
 import type { DevPanelHandle } from './types';
 
 export interface KeyDeps {
@@ -26,10 +26,17 @@ export function commandFor(e: Pick<KeyboardEvent, 'code' | 'metaKey' | 'altKey' 
   return null;
 }
 
+/**
+ * One step bigger or smaller, or null at the end of the range.
+ *
+ * A quarter of the grid per press. At one eighth the ladder is 26 presses end to end, which is not a
+ * shortcut; a quarter keeps the named Small/Medium/Large rungs reachable by pressing from any of them.
+ */
+export const SCALE_STEP = SCALE_STEPS_PER_UNIT / 4;
+
 export function nextScale(current: Scale, dir: 1 | -1): Scale | null {
-  const i = SCALES.indexOf(current);
-  const next = SCALES[i + dir];
-  return next === undefined || next === current ? null : next;
+  const next = clampScale(current + dir * SCALE_STEP);
+  return next === current ? null : next;
 }
 
 export function installKeys(deps: KeyDeps): () => void {

@@ -27,6 +27,27 @@ pub fn set_hit_regions(state: State<'_, ShellState>, regions: Vec<HitRect>) -> R
     Ok(())
 }
 
+/// `live` is a resize drag in flight. See `window::set_scale_live`.
+#[tauri::command]
+pub fn set_scale_live(app: AppHandle, scale: u8, live: bool) -> Result<WindowGeometry, String> {
+    window::set_scale_live(&app, scale, live)
+}
+
+/// Hands the pointer to the webview for `ms` milliseconds, renewable. See `ShellState`.
+#[tauri::command]
+pub fn set_interaction_lock(state: State<ShellState>, ms: u64) -> Result<(), String> {
+    let until = if ms == 0 {
+        None
+    } else {
+        Some(std::time::Instant::now() + std::time::Duration::from_millis(ms.min(5_000)))
+    };
+    *state
+        .interaction_lock_until
+        .lock()
+        .map_err(|_| "interaction lock poisoned".to_string())? = until;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn set_layering(
     app: AppHandle,

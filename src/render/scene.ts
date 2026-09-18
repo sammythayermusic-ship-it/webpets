@@ -15,7 +15,7 @@
 // Bubbles, the pantry blink and the night fade run at ticker rate as before.
 
 import { Application, Container, Rectangle, type Ticker } from 'pixi.js';
-import { DEFAULT_SCALE, GRID_H, GRID_W, PET_FPS, WINDOW_PAD, windowSizeForScale, type Scale } from '../sim/constants';
+import { DEFAULT_SCALE, GRID_H, GRID_W, PET_FPS, WINDOW_PAD, scaleFactor, windowSizeForScale, type Scale } from '../sim/constants';
 import type { Rect, Rng } from '../sim/types';
 import { createFishBehavior } from '../species/fish/behavior';
 import { configureAssetPipeline, loadTextures } from './assets';
@@ -146,14 +146,17 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
     // The whole transform chain: grid px -> CSS px happens here, CSS px -> device px is the renderer's
     // resolution, and texture px -> grid px is on each leaf. Nothing in between needs to know.
     m.layers.root.position.set(WINDOW_PAD, WINDOW_PAD);
-    m.layers.root.scale.set(scale);
+    // `scale` counts EIGHTHS of the grid, so it has to go through scaleFactor before it multiplies
+    // anything. Nothing here type-checks that for us: the scale is a plain number.
+    m.layers.root.scale.set(scaleFactor(scale));
   };
 
   const applyPointer = (): void => {
     if (!m) return;
     const reduced = view?.reducedMotion ?? false;
-    const gx = pointer ? (pointer.x - WINDOW_PAD) / scale : null;
-    const gy = pointer ? (pointer.y - WINDOW_PAD) / scale : null;
+    const f = scaleFactor(scale);
+    const gx = pointer ? (pointer.x - WINDOW_PAD) / f : null;
+    const gy = pointer ? (pointer.y - WINDOW_PAD) / f : null;
     m.sheen.setPointer(gx, gy, m.bounds);
     const { dx, dy } = parallaxOffset(habitat.grid, gx, gy, reduced);
     m.layers.setParallax(dx, dy);
@@ -226,8 +229,9 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
     });
     // Somewhere to be curious about, in grid px. Only when there IS a pointer and the pet is in a mood
     // to care; `interest` already collapses when it is starving or asleep.
-    const gx = pointer ? (pointer.x - WINDOW_PAD) / scale : null;
-    const gy = pointer ? (pointer.y - WINDOW_PAD) / scale : null;
+    const f = scaleFactor(scale);
+    const gx = pointer ? (pointer.x - WINDOW_PAD) / f : null;
+    const gy = pointer ? (pointer.y - WINDOW_PAD) / f : null;
     if (gx !== null && gy !== null) {
       pullX = gx;
       pullY = gy;
@@ -474,9 +478,14 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       };
     },
 
+    habitatOpaqueRect(): Rect {
+      return { ...habitat.opaqueRect };
+    },
+
     habitatHitRect(): Rect {
       const o = habitat.opaqueRect;
-      return { x: WINDOW_PAD + o.x * scale, y: WINDOW_PAD + o.y * scale, w: o.w * scale, h: o.h * scale };
+      const f = scaleFactor(scale);
+      return { x: WINDOW_PAD + o.x * f, y: WINDOW_PAD + o.y * f, w: o.w * f, h: o.h * f };
     },
 
     fps() {

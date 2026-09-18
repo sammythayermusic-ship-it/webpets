@@ -86,7 +86,9 @@ describe('persistence', () => {
   });
 
   it('merges partial settings over defaults', () => {
-    const s = normalizeSettings({ version: 2, scale: SCALE_S, dayNight: 'bogus', devClockOffsetMs: 5 });
+    // `scaleSteps`, not `scale`: the number changed meaning when the ladder became continuous, so
+    // the current value is written under a new key and the old one is read as a legacy rung.
+    const s = normalizeSettings({ version: 2, scaleSteps: SCALE_S, dayNight: 'bogus', devClockOffsetMs: 5 });
     expect(s).toEqual({ ...defaultSettings(), scale: SCALE_S, devClockOffsetMs: 5 });
   });
 
@@ -138,8 +140,9 @@ describe('persistence', () => {
     });
 
     it('passes a v2 document through as-is', () => {
-      const v2 = { ...v1(0), version: 2, scale: SCALE_L };
-      expect(normalizeSettings(v2)).toEqual({ ...defaultSettings(), ...v2, dayNight: 'night' });
+      const v2 = { ...v1(0), version: 2, scaleSteps: SCALE_L };
+      const { scaleSteps, ...rest } = v2;
+      expect(normalizeSettings(v2)).toEqual({ ...defaultSettings(), ...rest, scale: scaleSteps, dayNight: 'night' });
     });
 
     it('still yields defaults for a corrupt or unknown-version document', () => {

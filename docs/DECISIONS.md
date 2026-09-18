@@ -525,3 +525,44 @@ third the app never asked for.
   added shows up as "takes its default" rather than as a failure.
 - Switching all-desktops off has a side effect worth knowing: on macOS that same collection behaviour
   is what stops Stage Manager shrinking and re-arranging the window like an app window.
+
+### the scale became continuous, as an integer count of eighths
+The three-rung ladder existed because only whole multiples of the grid were legal while the renderer
+drew on a pixel grid. That constraint went with the pixel art, so the scale is now continuous between
+0.75x and 4x, reachable from a drag handle and from +/- buttons on the hover bar as well as the tray.
+
+- **Eighths, not a float.** `GRID_W` and `GRID_H` are both divisible by 8, so `windowSizeForScale` is
+  `40n + 48` by `30n + 48` — exact whole pixels for every value, in both languages, with no rounding
+  rule to keep in step and no reliance on two JSON parsers agreeing about a decimal. The alternative,
+  sending a float and rounding "in exactly one place", is a rule someone has to maintain; this is a
+  property of the numbers. A one-pixel disagreement between Rust and the frontend silently stops the
+  click-through region matching the art, and the symptom is the window eating clicks meant for the app
+  behind it — which is miserable to trace back to a rounding difference.
+- **The contract test gained a better assertion than the one it lost.** The old one checked that the
+  rung list was a contiguous ascending run, which existed only because Rust expressed three rungs as a
+  range. The new one asserts `GRID_W % SCALE_STEPS_PER_UNIT == 0` on both sides, which is what turns
+  "the two languages agree to the pixel" from a hope into a theorem.
+- **The handle is at the habitat's TOP-LEFT**, which is unconventional and correct here: resizing pins
+  the window's bottom-right, because this is a corner pet that lives in the bottom right of a screen,
+  so that is the corner that travels with the cursor. A handle at the bottom-right would sit still
+  while the window grew away behind it.
+- **It is a DOM element, not something drawn into the canvas**, and that is not a style preference:
+  `main.ts` starts a native window drag on any `mousedown` over the canvas, which hands the mouse to
+  the window server and stops the webview seeing another event. A handle drawn there could be pressed
+  but never dragged.
+- **The cursor poller has to stand down during a drag.** The window is click-through outside its hit
+  regions, enforced by a poller that toggles ignore-cursor-events; mid-drag that takes the pointer away
+  from the element that captured it and the drag dies with the window stuck at whatever size it had
+  reached. The lock is a renewed DEADLINE rather than a flag, because the release is the dangerous
+  half: a swallowed pointerup would otherwise leave the transparent padding permanently opaque and the
+  user unable to click their own desktop again.
+- **A live drag skips snapping and skips persisting.** Snapping moves the window by up to 16 px, which
+  detaches the handle from the cursor; persisting calls `store.save()`, and a drag produces a step every
+  few pixels of travel. Both happen once, on release, through the normal `setScale` path.
+- **Settings: the field was renamed, not versioned.** `scale` now counts eighths, so a stored `2` would
+  read back as a quarter of a rung — a 128x108 window. It is written as `scaleSteps` and the old key is
+  read as a legacy rung. Bumping the version instead would have hit `normalizeSettings`'s "unknown
+  version, return defaults" branch and discarded every other preference.
+- Small, Medium and Large are still 1x, 2x and 3x, so nobody's window changes size on upgrade. The
+  keyboard shortcuts now step by a quarter of the grid rather than jumping between rungs: at one eighth
+  the range is 26 presses end to end, which is not a shortcut.

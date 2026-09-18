@@ -3,7 +3,7 @@
 // `window.__webpetsMock` (typed globally by `src/platform/mock.d.ts`).
 
 import { expect, type Page } from '@playwright/test';
-import { DEFAULT_SCALE, GRID_H, GRID_W, WINDOW_PAD, windowSizeForScale } from '../../src/sim/constants';
+import { DEFAULT_SCALE, GRID_H, GRID_W, WINDOW_PAD, scaleFactor, windowSizeForScale } from '../../src/sim/constants';
 
 /** Habitat grid scale the app boots at (settings default). */
 export const BOOT_SCALE = DEFAULT_SCALE;
@@ -15,8 +15,10 @@ export const BOOT_WINDOW = windowSizeForScale(BOOT_SCALE);
  * resolution change without reaching into the render-owned manifest.
  */
 export const BOWL_CENTER = {
-  x: WINDOW_PAD + (GRID_W / 2) * BOOT_SCALE,
-  y: WINDOW_PAD + (GRID_H / 2) * BOOT_SCALE,
+  // Through scaleFactor: the scale counts EIGHTHS of the grid, so multiplying by it raw puts this
+  // point several screens away and every hover in the suite silently misses the window.
+  x: WINDOW_PAD + (GRID_W / 2) * scaleFactor(BOOT_SCALE),
+  y: WINDOW_PAD + (GRID_H / 2) * scaleFactor(BOOT_SCALE),
 };
 
 /**

@@ -446,3 +446,61 @@ body {
     transform: none;
   }
 }
+
+/* ---------- Resize handle ---------- */
+
+/*
+ * Sits on the habitat's top-left corner and appears with the rest of the hover chrome. Top-left
+ * because resizing pins the window's bottom-right, so that is the corner that travels with the cursor.
+ * It lives inside the habitat's own hit region, so it needs no region of its own.
+ */
+.resize-grip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  background: var(--wp-scrim);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
+  box-shadow: var(--wp-shadow), var(--wp-hairline);
+  pointer-events: auto;
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 160ms ease, transform 120ms ease;
+  touch-action: none;
+}
+#ui .resize-grip:not([hidden]) {
+  opacity: 1;
+}
+.resize-grip::before,
+.resize-grip::after {
+  /* Two corner strokes, reading as the corner being grabbed. */
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 1px;
+}
+.resize-grip::before {
+  left: 4px;
+  top: 4px;
+  width: 9px;
+  height: 1.5px;
+}
+.resize-grip::after {
+  left: 4px;
+  top: 4px;
+  width: 1.5px;
+  height: 9px;
+}
+.resize-grip.dragging {
+  transform: scale(1.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resize-grip {
+    transition: none;
+  }
+}

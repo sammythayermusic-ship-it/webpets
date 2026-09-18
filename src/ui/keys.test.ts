@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { commandFor, nextScale } from './keys';
+import { commandFor, nextScale, SCALE_STEP } from './keys';
+import { MAX_SCALE, MIN_SCALE, SCALE_M } from '../sim/constants';
 
 function key(code: string, mods: { meta?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
   return { code, metaKey: mods.meta ?? false, altKey: mods.alt ?? false, ctrlKey: mods.ctrl ?? false };
@@ -26,12 +27,28 @@ describe('commandFor', () => {
 });
 
 describe('nextScale', () => {
-  it('steps through 1/2/3 and stops at the ends', () => {
-    expect(nextScale(1, 1)).toBe(2);
-    expect(nextScale(2, 1)).toBe(3);
-    expect(nextScale(3, 1)).toBeNull();
-    expect(nextScale(3, -1)).toBe(2);
-    expect(nextScale(1, -1)).toBeNull();
+  it('steps by a quarter of the grid and stops at the ends', () => {
+    // A quarter per press rather than an eighth: at one step the range is 26 presses end to end,
+    // which is not a shortcut. A quarter keeps Small, Medium and Large reachable from each other.
+    expect(nextScale(SCALE_M, 1)).toBe(SCALE_M + SCALE_STEP);
+    expect(nextScale(SCALE_M, -1)).toBe(SCALE_M - SCALE_STEP);
+    expect(nextScale(MAX_SCALE, 1), 'nothing above the ceiling').toBeNull();
+    expect(nextScale(MIN_SCALE, -1), 'nothing below the floor').toBeNull();
+    expect(nextScale(MAX_SCALE, -1)).toBe(MAX_SCALE - SCALE_STEP);
+  });
+
+  it('walks the whole range without getting stuck or overshooting', () => {
+    let n = MIN_SCALE;
+    const seen = [n];
+    for (let i = 0; i < 100; i += 1) {
+      const next = nextScale(n, 1);
+      if (next === null) break;
+      expect(next, 'must always move upward').toBeGreaterThan(n);
+      n = next;
+      seen.push(n);
+    }
+    expect(n, 'reaches the ceiling').toBe(MAX_SCALE);
+    expect(seen.length, 'in a sensible number of presses').toBeLessThan(15);
   });
 });
 

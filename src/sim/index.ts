@@ -31,13 +31,17 @@ export {
   PANTRY_VISUAL_MAX,
   PET_FPS,
   POINTER_POLL_MS,
-  SCALES,
+  MAX_SCALE,
+  MIN_SCALE,
+  SCALE_STEPS_PER_UNIT,
   SCALE_L,
   SCALE_M,
   SCALE_S,
   SNAP_PX,
   STARTING_BALANCE,
   WINDOW_PAD,
+  clampScale,
+  scaleFactor,
   windowSizeForScale,
 } from './constants';
 export type { Scale, TrayChipSize } from './constants';

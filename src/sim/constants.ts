@@ -26,34 +26,60 @@ export const PANTRY_LOW_HUNGER_MAX = 60;
 /** Starting local $FEED balance for a fresh install. */
 export const STARTING_BALANCE = 1000;
 
-/** Habitat grid and window layout. Integer scales only. */
+/** Habitat grid and window layout. */
 export const GRID_W = 320;
 export const GRID_H = 240;
-export type Scale = 1 | 2 | 3;
+
 /**
- * The ladder, spelled out. Everything that means "the small window" says `SCALE_S`, never `1`, so the
- * ladder can move again without a grep. The literals below are deliberately plain number literals:
- * `src-tauri/src/window.rs`'s `contract_sync` test parses this file as text and only understands
- * literals. `src/sim/constants.test.ts` pins `SCALES`/`DEFAULT_SCALE` to these names so the duplication
- * cannot drift.
+ * The window scale, as an integer count of EIGHTHS of the logical grid. `16` is 2x, `8` is 1x.
+ *
+ * An integer count rather than a fraction, because the window size has to come out identical in two
+ * languages that never see each other's arithmetic. `GRID_W` and `GRID_H` are both divisible by 8, so
+ * `windowSizeForScale` is `40n + 48` by `30n + 48` — exact whole pixels for every value, with no
+ * rounding rule to keep in step and no reliance on two JSON parsers agreeing about a float. If Rust
+ * and TypeScript ever disagreed by a single pixel the click-through region would stop matching the
+ * art, and the symptom is the window silently eating clicks meant for whatever is behind it.
+ *
+ * It was three named rungs (1, 2, 3) for as long as the renderer drew on a pixel grid and only whole
+ * multiples were legal. That constraint went when the art did.
  */
-export const SCALE_S: Scale = 1;
-export const SCALE_M: Scale = 2;
-export const SCALE_L: Scale = 3;
-export const SCALES: readonly Scale[] = [1, 2, 3];
+export type Scale = number;
+export const SCALE_STEPS_PER_UNIT = 8;
+/** 0.75x. Below this the pet is too small to read. */
+export const MIN_SCALE = 6;
+/** 4x, which is exactly 1:1 with the art's own resolution and so the natural ceiling. */
+export const MAX_SCALE = 32;
+/** The named rungs the tray menu offers and the +/- buttons snap to. */
+export const SCALE_S: Scale = 8;
+export const SCALE_M: Scale = 16;
+export const SCALE_L: Scale = 24;
 /** Scale a fresh install boots at, and the pre-boot fallback size in `src-tauri/tauri.conf.json`. */
-export const DEFAULT_SCALE: Scale = 2;
+export const DEFAULT_SCALE: Scale = 16;
 /** Transparent padding around the habitat on every side, in CSS px: room for the HUD pill, caption and drop shadow. */
 export const WINDOW_PAD = 24;
+
+/** Rounds and clamps an arbitrary number into the legal scale range. */
+export function clampScale(raw: number): Scale {
+  const n = Math.round(raw);
+  return n < MIN_SCALE ? MIN_SCALE : n > MAX_SCALE ? MAX_SCALE : n;
+}
+
+/** How much bigger than the logical grid the habitat is drawn, as a plain multiplier. */
+export function scaleFactor(scale: Scale): number {
+  return scale / SCALE_STEPS_PER_UNIT;
+}
+
 /**
- * The only window-size formula in the codebase: the habitat grid at an integer scale plus `WINDOW_PAD`
- * on every side, in CSS px — S 368x288, M 688x528, L 1008x768. `src/platform/geometry.ts` re-exports it,
- * `src/render/scene.ts` sizes the Pixi renderer with it, and `src-tauri/src/window.rs` mirrors it in
- * Rust — a Rust unit test parses the constants above out of this file and fails the build if the two
- * ever disagree.
+ * The only window-size formula in the codebase: the habitat grid at `scale` eighths plus `WINDOW_PAD`
+ * on every side, in CSS px. `src/platform/geometry.ts` re-exports it, `src/render/scene.ts` sizes the
+ * Pixi renderer with it, and `src-tauri/src/window.rs` mirrors it in Rust — a Rust unit test parses the
+ * constants above out of this file and fails the build if the two ever disagree.
  */
 export function windowSizeForScale(scale: Scale): { width: number; height: number } {
-  return { width: GRID_W * scale + 2 * WINDOW_PAD, height: GRID_H * scale + 2 * WINDOW_PAD };
+  return {
+    width: (GRID_W * scale) / SCALE_STEPS_PER_UNIT + 2 * WINDOW_PAD,
+    height: (GRID_H * scale) / SCALE_STEPS_PER_UNIT + 2 * WINDOW_PAD,
+  };
 }
 
 export const PET_FPS = 8;
