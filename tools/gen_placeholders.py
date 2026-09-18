@@ -76,6 +76,11 @@ OPAQUE_RECT: dict[str, int] = {}
 PANTRY_RECT_PX: dict[str, int] = {}
 
 
+
+# Draw decorative placeholder content and PLACEHOLDER stamps? Off by default: `bg` is real art
+# now, so labelled stand-ins drawn over it hide the very thing they stand in for. See --labeled.
+LABELED = False
+
 def u(n: float) -> int:
     """Map a hand-placed art-unit coordinate onto the drawing canvas."""
     return int(round(n * S))
@@ -233,19 +238,56 @@ def in_water(x: float, y: float) -> bool:
 PAINTED_FISH_SEARCH = dict(x0=50, x1=93, y0=44, y1=74)
 
 
-def painted_fish_box(concept: Image.Image) -> tuple[int, int, int, int] | None:
+def painted_fish_pixels(concept: Image.Image) -> set[tuple[int, int]]:
+    """The fish painted into the bg, as the largest connected orange blob inside the water.
+
+    A bounding-box scan is not enough any more: the real 320x240 art has orange in the plant fronds
+    and in the flakes falling from the feeder, so a box around every orange pixel swallows half the
+    bowl. Flood-filling the largest blob picks the fish and nothing else.
+    """
     px = concept.load()
     s = PAINTED_FISH_SEARCH
-    xs, ys = [], []
-    for y in range(u(s['y0']), u(s['y1'])):
-        for x in range(u(s['x0']), u(s['x1'])):
-            r, g, b, a = px[x, y]
-            if a > 0 and in_water(x + 0.5, y + 0.5) and r > g + 30 and r > b + 30:
-                xs.append(x)
-                ys.append(y)
-    if not xs:
-        return None
-    return min(xs) - u(1), min(ys) - u(1), max(xs) + u(1), max(ys) + u(1)
+    x0, x1 = u(s['x0']), min(CANVAS_W, u(s['x1']))
+    y0, y1 = u(s['y0']), min(CANVAS_H, u(s['y1']))
+
+    def is_fish(x: int, y: int) -> bool:
+        r, g, b, a = px[x, y]
+        return a > 0 and in_water(x + 0.5, y + 0.5) and r > g + 30 and r > b + 30
+
+    seen: set[tuple[int, int]] = set()
+    best: list[tuple[int, int]] = []
+    for sy in range(y0, y1):
+        for sx in range(x0, x1):
+            if (sx, sy) in seen or not is_fish(sx, sy):
+                continue
+            comp = []
+            stack = [(sx, sy)]
+            seen.add((sx, sy))
+            while stack:
+                cx, cy = stack.pop()
+                comp.append((cx, cy))
+                for dx in (-1, 0, 1):
+                    for dy in (-1, 0, 1):
+                        nx, ny = cx + dx, cy + dy
+                        if (nx, ny) in seen or not (x0 <= nx < x1 and y0 <= ny < y1):
+                            continue
+                        if is_fish(nx, ny):
+                            seen.add((nx, ny))
+                            stack.append((nx, ny))
+            if len(comp) > len(best):
+                best = comp
+    if not best:
+        return set()
+    # Grow by one art unit so the fish's dark outline goes too, not just its orange body.
+    grown = set(best)
+    for _ in range(max(1, u(1))):
+        for x, y in list(grown):
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < CANVAS_W and 0 <= ny < CANVAS_H and in_water(nx + 0.5, ny + 0.5):
+                        grown.add((nx, ny))
+    return grown
 
 
 def water_color_at_row(concept: Image.Image, y: int, x_from: int) -> tuple[int, int, int, int]:
@@ -259,31 +301,73 @@ def water_color_at_row(concept: Image.Image, y: int, x_from: int) -> tuple[int, 
 
 
 def gen_medium() -> Image.Image:
+    """Heal the fish painted into the concept art, and nothing else.
+
+    `bg` is real art now: it already contains the water, the gravel, the plants and the glass. A
+    placeholder tint drawn over it covered a quarter of the frame and washed all of that back out, so
+    the composite looked worse than the background alone. The only thing this layer still owes the
+    scene is hiding the painted-in fish so the live sprite is the only one. Pass --labeled to get the
+    old full-coverage tint back for debugging the layer stack.
+    """
     im = new_layer()
     px = im.load()
     concept = concept_art()
-    box = painted_fish_box(concept)
-    band = max(1, u(3))
-    for y in range(CANVAS_H):
-        for x in range(CANVAS_W):
-            if in_water(x + 0.5, y + 0.5):
-                # faint horizontal shimmer bands so the tint reads
-                a = WATER_BLUE[3] + (12 if (y // band) % 2 == 0 else 0)
-                px[x, y] = (WATER_BLUE[0], WATER_BLUE[1], WATER_BLUE[2], a)
-    if box is not None:
-        x0, y0, x1, y1 = box
-        for y in range(y0, y1 + 1):
-            col = water_color_at_row(concept, y, x0 - 1)
-            for x in range(x0, x1 + 1):
+    fish_px = painted_fish_pixels(concept)
+    if LABELED:
+        band = max(1, u(3))
+        for y in range(CANVAS_H):
+            for x in range(CANVAS_W):
                 if in_water(x + 0.5, y + 0.5):
-                    px[x, y] = col
-    stamp(im, u(66), u(62), 'MEDIUM')
-    stamp(im, u(66), u(68), 'PLACEHOLDER')
+                    # faint horizontal shimmer bands so the tint reads
+                    a = WATER_BLUE[3] + (12 if (y // band) % 2 == 0 else 0)
+                    px[x, y] = (WATER_BLUE[0], WATER_BLUE[1], WATER_BLUE[2], a)
+    # Heal with the MEDIAN water colour of the same row, bucketed by dither phase.
+    #
+    # Two earlier attempts and why they failed: filling the span with one flat colour per row left a
+    # pale rectangle sitting on top of dithered water, and tiling a contiguous run of neighbouring
+    # water dragged the bowl's bright specular streak across the patch as ghost blobs. Taking the
+    # per-phase median over a wide window reproduces the dither pattern while outliers like the
+    # highlight are voted out.
+    if fish_px:
+        src = concept.load()
+        rows: dict[int, list[int]] = {}
+        for x, y in fish_px:
+            rows.setdefault(y, []).append(x)
+        phase = u(2) * 2  # the water dither repeats on this horizontal period
+        for y, xs in rows.items():
+            lo, hi = min(xs), max(xs)
+            buckets: dict[int, list[tuple[int, int, int, int]]] = {}
+            for x in range(max(0, lo - u(40)), min(CANVAS_W, hi + u(40))):
+                if (x, y) in fish_px or not in_water(x + 0.5, y + 0.5):
+                    continue
+                buckets.setdefault(x % phase, []).append(src[x, y])
+            if not buckets:
+                continue
+            medians = {}
+            for k, vals in buckets.items():
+                medians[k] = tuple(sorted(v[i] for v in vals)[len(vals) // 2] for i in range(4))
+            for x in sorted(xs):
+                if not in_water(x + 0.5, y + 0.5):
+                    continue
+                col = medians.get(x % phase)
+                if col is None:
+                    col = next(iter(medians.values()))
+                px[x, y] = col
+    if LABELED:
+        stamp(im, u(66), u(62), 'MEDIUM')
+        stamp(im, u(66), u(68), 'PLACEHOLDER')
     return im
 
 
 def gen_decor_back() -> Image.Image:
+    """Empty by default: `bg` already draws the real plants behind the fish.
+
+    Drawing a placeholder plant here put crude green rectangles on top of the detailed ones in the
+    background. The slot stays in the manifest and the layer stack so real layered art can drop in.
+    """
     im = new_layer()
+    if not LABELED:
+        return im
     d = ImageDraw.Draw(im)
     # a back plant: three stalks with leaves, rooted in the gravel on the left
     for sx, h in ((56, 30), (62, 40), (68, 34)):
@@ -306,8 +390,11 @@ def gen_pantry() -> Image.Image:
                 outline=FEEDER_GRAY, width=u(1))
     d.rectangle((b['x'] + u(16), b['y'] + b['h'], b['x'] + u(20) - 1, b['y'] + b['h'] + u(7) - 1),
                 fill=FEEDER_GRAY)
-    stamp(im, u(125), u(6), 'PANTRY')
-    stamp(im, u(114), u(12), 'PLACEHOLDER')  # right of the feeder box, ends inside the grid
+    # The box above is functional, not decorative: it hides the flakes painted into the concept art so
+    # `pantry_fill` is the only thing that shows a level. Only the labels are placeholder.
+    if LABELED:
+        stamp(im, u(125), u(6), 'PANTRY')
+        stamp(im, u(114), u(12), 'PLACEHOLDER')  # right of the feeder box, ends inside the grid
     return im
 
 
@@ -327,7 +414,10 @@ def gen_pantry_fill() -> Image.Image:
 
 
 def gen_decor_front() -> Image.Image:
+    """Empty by default, for the same reason as `decor_back`."""
     im = new_layer()
+    if not LABELED:
+        return im
     d = ImageDraw.Draw(im)
     # a small front plant on the right side of the gravel
     for sx, h in ((100, 18), (105, 24)):
@@ -341,7 +431,14 @@ def gen_decor_front() -> Image.Image:
 
 
 def gen_glass() -> Image.Image:
+    """Empty by default: `bg` carries the real glass highlights.
+
+    The runtime still uses this slot - the hover sheen and the dead-phase fog are added to it as
+    children - so only the painted-on streak goes away, not the layer.
+    """
     im = new_layer()
+    if not LABELED:
+        return im
     px = im.load()
     # a faint specular streak along the upper-left inside of the glass
     steps = 40 * max(1, u(1))
@@ -394,13 +491,9 @@ def gen_memorial() -> Image.Image:
             if a > 0 and in_water(x + 0.5, y + 0.5) and b > r + 20 and b > g:
                 px[x, y] = (236, 242, 246, 120)
     # remove the painted fish as well (same patch the medium layer heals)
-    box = painted_fish_box(concept_art())
-    if box is not None:
-        x0, y0, x1, y1 = box
-        for y in range(y0, y1 + 1):
-            for x in range(x0, x1 + 1):
-                if in_water(x + 0.5, y + 0.5):
-                    px[x, y] = (236, 242, 246, 120)
+    for x, y in painted_fish_pixels(concept_art()):
+        if in_water(x + 0.5, y + 0.5):
+            px[x, y] = (236, 242, 246, 120)
     # a tiny flag planted in the gravel
     d = ImageDraw.Draw(im)
     d.rectangle((u(84), u(82), u(85) - 1, u(92) - 1), fill=(60, 50, 40, 255))
@@ -445,11 +538,17 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
                    help='habitat grid override (default: assets/manifest.json)')
     p.add_argument('--upscale', type=int, metavar='N',
                    help='draw at grid/N and NEAREST-upscale by N (default: 1, i.e. draw natively)')
+    p.add_argument('--labeled', action='store_true',
+                   help='draw the decorative placeholder content and PLACEHOLDER stamps. Off by '
+                        'default because bg.png is real art now and painting labelled stand-ins over '
+                        'it hides the thing they were standing in for. Useful for debugging the stack.')
     return p.parse_args(list(argv))
 
 
 def main(argv: Iterable[str] = ()) -> None:
+    global LABELED
     args = parse_args(argv)
+    LABELED = bool(args.labeled)
     configure(
         grid=(args.grid[0], args.grid[1]) if args.grid else None,
         upscale=args.upscale,

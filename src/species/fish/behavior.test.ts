@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createFishBehavior } from './behavior';
-import { BOWL_WATER_SHAPE } from './layout';
+import { BOWL_WATER_SHAPE, FISH_BODY } from './layout';
 import { makeWaterBounds } from '../../render/water';
 import type { FishInput, FishOutput } from '../../render/types';
 import type { HungerLabel, Rng } from '../../sim/types';
 
 const bounds = makeWaterBounds(BOWL_WATER_SHAPE);
-const body = { w: 56, h: 28 };
+// One source of truth with the manifest; a stale copy here silently tests a fish that is not shipped.
+const body = FISH_BODY;
 const HW = body.w / 2;
 const HH = body.h / 2;
 
@@ -116,17 +117,45 @@ describe('fish behavior', () => {
     expect(o.biteFlakeIndex).toBe(1);
   });
 
-  it('dead: floats belly-up at surfaceY + 12 with the dead anim and never bites', () => {
+  it('dead: floats belly-up as high as the body still fits, and never bites', () => {
     const b = createFishBehavior();
     for (let i = 0; i < 20; i += 1) b.step(input());
+    // The highest legal centre for the body box, which is what "at the surface" has to mean: the
+    // water's topmost row is the glass, so a raw surfaceY + 12 hangs the dorsal fin outside the bowl.
+    const expected = bounds.clamp(160, bounds.surfaceY + 12, body.w / 2, body.h / 2);
     for (let i = 0; i < 50; i += 1) {
       const o = b.step(input({ alive: false, flakes: [{ x: 162, y: 60 }] }));
-      expect(o.y).toBe(bounds.surfaceY + 12);
+      expect(o.y).toBe(Math.round(expected.y));
       expect(o.anim).toBe('dead');
       expect(o.turning).toBe(false);
       expect(o.biteFlakeIndex).toBeNull();
-      expect(bounds.inside(o.x, o.y)).toBe(true);
+      // Every corner of the body box, not just its centre — the centre can sit inside the ellipse
+      // while the fins hang through the glass, which is exactly the bug this guards.
+      for (const dx of [-body.w / 2, body.w / 2]) {
+        for (const dy of [-body.h / 2, body.h / 2]) {
+          expect(bounds.inside(o.x + dx, o.y + dy), `body corner (${dx}, ${dy}) must stay inside the water`).toBe(true);
+        }
+      }
     }
+  });
+
+  it('can reach a flake that has settled on the gravel', () => {
+    // Regression: the water clamp keeps the body box inside the bowl, so the body CENTRE cannot get
+    // near the gravel. Flakes settle a few px above floorY. Measuring bite distance from the centre
+    // put settled food ~19px away with a 12px bite range, so the fish hovered over its dinner until
+    // the flake dissolved 30s later, and nothing in the suite noticed.
+    const b = createFishBehavior();
+    b.step(input());
+    const settled = { x: 160, y: bounds.floorY - 4 };
+    let bitten: number | null = null;
+    let ticks = 0;
+    while (bitten === null && ticks < 200) {
+      const o = b.step(input({ flakes: [settled] }));
+      bitten = o.biteFlakeIndex;
+      expect(boxInside(o), 'the body must stay inside the water while chasing food').toBe(true);
+      ticks += 1;
+    }
+    expect(bitten, 'a flake resting on the gravel must be eatable').toBe(0);
   });
 
   it('turning is true exactly once per facing change, on the change tick', () => {

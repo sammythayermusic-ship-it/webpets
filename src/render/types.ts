@@ -115,6 +115,17 @@ export interface HabitatScene {
   /** Rect of the habitat's opaque pixels inside the window, CSS px: (24 + opaqueRect.x*s, ...). */
   habitatHitRect(): Rect;
   fps(): number;
+  /**
+   * Dev-only snapshot of what the scene is actually drawing, for the diagnostics bridge. Reading it
+   * is how "the fish is not on screen" gets diagnosed without a debugger attached to the webview.
+   */
+  debugState(): {
+    petVisible: boolean;
+    petAnim: string;
+    petPos: { x: number; y: number };
+    petFrame: { w: number; h: number };
+    layerAlpha: Record<string, number>;
+  };
   /** PNG data URL of the whole canvas (habitat + shadow) rendered right now; for tests and dev diagnostics. */
   snapshot(): Promise<string>;
   destroy(): void;

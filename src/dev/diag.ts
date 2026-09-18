@@ -59,6 +59,7 @@ export function installDiag(ctx: DiagContext): void {
       balance: s.balance,
       settings: s.settings,
       fps: ctx.scene.fps(),
+      scene: ctx.scene.debugState(),
     };
     await fetch('/__webpets/diag', {
       method: 'POST',

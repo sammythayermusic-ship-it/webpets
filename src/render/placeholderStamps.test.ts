@@ -105,6 +105,14 @@ describe('placeholder habitat layers', () => {
   const whole: Box = { x: 0, y: 0, w: gw, h: gh };
   const scale = Math.max(1, Math.round(gw / ART_GRID_W));
 
+  // Which layers still carry placeholder content, now that `bg` is real art derived from the concept
+  // render. `medium` and `pantry` draw only functional pixels (they hide the fish and the flakes that
+  // are painted into the concept art, so the live sprite and the real pantry gauge are the only ones
+  // visible), and the purely decorative slots are empty: a labelled stand-in drawn over real art hides
+  // the very thing it stands in for. `tools/gen_placeholders.py --labeled` restores them for debugging.
+  const EMPTY_BY_DESIGN = new Set(['decor_back', 'decor_front', 'glass']);
+  const FUNCTIONAL_ONLY = new Set(['medium', 'pantry']);
+
   for (const layer of bowl.layers) {
     const file = layer.file;
     if (!file || layer.name === 'bg') continue; // bg is real derived art, not placeholder geometry
@@ -112,6 +120,29 @@ describe('placeholder habitat layers', () => {
       it('pantry_fill: too small for the word, so PH in the stamp colour inside pantryRect', () => {
         const png = load(file);
         expect(findWord(png, 'PH', bowl.pantryRect, scale, STAMP)).not.toBeNull();
+      });
+      continue;
+    }
+    if (EMPTY_BY_DESIGN.has(layer.name)) {
+      it(`${layer.name}: empty, because bg already draws it`, () => {
+        const png = load(file);
+        expect([png.width, png.height]).toEqual([gw, gh]);
+        const drawn = png.data.filter((_, i) => i % 4 === 3).filter((a) => a > 0).length;
+        expect(drawn, `${layer.name} should draw nothing over the real background`).toBe(0);
+      });
+      continue;
+    }
+    if (FUNCTIONAL_ONLY.has(layer.name)) {
+      it(`${layer.name}: draws only the patch it needs, with no stamp`, () => {
+        const png = load(file);
+        expect([png.width, png.height]).toEqual([gw, gh]);
+        const drawn = png.data.filter((_, i) => i % 4 === 3).filter((a) => a > 0).length;
+        expect(drawn, `${layer.name} must still cover what it hides`).toBeGreaterThan(0);
+        // A tenth of the frame is far more than a heal patch or a feeder box needs; past that it is
+        // covering the real art again, which is the regression this number exists to catch.
+        expect(drawn, `${layer.name} covers ${drawn}px, which is enough to hide the real art`)
+          .toBeLessThan(gw * gh * 0.1);
+        expect(findWord(png, 'PLACEHOLDER', whole, scale), `${layer.name} should not be stamped`).toBeNull();
       });
       continue;
     }

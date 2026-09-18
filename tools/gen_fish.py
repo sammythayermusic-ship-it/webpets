@@ -339,10 +339,13 @@ def build_states(fish: Fish, full_palette: Sequence[Rgb]) -> dict[str, list[Imag
     # hungry: head down, fins drooping, a slow tired wag
     states['hungry'] = [pose(wag=(i / 5, 0.8, 0.6), lean=0.22, dy=1, droop=3 + (i % 2)) for i in range(5)]
 
-    # sleep: closed eyes, nose down, a barely-there drift
+    # sleep: closed eyes, nose down, a barely-there drift.
+    # The wag phase must span a FULL cycle across the frame count (i / len), not i / 8. At i / 8 four
+    # frames cover only a quarter cycle, and at this amplitude the first two rounded to identical
+    # pixels -- a 4-frame strip that animated as 2 stills.
     sleep = []
     for i, d in enumerate((0, 0, 1, 1)):
-        im = pose(wag=(i / 8, 0.7, 0.5), lean=0.10, dy=d, droop=1)
+        im = pose(wag=(i / 4, 0.7, 0.5), lean=0.10, dy=d, droop=1)
         close_eye(im, fish, dy=d + tilt(fish, 0.10)(fish.eye[0]))
         sleep.append(im)
     states['sleep'] = sleep
@@ -361,10 +364,10 @@ def build_states(fish: Fish, full_palette: Sequence[Rgb]) -> dict[str, list[Imag
     # excited: fast, high-amplitude wag with a body arch
     states['excited'] = [pose(wag=(i / 3, 3.5, 1.4), dy=(-1 if i % 2 else 1)) for i in range(6)]
 
-    # curious: head forward, eye wide, tail almost still
+    # curious: head forward, eye wide, tail almost still (same full-cycle rule as sleep above)
     curious = []
     for i in range(4):
-        im = pose(wag=(i / 8, 1.0, 0.6), dx=1 if i >= 2 else 0)
+        im = pose(wag=(i / 4, 1.0, 0.6), dx=1 if i >= 2 else 0)
         widen_eye(im, fish, dy=0)
         curious.append(im)
     states['curious'] = curious

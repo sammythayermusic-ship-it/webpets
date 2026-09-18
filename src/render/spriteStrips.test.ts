@@ -22,6 +22,21 @@ const assets = new URL('../../assets/', import.meta.url);
 const manifest = parseManifest(JSON.parse(readFileSync(new URL('manifest.json', assets), 'utf8')) as unknown);
 const load = (file: string): Rgba => decodePng(new Uint8Array(readFileSync(new URL(file, assets))));
 
+/** Count pixels that visibly differ between two frames of a strip (alpha included). */
+function framesDiffer(png: Rgba, a: number, b: number, fw: number, fh: number): number {
+  let n = 0;
+  for (let y = 0; y < fh; y += 1) {
+    for (let x = 0; x < fw; x += 1) {
+      const ia = ((y * png.width) + (a * fw) + x) * 4;
+      const ib = ((y * png.width) + (b * fw) + x) * 4;
+      let d = 0;
+      for (let c = 0; c < 4; c += 1) d += Math.abs((png.data[ia + c] ?? 0) - (png.data[ib + c] ?? 0));
+      if (d > 8) n += 1;
+    }
+  }
+  return n;
+}
+
 /**
  * How far past the body box the drawn art may reach, per side, in grid px. Fins and tail, not a whole fish.
  *
@@ -74,6 +89,24 @@ describe('fish sprite strips', () => {
         for (const [f, e] of extents.entries()) {
           expect(e.halfW, `frame ${f} width`).toBeLessThan(fw / 2);
           expect(e.halfH, `frame ${f} height`).toBeLessThan(fh / 2);
+        }
+      });
+
+      it('actually animates: no two consecutive frames are near-identical', () => {
+        // A strip can pass every other check here and still render as a still image. `sleep` and
+        // `curious` shipped with a wag phase spanning a quarter cycle instead of a full one, so
+        // adjacent frames rounded to the same pixels: 4 declared frames, 2 visible poses, and
+        // nothing caught it. Frame-to-frame change has to be asserted, not assumed.
+        if (def.frames < 2) return;
+        const opaque = extents[0]?.pixels ?? 0;
+        const floor = Math.max(8, Math.round(opaque * 0.02));
+        for (let f = 0; f + 1 < def.frames; f += 1) {
+          const changed = framesDiffer(png, f, f + 1, fw, fh);
+          expect(
+            changed,
+            `frames ${f} and ${f + 1} differ by only ${changed}px of a ${opaque}px fish; ` +
+              `the animation reads as a still. Widen the pose range in tools/gen_fish.py.`,
+          ).toBeGreaterThanOrEqual(floor);
         }
       });
 

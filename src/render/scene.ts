@@ -271,10 +271,31 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       return m ? m.app.ticker.FPS : 0;
     },
 
+    debugState() {
+      if (!m) {
+        return { petVisible: false, petAnim: '(unmounted)', petPos: { x: 0, y: 0 }, petFrame: { w: 0, h: 0 }, layerAlpha: {} };
+      }
+      const sprite = m.player.sprite;
+      const layerAlpha: Record<string, number> = {};
+      for (const [name, c] of Object.entries(m.layers.slots)) {
+        layerAlpha[name] = c.visible ? c.alpha : 0;
+      }
+      return {
+        petVisible: sprite.visible,
+        petAnim: m.player.state(),
+        petPos: { x: Math.round(sprite.x), y: Math.round(sprite.y) },
+        petFrame: { w: Math.round(sprite.width), h: Math.round(sprite.height) },
+        layerAlpha,
+      };
+    },
+
     async snapshot() {
       if (!m) throw new Error('scene not mounted');
-      // Re-render the habitat into the RenderTexture first: a hidden tab or a suspended webview gets no
-      // ticker callbacks, so without this the extract would return whatever was last drawn.
+      // A hidden tab or a suspended webview gets no ticker callbacks, so nothing here can be assumed
+      // to have run. Step the behaviour at least once before rendering: the pet sprite stays hidden at
+      // (0, 0) until its first step places it, so without this a capture of a backgrounded page shows
+      // a bowl with no fish in it and looks like a rendering bug.
+      if (!placed) stepOnce();
       m.app.renderer.render({ container: m.layers.root, target: m.rt });
       m.app.render();
       return m.app.renderer.extract.base64({ target: m.app.stage, format: 'png' });

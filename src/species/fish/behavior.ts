@@ -116,9 +116,12 @@ export function createFishBehavior(): FishBehavior {
 
     // ---- dead: belly-up at the surface, nothing else moves
     if (!input.alive) {
+      // Belly-up as close to the surface as the body box legally fits. Use the clamped y, not the raw
+      // target: surfaceY is the topmost water row, so `surfaceY + 12` puts the box's centre above the
+      // legal band and hangs the dorsal fin and tail outside the glass.
       const c = bounds.clamp(x, bounds.surfaceY + 12, halfW, halfH);
       x = c.x;
-      y = bounds.surfaceY + 12;
+      y = c.y;
       eatTicks = 0;
       return { x: Math.round(x), y: Math.round(y), facing, turning: false, anim: 'dead', biteFlakeIndex: null };
     }
@@ -132,10 +135,17 @@ export function createFishBehavior(): FishBehavior {
 
     if (input.flakes.length > 0) {
       // ---- dart to the nearest flake (overrides hunger posture and sleep)
+      // Distance is measured from the body BOX, not its centre. A fish eats with its mouth, which is
+      // on its outline; measuring from the centre adds half the body height to every reach. That is
+      // not cosmetic: the water clamp keeps the body inside the bowl, so the deepest the centre can
+      // sit is well above the gravel, and a flake that has settled there would be permanently
+      // uneatable -- the fish would hover over its food until the flake dissolved.
+      const reach = (f: { x: number; y: number }): number =>
+        Math.hypot(Math.max(0, Math.abs(f.x - x) - halfW), Math.max(0, Math.abs(f.y - y) - halfH));
       let best = 0;
       let bestD = Infinity;
       input.flakes.forEach((f, i) => {
-        const d = Math.hypot(f.x - x, f.y - y);
+        const d = reach(f);
         if (d < bestD) {
           bestD = d;
           best = i;

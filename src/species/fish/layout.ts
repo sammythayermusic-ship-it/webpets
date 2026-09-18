@@ -41,3 +41,11 @@ export const BOWL_OPAQUE_RECT: Readonly<Rect> = Object.freeze({ x: 79, y: 8, w: 
 
 /** Where the fish starts (body center), grid px. */
 export const BOWL_PET_ANCHOR: readonly [number, number] = Object.freeze([160, 120] as const);
+
+/**
+ * Collision box of the drawn fish, mirroring `sprites.fish.body` in the manifest. The behavior clamps
+ * this box inside `BOWL_WATER_SHAPE`, so it is deliberately a little smaller than the 64x48 art: the
+ * difference is the fin fringe that may overlap the glass without the clamp fighting it. It lives here
+ * rather than only in the manifest so tests and behavior share one number instead of hardcoding copies.
+ */
+export const FISH_BODY: Readonly<{ w: number; h: number }> = Object.freeze({ w: 56, h: 46 });
