@@ -10,12 +10,12 @@ describe('parseManifest', () => {
     expect(m.version).toBe(1);
     const bowl = m.habitats['fish/bowl'];
     expect(bowl).toBeDefined();
-    expect(bowl?.grid).toEqual([160, 120]);
+    expect(bowl?.grid).toEqual([320, 240]);
     expect(bowl?.layers.map((l) => l.name)).toEqual([
       'bg', 'memorial', 'medium', 'decor_back', 'pantry', 'pantry_fill', 'pet', 'food', 'decor_front', 'glass', 'fx', 'night', 'shadow',
     ]);
     const fish = m.sprites['fish'];
-    expect(fish?.frame).toEqual([80, 80]);
+    expect(fish?.frame).toEqual([160, 160]);
     expect(Object.keys(fish?.states ?? {})).toEqual(['idle', 'eat', 'hungry', 'sleep', 'dead']);
     expect(fish?.states['eat']?.returnTo).toBe('idle');
   });

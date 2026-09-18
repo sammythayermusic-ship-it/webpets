@@ -1,4 +1,4 @@
-// Layer stack inside the 160x120 RenderTexture. Fixed slot order (shadow is NOT here: it is drawn in CSS px
+// Layer stack inside the habitat RenderTexture. Fixed slot order (shadow is NOT here: it is drawn in CSS px
 // under the habitat sprite by the scene). `memorial` is the bg variant; `pantry_fill` is cropped via a
 // dynamic texture frame; `night` multiplies with a 2 s stepped fade.
 

@@ -292,9 +292,9 @@ describe('app store', () => {
   it('setScale calls the platform then persists; setHidden hides/shows; setLaunchAtLogin', async () => {
     const { store, platform } = await bootStore();
     const a = store.getState().actions;
-    await a.setScale(4);
-    expect(platform.scaleCalls).toEqual([4]);
-    expect(store.getState().settings.scale).toBe(4);
+    await a.setScale(3);
+    expect(platform.scaleCalls).toEqual([3]);
+    expect(store.getState().settings.scale).toBe(3);
     await a.setHidden(true);
     expect(platform.visible).toBe(false);
     expect(store.getState().hidden).toBe(true);
@@ -314,7 +314,7 @@ describe('app store', () => {
     a.feed();
     a.feed();
     a.setMuted(true);
-    await a.setScale(2);
+    await a.setScale(1);
     const savesBefore = platform.saveCount;
     await a.quit();
     expect(platform.quitCalled).toBe(true);
@@ -322,7 +322,7 @@ describe('app store', () => {
     expect((platform.files.get(PET_FILE) as PetDoc).balance).toBe(950);
     const settings = platform.files.get(SETTINGS_FILE) as SettingsDoc;
     expect(settings.muted).toBe(true);
-    expect(settings.scale).toBe(2);
+    expect(settings.scale).toBe(1);
   });
 
   it('tick after a wake covering hours emits catch-up events', async () => {

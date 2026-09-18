@@ -1,8 +1,13 @@
 // Flakes: entities the fish eats. Spawned at the surface on feed(), sinking with drift at 8 fps steps
 // (integer draw positions), removed on bite; leftovers settle on the gravel and dissolve after a while.
+//
+// Sizes, offsets and speeds are in habitat grid px (320x240) and doubled with the grid in Stage 1; the
+// 2x2 flake pattern is authored on the old 160x120 art grid and nearest-upscaled by ART_UNIT, so the
+// texture is pixel-identical to the previous one at twice the size. Step counts are not pixel
+// quantities and did not change.
 
 import { Container, Sprite, type Texture } from 'pixi.js';
-import { bufferTexture } from './fx';
+import { ART_UNIT, bufferTexture, upscalePattern } from './fx';
 import type { Rng } from '../sim/types';
 import type { WaterBounds, WaterShape } from './types';
 
@@ -39,7 +44,7 @@ function flakeTexture(): Texture {
     222, 160, 72, 255, 240, 190, 100, 255,
     186, 118, 48, 255, 222, 160, 72, 255,
   ]);
-  return bufferTexture(2, 2, px, 'flake');
+  return bufferTexture(2 * ART_UNIT, 2 * ART_UNIT, upscalePattern(2, 2, px), 'flake');
 }
 
 export function createFlakes(shape: WaterShape, bounds: WaterBounds): Flakes {
@@ -54,7 +59,7 @@ export function createFlakes(shape: WaterShape, bounds: WaterBounds): Flakes {
   };
 
   const draw = (f: Flake): void => {
-    f.sprite.position.set(Math.round(f.x) - 1, Math.round(f.y) - 1);
+    f.sprite.position.set(Math.round(f.x) - ART_UNIT, Math.round(f.y) - ART_UNIT);
   };
 
   const kill = (f: Flake): void => {
@@ -64,8 +69,8 @@ export function createFlakes(shape: WaterShape, bounds: WaterBounds): Flakes {
   return {
     container,
     feed(rng) {
-      const y = bounds.surfaceY + 1;
-      const hw = Math.max(6, halfWidthAt(y + 2) - 6);
+      const y = bounds.surfaceY + 2;
+      const hw = Math.max(12, halfWidthAt(y + 4) - 12);
       for (let i = 0; i < FLAKES_PER_FEED; i += 1) {
         const sprite = new Sprite({ texture: tex });
         container.addChild(sprite);
@@ -73,8 +78,8 @@ export function createFlakes(shape: WaterShape, bounds: WaterBounds): Flakes {
           sprite,
           x: shape.cx + (rng() * 2 - 1) * hw,
           y,
-          vy: 0.5 + rng() * 0.5,
-          vx: (rng() - 0.5) * 0.4,
+          vy: 1 + rng(),
+          vx: (rng() - 0.5) * 0.8,
           settled: false,
           age: 0,
         };
@@ -88,10 +93,10 @@ export function createFlakes(shape: WaterShape, bounds: WaterBounds): Flakes {
         const f = flakes[i];
         if (!f) continue;
         if (!f.settled) {
-          if (rng() < 0.12) f.vx = (rng() - 0.5) * 0.4;
+          if (rng() < 0.12) f.vx = (rng() - 0.5) * 0.8;
           const nx = f.x + f.vx;
           const ny = f.y + f.vy;
-          const floor = bounds.floorY - 2;
+          const floor = bounds.floorY - 4;
           f.y = Math.min(ny, floor);
           f.x = bounds.inside(nx, f.y) ? nx : f.x;
           if (f.y >= floor) f.settled = true;

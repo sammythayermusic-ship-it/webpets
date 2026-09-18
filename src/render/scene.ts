@@ -1,14 +1,14 @@
-// The habitat scene. Everything except the drop shadow renders into a 160x120 RenderTexture (nearest,
-// resolution 1) in grid units; that one texture is drawn at (WINDOW_PAD, WINDOW_PAD) scaled by the integer
+// The habitat scene. Everything except the drop shadow renders into a RenderTexture the size of the
+// manifest habitat's grid (nearest, resolution 1) in grid units; that one texture is drawn at (WINDOW_PAD, WINDOW_PAD) scaled by the integer
 // scale, which is the structural pixel-grid guarantee. Pet + flakes step at PET_FPS via a deltaMS
 // accumulator; bubbles, the pantry blink and the night fade run at ticker rate.
 
 import { Application, Container, RenderTexture, Sprite, type Ticker } from 'pixi.js';
-import { GRID_H, GRID_W, PET_FPS, WINDOW_PAD, windowSizeForScale, type Scale } from '../sim/constants';
+import { DEFAULT_SCALE, GRID_H, GRID_W, PET_FPS, WINDOW_PAD, windowSizeForScale, type Scale } from '../sim/constants';
 import type { Rect, Rng } from '../sim/types';
 import { createFishBehavior } from '../species/fish/behavior';
 import { configureNearestTextures, loadTextures } from './assets';
-import { createBubbles, createSheen, parallaxOffset, type Bubbles, type Sheen } from './fx';
+import { ART_UNIT, createBubbles, createSheen, parallaxOffset, type Bubbles, type Sheen } from './fx';
 import { createFlakes, type Flakes } from './food';
 import { buildLayers, type LayerStack } from './layers';
 import { createSpritePlayer, type SpritePlayer } from './spritePlayer';
@@ -18,6 +18,13 @@ import type { FishBehavior, HabitatScene, Manifest, ManifestHabitat, ManifestSpr
 const STEP_MS = 1000 / PET_FPS;
 /** Cap the accumulator so a background tab does not replay minutes of steps at once. */
 const MAX_ACC_MS = 1000;
+/**
+ * Drop shadow offsets in grid px. They are ART_UNIT-scaled because the shadow is drawn in CSS px
+ * (`offset * scale`): a grid px is physically smaller on a finer grid, so a literal 1/2 here would halve
+ * the shadow on screen when the grid doubled.
+ */
+const SHADOW_NEAR_PX = 1 * ART_UNIT;
+const SHADOW_FAR_PX = 2 * ART_UNIT;
 const HABITAT_KEY = 'fish/bowl';
 const SPRITE_KEY = 'fish';
 
@@ -58,7 +65,7 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
     );
 
   let m: Mounted | null = null;
-  let scale: Scale = 3;
+  let scale: Scale = DEFAULT_SCALE;
   let view: SceneView | null = null;
   let pointer: { x: number; y: number } | null = null;
   let acc = 0;
@@ -76,10 +83,11 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
     m.app.renderer.resize(w, h);
     m.habitatSprite.position.set(WINDOW_PAD, WINDOW_PAD);
     m.habitatSprite.scale.set(scale);
-    // Stepped 2-tone drop shadow: two black-tinted copies of the habitat texture offset by 1 and 2 grid px.
-    m.shadowNear.position.set(WINDOW_PAD + scale, WINDOW_PAD + scale);
+    // Stepped 2-tone drop shadow: two black-tinted copies of the habitat texture, offset by SHADOW_NEAR_PX
+    // and SHADOW_FAR_PX grid px (2 and 4 CSS px at scale 1, unchanged from the 160x120 grid at scale 2).
+    m.shadowNear.position.set(WINDOW_PAD + SHADOW_NEAR_PX * scale, WINDOW_PAD + SHADOW_NEAR_PX * scale);
     m.shadowNear.scale.set(scale);
-    m.shadowFar.position.set(WINDOW_PAD + 2 * scale, WINDOW_PAD + 2 * scale);
+    m.shadowFar.position.set(WINDOW_PAD + SHADOW_FAR_PX * scale, WINDOW_PAD + SHADOW_FAR_PX * scale);
     m.shadowFar.scale.set(scale);
   };
 

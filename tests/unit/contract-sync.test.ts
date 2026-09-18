@@ -12,7 +12,17 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { GRID_H, GRID_W, SCALES, WINDOW_PAD, windowSizeForScale } from '../../src/sim/constants';
+import {
+  DEFAULT_SCALE,
+  GRID_H,
+  GRID_W,
+  SCALES,
+  SCALE_L,
+  SCALE_M,
+  SCALE_S,
+  WINDOW_PAD,
+  windowSizeForScale,
+} from '../../src/sim/constants';
 
 const ROOT = resolve(__dirname, '../..');
 const RS_PATH = 'src-tauri/src/window.rs';
@@ -23,23 +33,35 @@ const conf = JSON.parse(readFileSync(resolve(ROOT, CONF_PATH), 'utf8')) as {
   app: { windows: Array<{ label: string; width: number; height: number }> };
 };
 
+/** window.rs with `//` and block comments stripped, so a commented-out stale declaration cannot
+ * shadow the live one. */
+const RUST_SOURCE = rust.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+
 /**
- * A `const <name>: f64 = <number>;` (or u8) from window.rs, with `//` and block comments stripped
- * first so a commented-out stale declaration cannot shadow the live one. Throws when the pattern
- * stops matching rather than returning a default, because a guard that silently skips its own
- * assertions is worse than no guard at all.
+ * A `const <name>: f64 = <number>;` (or u8) from window.rs. The initialiser may also be another
+ * constant's name (`const MIN_SCALE: u8 = SCALE_S;`), which is followed one link at a time. Throws
+ * when the pattern stops matching rather than returning a default, because a guard that silently
+ * skips its own assertions is worse than no guard at all.
  */
-function rustConst(name: string): number {
-  const source = rust.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
-  const m = new RegExp(`const\\s+${name}\\s*:\\s*[a-z0-9]+\\s*=\\s*([0-9]+(?:\\.[0-9]+)?)\\s*;`).exec(source);
-  if (!m?.[1]) {
+function rustConst(name: string, seen: readonly string[] = []): number {
+  if (seen.includes(name)) {
+    throw new Error(`${RS_PATH}: constant ${name} is defined in terms of itself (${[...seen, name].join(' -> ')}).`);
+  }
+  const m = new RegExp(`const\\s+${name}\\s*:\\s*[a-z0-9]+\\s*=\\s*([^;]+);`).exec(RUST_SOURCE);
+  const raw = m?.[1]?.trim();
+  if (raw === undefined) {
     throw new Error(
-      `${RS_PATH}: could not find a \`const ${name}: <type> = <number>;\` declaration. This test ` +
+      `${RS_PATH}: could not find a \`const ${name}: <type> = <value>;\` declaration. This test ` +
         `parses that exact shape to keep it in sync with src/sim/constants.ts; if it was renamed or ` +
         `reformatted, update rustConst() in tests/unit/contract-sync.test.ts to match.`,
     );
   }
-  return Number(m[1]);
+  if (/^[0-9]+(?:\.[0-9]+)?$/.test(raw)) return Number(raw);
+  if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(raw)) return rustConst(raw, [...seen, name]);
+  throw new Error(
+    `${RS_PATH}: \`${name}\` is \`${raw}\`, which is neither a number literal nor another constant's ` +
+      `name. This test mirrors it into TypeScript, so it has to stay one of those two.`,
+  );
 }
 
 describe('grid contract: TypeScript vs Rust vs tauri.conf.json', () => {
@@ -50,6 +72,13 @@ describe('grid contract: TypeScript vs Rust vs tauri.conf.json', () => {
     expect(rustConst('GRID_W'), `GRID_W must match ${RS_PATH}`).toBe(GRID_W);
     expect(rustConst('GRID_H'), `GRID_H must match ${RS_PATH}`).toBe(GRID_H);
     expect(rustConst('WINDOW_PAD'), `WINDOW_PAD must match ${RS_PATH}`).toBe(WINDOW_PAD);
+  });
+
+  it('mirrors the named S/M/L rungs in window.rs', () => {
+    // tray.rs ticks and enables the Size submenu by comparing the current scale against these.
+    expect(rustConst('SCALE_S'), `SCALE_S must match ${RS_PATH}`).toBe(SCALE_S);
+    expect(rustConst('SCALE_M'), `SCALE_M must match ${RS_PATH}`).toBe(SCALE_M);
+    expect(rustConst('SCALE_L'), `SCALE_L must match ${RS_PATH}`).toBe(SCALE_L);
   });
 
   it('accepts exactly the scales in SCALES', () => {
@@ -67,13 +96,13 @@ describe('grid contract: TypeScript vs Rust vs tauri.conf.json', () => {
     const main = conf.app.windows.find((w) => w.label === 'main');
     expect(main, `${CONF_PATH} must declare a window labelled "main"`).toBeDefined();
     // The config size is what the user sees for the instant before the frontend calls set_scale.
-    // Anything other than a real ladder entry shows as a visible resize jump on every launch.
-    const sizes = SCALES.map((s) => windowSizeForScale(s));
-    const match = sizes.find((s) => s.width === main?.width && s.height === main?.height);
+    // Anything but DEFAULT_SCALE's size shows as a visible resize jump on every launch.
+    expect(SCALES, 'DEFAULT_SCALE must be a rung of the ladder').toContain(DEFAULT_SCALE);
+    const expected = windowSizeForScale(DEFAULT_SCALE);
     expect(
-      match,
-      `${CONF_PATH} creates "main" at ${main?.width}x${main?.height}, which is not any of the ladder ` +
-        `sizes ${JSON.stringify(sizes)} derived from src/sim/constants.ts.`,
-    ).toBeDefined();
+      { width: main?.width, height: main?.height },
+      `${CONF_PATH} creates "main" at ${main?.width}x${main?.height}, but DEFAULT_SCALE ` +
+        `${DEFAULT_SCALE} in src/sim/constants.ts is ${expected.width}x${expected.height}.`,
+    ).toEqual(expected);
   });
 });

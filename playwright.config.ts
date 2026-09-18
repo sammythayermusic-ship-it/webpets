@@ -3,11 +3,12 @@
 // Videos land in test-results/<test>/video.webm.
 
 import { defineConfig, devices } from '@playwright/test';
+import { DEFAULT_SCALE, windowSizeForScale } from './src/sim/constants';
 
 const PORT = 4173;
 const BASE_URL = `http://localhost:${PORT}`;
-/** Contract window size for scale 3 (M): (160*3 + 48) x (120*3 + 48). */
-const VIEWPORT = { width: 528, height: 408 };
+/** Contract window size at the scale the app boots at (M = 688x528). Derived, never re-hardcoded. */
+const VIEWPORT = windowSizeForScale(DEFAULT_SCALE);
 
 export default defineConfig({
   testDir: 'tests/e2e',

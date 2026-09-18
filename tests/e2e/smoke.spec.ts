@@ -1,7 +1,7 @@
 // Fast smoke: the built app boots in browser mode, the bowl canvas exists at the contract size, no errors.
 
 import { expect, test } from '@playwright/test';
-import { collectErrors, waitForBoot } from './support';
+import { BOOT_WINDOW, collectErrors, waitForBoot } from './support';
 
 test('boots into the bowl with no console errors', async ({ page }) => {
   const errors = collectErrors(page);
@@ -11,8 +11,8 @@ test('boots into the bowl with no console errors', async ({ page }) => {
 
   const canvas = page.locator('#app canvas');
   await expect(canvas).toHaveCount(1);
-  await expect(canvas).toHaveCSS('width', '528px');
-  await expect(canvas).toHaveCSS('height', '408px');
+  await expect(canvas).toHaveCSS('width', `${BOOT_WINDOW.width}px`);
+  await expect(canvas).toHaveCSS('height', `${BOOT_WINDOW.height}px`);
   // The mock tray chip exists but is only shown while the window is minimized.
   await expect(page.locator('#mock-tray')).toBeHidden();
 

@@ -10,7 +10,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, Wry};
 
 use crate::state::ShellState;
-use crate::window::MAIN_WINDOW;
+use crate::window::{scale_fits_work_area, MAIN_WINDOW, SCALE_L, SCALE_M, SCALE_S};
 
 const TRAY_ID: &str = "main";
 
@@ -212,9 +212,17 @@ pub fn set_menu_state(app: &AppHandle, s: &TrayMenuState) -> Result<(), String> 
     let m = guard.as_ref().ok_or_else(|| "tray menu not built".to_string())?;
     let e = |r: tauri::Result<()>| r.map_err(|e| e.to_string());
 
-    e(m.size_s.set_checked(s.scale == 2))?;
-    e(m.size_m.set_checked(s.scale == 3))?;
-    e(m.size_l.set_checked(s.scale == 4))?;
+    // A size that does not fit the current monitor's work area is greyed out — L is 1008x768, which
+    // is fine on a 1512x982 display and obnoxious on a 1440x900 one. The size in use stays selectable
+    // whatever the monitor says, so the checked row is never a disabled row.
+    for (item, scale) in [
+        (&m.size_s, SCALE_S),
+        (&m.size_m, SCALE_M),
+        (&m.size_l, SCALE_L),
+    ] {
+        e(item.set_checked(s.scale == scale))?;
+        e(item.set_enabled(s.scale == scale || scale_fits_work_area(app, scale)))?;
+    }
     e(m.mute.set_checked(s.muted))?;
     e(m.notifications.set_checked(!s.notifications_muted))?;
     e(m.daynight_auto.set_checked(s.day_night == "auto"))?;

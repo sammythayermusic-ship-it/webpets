@@ -26,12 +26,12 @@ describe('commandFor', () => {
 });
 
 describe('nextScale', () => {
-  it('steps through 2/3/4 and stops at the ends', () => {
+  it('steps through 1/2/3 and stops at the ends', () => {
+    expect(nextScale(1, 1)).toBe(2);
     expect(nextScale(2, 1)).toBe(3);
-    expect(nextScale(3, 1)).toBe(4);
-    expect(nextScale(4, 1)).toBeNull();
-    expect(nextScale(4, -1)).toBe(3);
-    expect(nextScale(2, -1)).toBeNull();
+    expect(nextScale(3, 1)).toBeNull();
+    expect(nextScale(3, -1)).toBe(2);
+    expect(nextScale(1, -1)).toBeNull();
   });
 });
 

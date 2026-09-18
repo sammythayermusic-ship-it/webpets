@@ -20,13 +20,18 @@ use crate::state::ShellState;
 pub const MAIN_WINDOW: &str = "main";
 
 /// Habitat grid and padding (contract: `GRID_W`, `GRID_H`, `WINDOW_PAD` in `src/sim/constants.ts`).
-const GRID_W: f64 = 160.0;
-const GRID_H: f64 = 120.0;
+const GRID_W: f64 = 320.0;
+const GRID_H: f64 = 240.0;
 const WINDOW_PAD: f64 = 24.0;
+/// The scale ladder (contract: `SCALE_S`/`SCALE_M`/`SCALE_L` in `src/sim/constants.ts`). `tray.rs`
+/// checks its size menu against these rather than against bare numbers.
+pub const SCALE_S: u8 = 1;
+pub const SCALE_M: u8 = 2;
+pub const SCALE_L: u8 = 3;
 /// Lowest and highest integer scale accepted by `set_scale` (contract: `SCALES` in
 /// `src/sim/constants.ts`, which must stay a contiguous ascending run for this range to be equivalent).
-const MIN_SCALE: u8 = 2;
-const MAX_SCALE: u8 = 4;
+const MIN_SCALE: u8 = SCALE_S;
+const MAX_SCALE: u8 = SCALE_L;
 /// Snap to a work-area edge when within this many logical px (contract `SNAP_PX`).
 const SNAP_PX: f64 = 16.0;
 /// Default distance from the bottom-right corner of the primary work area on first launch.
@@ -81,11 +86,34 @@ pub fn scale_supported(scale: u8) -> bool {
     (MIN_SCALE..=MAX_SCALE).contains(&scale)
 }
 
-/// Window size for an integer scale: `(160s + 48) x (120s + 48)`. Mirrors `windowSizeForScale` in
+/// Window size for an integer scale: `(320s + 48) x (240s + 48)` — S 368x288, M 688x528, L 1008x768.
+/// Mirrors `windowSizeForScale` in
 /// `src/sim/constants.ts`; `contract_sync` below fails the build if the two drift apart.
 pub fn window_size_for_scale(scale: u8) -> (f64, f64) {
     let s = f64::from(scale);
     (GRID_W * s + 2.0 * WINDOW_PAD, GRID_H * s + 2.0 * WINDOW_PAD)
+}
+
+/// Whether the window at `scale` fits inside the work area of the monitor the window is currently on.
+///
+/// The tray greys out a size that would not fit: L is 1008x768, which is comfortable on a 1512x982
+/// display and obnoxious on a 1440x900 one for a window that is always on top. `snap_and_clamp`
+/// already keeps an oversized window on screen, so this is about taste, not correctness — which is
+/// why every failure to read the monitor answers "it fits". Refusing to offer a size the user could
+/// actually use is the worse error.
+pub fn scale_fits_work_area(app: &AppHandle, scale: u8) -> bool {
+    let Ok(window) = main_window(app) else {
+        return true;
+    };
+    let Ok((rect, _)) = outer_rect(&window) else {
+        return true;
+    };
+    let Some(monitor) = monitor_for(app, &window, &rect) else {
+        return true;
+    };
+    let area = work_area(&monitor);
+    let (w, h) = window_size_for_scale(scale);
+    w <= area.w && h <= area.h
 }
 
 pub fn main_window(app: &AppHandle) -> Result<WebviewWindow<Wry>, String> {
@@ -279,14 +307,17 @@ fn apply_geometry(
     Ok(())
 }
 
-/// `set_scale`: resize to `(160s+48, 120s+48)` keeping the bottom-right corner fixed. The first call
+/// `set_scale`: resize to `(320s+48, 240s+48)` keeping the bottom-right corner fixed. The first call
 /// after launch instead restores `positions[monitorKey]` (preferring the monitor recorded in
 /// `positions.last` when it is connected, then the monitor the window is on, then any other
 /// connected monitor with a saved position) or defaults to the bottom-right corner of the primary
 /// work area with a 24 px margin. The result is clamped to the work area and persisted.
 pub fn set_scale(app: &AppHandle, scale: u8) -> Result<WindowGeometry, String> {
     if !scale_supported(scale) {
-        return Err(format!("invalid scale {scale}; expected 2, 3 or 4"));
+        return Err(format!(
+            "invalid scale {scale}; expected {MIN_SCALE}, {} or {MAX_SCALE}",
+            SCALE_M
+        ));
     }
     let window = main_window(app)?;
     let (cur, sf) = outer_rect(&window)?;
@@ -484,9 +515,9 @@ mod tests {
 
     #[test]
     fn window_sizes_match_contract() {
-        assert_eq!(window_size_for_scale(2), (368.0, 288.0));
-        assert_eq!(window_size_for_scale(3), (528.0, 408.0));
-        assert_eq!(window_size_for_scale(4), (688.0, 528.0));
+        assert_eq!(window_size_for_scale(SCALE_S), (368.0, 288.0));
+        assert_eq!(window_size_for_scale(SCALE_M), (688.0, 528.0));
+        assert_eq!(window_size_for_scale(SCALE_L), (1008.0, 768.0));
     }
 
     #[test]
@@ -761,17 +792,45 @@ mod contract_sync {
     }
 
     #[test]
-    fn tauri_conf_fallback_size_matches_the_middle_scale() {
+    fn named_scale_rungs_match_typescript() {
+        for (name, rust) in [("SCALE_S", SCALE_S), ("SCALE_M", SCALE_M), ("SCALE_L", SCALE_L)] {
+            let ts = ts_number(name);
+            assert_eq!(
+                f64::from(rust),
+                ts,
+                "{name} is {rust} in {RS_PATH} but {ts} in {TS_PATH}. `tray.rs` ticks the Size menu's \
+                 Small/Medium/Large items by comparing the current scale against these, so a drift \
+                 puts the check mark on the wrong row. Fix by setting {name} in {RS_PATH} to {ts}."
+            );
+        }
         let scales = ts_scales();
-        let middle = scales[scales.len() / 2];
-        let expected = window_size_for_scale(middle);
+        assert_eq!(
+            scales,
+            vec![SCALE_S, SCALE_M, SCALE_L],
+            "SCALES in {TS_PATH} is {scales:?}, but {RS_PATH} names exactly three rungs \
+             ({SCALE_S}, {SCALE_M}, {SCALE_L}). The tray Size submenu has three items; adding or \
+             removing a scale means adding or removing one there too."
+        );
+    }
+
+    #[test]
+    fn tauri_conf_fallback_size_matches_the_default_scale() {
+        let default_scale = ts_number("DEFAULT_SCALE");
+        let scales = ts_scales();
+        assert!(
+            scales.iter().any(|s| f64::from(*s) == default_scale),
+            "DEFAULT_SCALE in {TS_PATH} is {default_scale}, which is not in SCALES {scales:?}."
+        );
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let expected = window_size_for_scale(default_scale as u8);
         assert_eq!(
             conf_main_window_size(),
             expected,
-            "{CONF_PATH} creates the \"{MAIN_WINDOW}\" window at {:?}, but the middle scale {middle} \
-             of SCALES {scales:?} is {expected:?}. That size is the pre-boot fallback the window is \
-             created with before TS calls `set_scale`, so a stale value makes the habitat visibly \
-             resize on every launch. Fix by setting width/height in {CONF_PATH} to {expected:?}.",
+            "{CONF_PATH} creates the \"{MAIN_WINDOW}\" window at {:?}, but DEFAULT_SCALE \
+             {default_scale} in {TS_PATH} is {expected:?}. That size is the pre-boot fallback the \
+             window is created with before TS calls `set_scale`, so a stale value makes the habitat \
+             visibly resize on every launch. Fix by setting width/height in {CONF_PATH} to \
+             {expected:?}.",
             conf_main_window_size()
         );
     }

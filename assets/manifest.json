@@ -2,9 +2,9 @@
   "version": 1,
   "habitats": {
     "fish/bowl": {
-      "grid": [160, 120],
+      "grid": [320, 240],
       "layers": [
-        { "name": "bg", "file": "habitats-160x120/fish-bowl.png", "z": 0 },
+        { "name": "bg", "file": "habitats/fish/bowl/bg.png", "z": 0 },
         { "name": "memorial", "file": "habitats/fish/bowl/memorial.png", "z": 0 },
         { "name": "medium", "file": "habitats/fish/bowl/medium.png", "z": 0 },
         { "name": "decor_back", "file": "habitats/fish/bowl/decor_back.png", "z": 0 },
@@ -18,17 +18,17 @@
         { "name": "night", "file": "habitats/fish/bowl/night.png", "z": 0, "blend": "multiply" },
         { "name": "shadow", "z": 0 }
       ],
-      "water": { "x": 41, "y": 23, "w": 80, "h": 74 },
-      "waterShape": { "cx": 81, "cy": 58, "rx": 40, "ry": 42, "surfaceY": 23, "floorY": 96 },
-      "pantryRect": { "x": 93, "y": 5, "w": 18, "h": 15 },
-      "petAnchor": [80, 60],
-      "opaqueRect": { "x": 40, "y": 4, "w": 84, "h": 115 }
+      "water": { "x": 82, "y": 46, "w": 160, "h": 148 },
+      "waterShape": { "cx": 162, "cy": 116, "rx": 80, "ry": 84, "surfaceY": 46, "floorY": 192 },
+      "pantryRect": { "x": 186, "y": 10, "w": 36, "h": 30 },
+      "petAnchor": [160, 120],
+      "opaqueRect": { "x": 80, "y": 8, "w": 168, "h": 230 }
     }
   },
   "sprites": {
     "fish": {
-      "frame": [80, 80],
-      "body": { "w": 28, "h": 14 },
+      "frame": [160, 160],
+      "body": { "w": 56, "h": 28 },
       "states": {
         "idle": { "file": "sprites/fish/idle.png", "frames": 4, "sequence": [0, 0, 0, 0, 1, 1, 0, 0, 2, 0, 0, 3, 3, 0], "loop": true },
         "eat": { "file": "sprites/fish/eat.png", "frames": 4, "sequence": [0, 1, 2, 3], "loop": false, "returnTo": "idle" },

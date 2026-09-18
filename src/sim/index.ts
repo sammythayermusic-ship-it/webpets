@@ -20,6 +20,7 @@ export type {
 export {
   DAY_MS,
   DEFAULT_CONSTANTS,
+  DEFAULT_SCALE,
   DYING_SOON_HOURS,
   GRID_H,
   GRID_W,
@@ -30,6 +31,9 @@ export {
   PET_FPS,
   POINTER_POLL_MS,
   SCALES,
+  SCALE_L,
+  SCALE_M,
+  SCALE_S,
   SNAP_PX,
   STARTING_BALANCE,
   WINDOW_PAD,

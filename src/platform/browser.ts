@@ -3,7 +3,7 @@
 // `#mock-tray` canvas as the tray chip, a DOM popup menu, and `pointer` derived from DOM mouse events.
 // Test hooks live on `window.__webpetsMock` (typed in ./mock.d.ts).
 
-import type { Scale, TrayChipSize } from '../sim/constants';
+import { SCALE_L, SCALE_M, SCALE_S, type Scale, type TrayChipSize } from '../sim/constants';
 import { pointerInside, windowSizeForScale } from './geometry';
 import type { WebpetsMock } from './mock';
 import type {
@@ -222,11 +222,11 @@ export function createBrowserPlatform(): Platform {
     if (!s) return false;
     switch (action) {
       case 'size-s':
-        return s.scale === 2;
+        return s.scale === SCALE_S;
       case 'size-m':
-        return s.scale === 3;
+        return s.scale === SCALE_M;
       case 'size-l':
-        return s.scale === 4;
+        return s.scale === SCALE_L;
       case 'mute':
         return s.muted;
       case 'notifications':

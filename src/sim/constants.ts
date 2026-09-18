@@ -26,17 +26,30 @@ export const PANTRY_LOW_HUNGER_MAX = 60;
 export const STARTING_BALANCE = 1000;
 
 /** Habitat grid and window layout. Integer scales only. */
-export const GRID_W = 160;
-export const GRID_H = 120;
-export type Scale = 2 | 3 | 4;
-export const SCALES: readonly Scale[] = [2, 3, 4];
+export const GRID_W = 320;
+export const GRID_H = 240;
+export type Scale = 1 | 2 | 3;
+/**
+ * The ladder, spelled out. Everything that means "the small window" says `SCALE_S`, never `1`, so the
+ * ladder can move again without a grep. The literals below are deliberately plain number literals:
+ * `src-tauri/src/window.rs`'s `contract_sync` test parses this file as text and only understands
+ * literals. `src/sim/constants.test.ts` pins `SCALES`/`DEFAULT_SCALE` to these names so the duplication
+ * cannot drift.
+ */
+export const SCALE_S: Scale = 1;
+export const SCALE_M: Scale = 2;
+export const SCALE_L: Scale = 3;
+export const SCALES: readonly Scale[] = [1, 2, 3];
+/** Scale a fresh install boots at, and the pre-boot fallback size in `src-tauri/tauri.conf.json`. */
+export const DEFAULT_SCALE: Scale = 2;
 /** Transparent padding around the habitat on every side, in CSS px: room for the HUD pill, caption and drop shadow. */
 export const WINDOW_PAD = 24;
 /**
  * The only window-size formula in the codebase: the habitat grid at an integer scale plus `WINDOW_PAD`
- * on every side, in CSS px. `src/platform/geometry.ts` re-exports it, `src/render/scene.ts` sizes the
- * Pixi renderer with it, and `src-tauri/src/window.rs` mirrors it in Rust — a Rust unit test parses the
- * constants above out of this file and fails the build if the two ever disagree.
+ * on every side, in CSS px — S 368x288, M 688x528, L 1008x768. `src/platform/geometry.ts` re-exports it,
+ * `src/render/scene.ts` sizes the Pixi renderer with it, and `src-tauri/src/window.rs` mirrors it in
+ * Rust — a Rust unit test parses the constants above out of this file and fails the build if the two
+ * ever disagree.
  */
 export function windowSizeForScale(scale: Scale): { width: number; height: number } {
   return { width: GRID_W * scale + 2 * WINDOW_PAD, height: GRID_H * scale + 2 * WINDOW_PAD };

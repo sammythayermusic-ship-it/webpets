@@ -3,11 +3,21 @@
 // `window.__webpetsMock` (typed globally by `src/platform/mock.d.ts`).
 
 import { expect, type Page } from '@playwright/test';
+import { DEFAULT_SCALE, GRID_H, GRID_W, WINDOW_PAD, windowSizeForScale } from '../../src/sim/constants';
 
 /** Habitat grid scale the app boots at (settings default). */
-export const BOOT_SCALE = 3;
-/** Window-local CSS px of the bowl's centre at the boot scale: pad + petAnchor * scale. */
-export const BOWL_CENTER = { x: 24 + 80 * BOOT_SCALE, y: 24 + 60 * BOOT_SCALE };
+export const BOOT_SCALE = DEFAULT_SCALE;
+/** Contract window (and canvas) size at the boot scale, in CSS px. */
+export const BOOT_WINDOW = windowSizeForScale(BOOT_SCALE);
+/**
+ * Window-local CSS px of the bowl's centre at the boot scale: pad + petAnchor * scale. The bowl's
+ * `petAnchor` is the centre of the grid, so deriving it from the grid keeps this in step with a
+ * resolution change without reaching into the render-owned manifest.
+ */
+export const BOWL_CENTER = {
+  x: WINDOW_PAD + (GRID_W / 2) * BOOT_SCALE,
+  y: WINDOW_PAD + (GRID_H / 2) * BOOT_SCALE,
+};
 
 /**
  * Collects uncaught page errors and console.error output for the lifetime of the page.

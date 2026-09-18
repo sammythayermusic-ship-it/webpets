@@ -42,9 +42,10 @@ Never name an asset with an `@2x`/`@Nx` suffix: Pixi's resolver would halve its 
 ```
 assets/
   manifest.json                     habitats + sprites index (schema = Manifest in src/render/types.ts)
-  habitats/fish/bowl/<layer>.png    160x120 layers: medium decor_back pantry pantry_fill decor_front glass night memorial
-  habitats-160x120/fish-bowl.png    concept art, used as the `bg` layer for the bowl until layered art exists
-  sprites/fish/<state>.png          80x80 strips: idle eat hungry sleep dead (frames left to right); the PH stamp
+  habitats/fish/bowl/<layer>.png    320x240 layers: bg medium decor_back pantry pantry_fill decor_front glass night memorial
+  habitats-160x120/fish-bowl.png    concept art; `tools/gen_bg.py` derives `habitats/fish/bowl/bg.png` from it
+                                    (Stage 1: a 2x NEAREST upscale, so the flip is a verifiable no-op)
+  sprites/fish/<state>.png          160x160 strips: idle eat hungry sleep dead (frames left to right); the PH stamp
                                     stays inside the centred `body` box (src/render/spriteStrips.test.ts checks it)
   sprites/strips-80/*.png           reference strips (gus-*, doink-idle) for validating the player
   fonts/PressStart2P-Regular.ttf    HUD font (OFL)
@@ -59,9 +60,9 @@ looking at the art, and must keep the manifest and `src/species/fish/layout.ts` 
   "version": 1,
   "habitats": {
     "fish/bowl": {
-      "grid": [160, 120],
+      "grid": [320, 240],
       "layers": [
-        { "name": "bg",          "file": "habitats-160x120/fish-bowl.png", "z": 0 },
+        { "name": "bg",          "file": "habitats/fish/bowl/bg.png", "z": 0 },
         { "name": "memorial",    "file": "habitats/fish/bowl/memorial.png", "z": 0 },
         { "name": "medium",      "file": "habitats/fish/bowl/medium.png", "z": 0 },
         { "name": "decor_back",  "file": "habitats/fish/bowl/decor_back.png", "z": 0 },
@@ -75,17 +76,17 @@ looking at the art, and must keep the manifest and `src/species/fish/layout.ts` 
         { "name": "night",       "file": "habitats/fish/bowl/night.png", "z": 0, "blend": "multiply" },
         { "name": "shadow", "z": 0 }
       ],
-      "water": { "x": 41, "y": 23, "w": 80, "h": 74 },
-      "waterShape": { "cx": 81, "cy": 60, "rx": 40, "ry": 37, "surfaceY": 23, "floorY": 96 },
-      "pantryRect": { "x": 100, "y": 6, "w": 22, "h": 22 },
-      "petAnchor": [80, 60],
-      "opaqueRect": { "x": 40, "y": 4, "w": 84, "h": 115 }
+      "water": { "x": 82, "y": 46, "w": 160, "h": 148 },
+      "waterShape": { "cx": 162, "cy": 116, "rx": 80, "ry": 84, "surfaceY": 46, "floorY": 192 },
+      "pantryRect": { "x": 186, "y": 10, "w": 36, "h": 30 },
+      "petAnchor": [160, 120],
+      "opaqueRect": { "x": 80, "y": 8, "w": 168, "h": 230 }
     }
   },
   "sprites": {
     "fish": {
-      "frame": [80, 80],
-      "body": { "w": 28, "h": 14 },
+      "frame": [160, 160],
+      "body": { "w": 56, "h": 28 },
       "states": {
         "idle":   { "file": "sprites/fish/idle.png",   "frames": 4, "sequence": [0,0,0,0,1,1,0,0,2,0,0,3,3,0], "loop": true },
         "eat":    { "file": "sprites/fish/eat.png",    "frames": 4, "sequence": [0,1,2,3], "loop": false, "returnTo": "idle" },
@@ -98,37 +99,50 @@ looking at the art, and must keep the manifest and `src/species/fish/layout.ts` 
 }
 ```
 
-Measured from the concept art: the bowl's opaque pixels span x 40..123, y 4..118; the water spans y 23..96
-with rows about x 41..121 at the widest (y 47..65) narrowing to x 59..92 at the surface (y 23) and x 56..106
-near the gravel (y 90). `waterShape` is the ellipse approximation of that; behavior keeps the body box inside it.
+Measured from the concept art (grid px at 320x240; Stage 1 doubled the grid, so these are the old 160x120
+measurements x2): the bowl's opaque pixels span x 80..245, y 8..235 and `opaqueRect` is that box rounded out
+by one art unit on the right and bottom; the water spans y 46..192 with rows about x 82..242 at the widest
+(y 94..130) narrowing near the surface and the gravel. `waterShape` is the ellipse approximation of that;
+behavior keeps the body box inside it. `water` is the water's bounding rect and is inclusive of the floor row
+(h = floorY - surfaceY + 1 = 148); `makeWaterBounds().rect` is the half-open surface..floor band (h = 146).
+Every distance in `src/species/fish/behavior.ts`, `src/render/food.ts` and `src/render/fx.ts`, and the drop
+shadow offsets in `src/render/scene.ts`, are grid px and were doubled with the grid.
 
 Layer semantics: `layers[].name` must be one of the 13 names in `LayerName`; the draw order is the fixed slot order
 (shadow, bg/memorial, medium, decor_back, pantry, pantry_fill, pet, food, decor_front, glass, fx, night) with `z`
 only ordering entries that share a slot. `memorial` is a `bg` variant shown instead of `bg` when `phase === 'memorial'`.
-`pantry_fill` is a full 160×120 PNG whose non-transparent pixels lie inside `pantryRect`; the visible rows are
+`pantry_fill` is a full grid-sized PNG whose non-transparent pixels lie inside `pantryRect`; the visible rows are
 `top = pantryRect.y + round(pantryRect.h * (1 - pantryFraction))` to the rect bottom, implemented as one Sprite whose
 `Texture` has a dynamic `frame` (`texture.frame = ...; texture.updateUvs()`), positioned at `(pantryRect.x, top)`.
 `pantryLow` blink = alpha stepped 1.0/0.6 every 500 ms, never tweened. Layers without `file` are procedural.
 
 ## Layout and window geometry
 
-- Habitat grid 160×120, integer scale `s ∈ {2,3,4}`. Habitat CSS size = `160s × 120s`.
-- `WINDOW_PAD = 24` CSS px on every side. Window size = `(160s + 48) × (120s + 48)`: S 368×288, M 528×408, L 688×528.
-  `tauri.conf.json` is 528×408 (the M fallback before TS boots).
+- Habitat grid 320×240, integer scale `s ∈ {1,2,3}`. Habitat CSS size = `320s × 240s`.
+- `WINDOW_PAD = 24` CSS px on every side (screen px, not grid px). Window size = `(320s + 48) × (240s + 48)`:
+  S 368×288, M 688×528, L 1008×768. `tauri.conf.json` is 688×528 (the `DEFAULT_SCALE` fallback before TS boots).
+  A 4× rung is deliberately absent: 1328×1008 is taller than the target display's 982 px work area.
+  `SCALE_S`/`SCALE_M`/`SCALE_L` and `DEFAULT_SCALE` in `src/sim/constants.ts` are the names for these rungs;
+  nothing else spells a scale as a bare number (`src/ui/tray.ts`, `src/platform/browser.ts` and
+  `src-tauri/src/tray.rs` all use them).
 - That formula is written once, as `windowSizeForScale(scale: Scale): { width, height }` in `src/sim/constants.ts`
   (re-exported by `src/platform/geometry.ts`, wrapped as `windowSize(scale): { w, h }` by `src/render/scene.ts`).
-  `src-tauri/src/window.rs` mirrors `GRID_W`/`GRID_H`/`WINDOW_PAD`/the scale range in Rust and pins them — plus the
-  `tauri.conf.json` fallback size — to `src/sim/constants.ts` in its `contract_sync` test (`include_str!` + a string
-  scan), so the grid, the padding and the scale ladder can only be changed in all four places at once.
+  `src-tauri/src/window.rs` mirrors `GRID_W`/`GRID_H`/`WINDOW_PAD`/`SCALE_S`/`SCALE_M`/`SCALE_L`/the scale range in
+  Rust and pins them — plus the `tauri.conf.json` fallback size — to `src/sim/constants.ts` in its `contract_sync`
+  test (`include_str!` + a string scan), so the grid, the padding and the scale ladder can only be changed in all
+  four places at once. `tests/unit/contract-sync.test.ts` mirrors the same assertions in Vitest, because drift is
+  almost always introduced from the TypeScript side where `npm test` is the loop people actually run.
+- The tray's Size submenu greys out a rung whose window would not fit the current monitor's work area
+  (`window::scale_fits_work_area`); the rung currently in use always stays selectable.
 - Habitat origin inside the window = `(24, 24)`. HUD pill is centered horizontally above the habitat inside the top pad
   (its bottom edge 4 px above the habitat, sliding up 8 px on appear). Caption sits in the bottom pad.
-- **Pixel grid guarantee (structural, not roundPixels):** every layer except `shadow` is drawn into a 160×120
+- **Pixel grid guarantee (structural, not roundPixels):** every layer except `shadow` is drawn into a 320×240
   `RenderTexture` (nearest, resolution 1) in grid units; the scene draws that one texture at `(24, 24)` with
   `scale = s`. FX may use float positions inside the RenderTexture and automatically become big pixels. The shadow is
   drawn under the habitat sprite in CSS px (a stepped 2-tone offset rect, no blur).
-- Pixi init is exactly: `app.init({ width: 160s+48, height: 120s+48, resolution: devicePixelRatio, autoDensity: true,
+- Pixi init is exactly: `app.init({ width: 320s+48, height: 240s+48, resolution: devicePixelRatio, autoDensity: true,
   roundPixels: true, backgroundAlpha: 0, antialias: false, preference: 'webgl' })`. No `resizeTo`.
-  `scene.setScale(s)` calls `renderer.resize(160s+48, 120s+48)`; `scene.setResolution(dpr)` calls
+  `scene.setScale(s)` calls `renderer.resize(320s+48, 240s+48)`; `scene.setResolution(dpr)` calls
   `renderer.resize(w, h, dpr)`. `TextureStyle.defaultOptions.scaleMode = 'nearest'` is set before any load and every
   `Assets.load` passes `{ src, data: { scaleMode: 'nearest' } }`. Phase 0 uses no filters at all; the starving water tint
   is `medium.tint`; the night layer uses `blendMode = 'multiply'` (native). Any future filter is created with
@@ -206,6 +220,10 @@ notification, autostart, global-shortcut, positioner.
 
 Notifications from `tauri dev` are posted under the Terminal identity (allow notifications for Terminal); only the
 bundled `.app` uses `com.sammythayer.webpets`. Document this in the README.
+
+`settings.json`'s document is **version 2**. Version 1 held the old 2/3/4 scale ladder, so the same number means a
+different window size in each; `normalizeSettings` migrates a v1 document by preserving on-screen size
+(`2 → 1`, `3 → 2`, `4 → 2`) and carries every other field forward. Only an unknown version falls back to defaults.
 
 Store files (Tauri store plugin, app-data dir): `pet.json`, `settings.json`, `graveyard.json`. TS reads/writes them
 through `platform.store` (`PersistApi`: `load(file)`, `set(file, data)`, `save(file)`) which only ever touches the

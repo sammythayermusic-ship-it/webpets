@@ -21,9 +21,17 @@ export interface PetDoc {
   latches: NotificationLatches;
 }
 
-/** Persisted user settings. TS writes this whole document under key "doc"; Rust writes the separate top-level key "positions". */
+/**
+ * Persisted user settings. TS writes this whole document under key "doc"; Rust writes the separate
+ * top-level key "positions".
+ *
+ * Version 2 (Stage 1): the habitat grid doubled to 320x240 and the scale ladder moved from 2/3/4 to
+ * 1/2/3, so the *number* stored in `scale` changed meaning (v1 `scale: 2` was 368x288; v2 `scale: 2`
+ * is 688x528). The version bump is what lets `normalizeSettings` tell the two apart and migrate a v1
+ * document by on-screen size instead of silently quadrupling the window.
+ */
 export interface SettingsDoc {
-  version: 1;
+  version: 2;
   scale: Scale;
   muted: boolean;
   notificationsMuted: boolean;

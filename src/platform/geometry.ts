@@ -2,7 +2,7 @@
 
 import type { Rect } from '../sim/types';
 
-// Contract window size for an integer scale: `(160s + 48) x (120s + 48)` CSS px. The formula itself
+// Contract window size for an integer scale: `(320s + 48) x (240s + 48)` CSS px. The formula itself
 // lives in `src/sim/constants.ts` (the single source of truth, mirrored by Rust); this module keeps
 // exporting it because `src/platform/browser.ts` and `geometry.test.ts` import it from here.
 export { windowSizeForScale } from '../sim/constants';

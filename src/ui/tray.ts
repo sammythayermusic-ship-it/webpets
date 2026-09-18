@@ -3,7 +3,7 @@
 
 import type { AppState } from '../app/types';
 import type { TrayAction, TrayMenuState } from '../platform/types';
-import type { TrayChipSize } from '../sim/constants';
+import { SCALE_L, SCALE_M, SCALE_S, type TrayChipSize } from '../sim/constants';
 import { paintTrayChip } from '../render';
 import type { DevPanelHandle, UiDeps } from './types';
 import { prefersReducedMotion } from './dom';
@@ -47,13 +47,13 @@ export function wireTray(deps: TrayDeps): () => void {
         deps.pantryDialog.open();
         return;
       case 'size-s':
-        a.setScale(2).catch(logRejected('setScale'));
+        a.setScale(SCALE_S).catch(logRejected('setScale'));
         return;
       case 'size-m':
-        a.setScale(3).catch(logRejected('setScale'));
+        a.setScale(SCALE_M).catch(logRejected('setScale'));
         return;
       case 'size-l':
-        a.setScale(4).catch(logRejected('setScale'));
+        a.setScale(SCALE_L).catch(logRejected('setScale'));
         return;
       case 'mute':
         a.setMuted(!s.settings.muted);

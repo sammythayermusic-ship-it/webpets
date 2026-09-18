@@ -5,9 +5,13 @@ import { parseManifest } from './manifest';
 
 /**
  * Blueprint section 12: generated placeholder art is marked PLACEHOLDER visibly. tools/gen_placeholders.py
- * stamps the full word on every 160x120 layer and abbreviates it to `PH` (in the STAMP colour) only where the
+ * stamps the full word on every habitat layer and abbreviates it to `PH` (in the STAMP colour) only where the
  * word cannot fit: inside the fish body box and inside pantryRect. This decodes the checked-in PNGs and looks
  * for the glyph pattern, so a hand-drawn or half-clipped stamp fails here and not in a review.
+ *
+ * The stamp is drawn at the generator's font scale, which is the art-unit multiplier `grid width / 160`
+ * (2 at 320x240): one font pixel becomes a SCALE x SCALE block. `findWord` takes that scale, so raising the
+ * resolution keeps the assertion instead of silently finding nothing.
  */
 
 /** The glyphs of the generator's 3x5 bitmap font that the two stamp words use (mirror of FONT in the script). */
@@ -25,6 +29,8 @@ const FONT: Record<string, readonly string[]> = {
 const GLYPH_W = 3;
 const GLYPH_H = 5;
 const ADVANCE = 4;
+/** The grid the generator's art (and its font scale) is authored on; mirrors ART_W in gen_placeholders.py. */
+const ART_GRID_W = 160;
 
 interface Box { x: number; y: number; w: number; h: number }
 
@@ -38,13 +44,20 @@ function same(a: readonly number[], b: readonly number[]): boolean {
 }
 
 /**
- * Find `word` rendered in the 3x5 font anywhere inside `box`: every lit font pixel shares one colour with
- * alpha > 0 (optionally a required RGB), and every unlit pixel inside the glyph cells differs from it, so the
- * match is colour independent and a glyph clipped by a mask does not count.
+ * Find `word` rendered in the 3x5 font at `scale` image px per font px anywhere inside `box`: every lit font
+ * pixel shares one colour with alpha > 0 (optionally a required RGB), and every unlit pixel inside the glyph
+ * cells differs from it, so the match is colour independent and a glyph clipped by a mask does not count.
+ * Every image pixel of a scaled font pixel is checked, so a stamp drawn at the wrong scale does not match.
  */
-function findWord(png: Rgba, word: string, box: Box, rgb?: readonly [number, number, number]): [number, number] | null {
-  const wordW = word.length * ADVANCE - 1;
-  for (let oy = box.y; oy + GLYPH_H <= box.y + box.h; oy += 1) {
+function findWord(
+  png: Rgba,
+  word: string,
+  box: Box,
+  scale: number,
+  rgb?: readonly [number, number, number],
+): [number, number] | null {
+  const wordW = (word.length * ADVANCE - 1) * scale;
+  for (let oy = box.y; oy + GLYPH_H * scale <= box.y + box.h; oy += 1) {
     for (let ox = box.x; ox + wordW <= box.x + box.w; ox += 1) {
       let colour: [number, number, number, number] | null = null;
       let ok = true;
@@ -53,12 +66,17 @@ function findWord(png: Rgba, word: string, box: Box, rgb?: readonly [number, num
         if (!glyph) throw new Error(`no glyph for ${word[i] ?? '?'}`);
         for (let gy = 0; ok && gy < GLYPH_H; gy += 1) {
           for (let gx = 0; ok && gx < GLYPH_W; gx += 1) {
-            const p = pixel(png, ox + i * ADVANCE + gx, oy + gy);
-            if (glyph[gy]?.[gx] === '1') {
-              if (p[3] === 0 || (rgb && !same(p.slice(0, 3), rgb)) || (colour && !same(p, colour))) ok = false;
-              colour = p;
-            } else if (colour && same(p, colour)) {
-              ok = false;
+            const lit = glyph[gy]?.[gx] === '1';
+            for (let sy = 0; ok && sy < scale; sy += 1) {
+              for (let sx = 0; ok && sx < scale; sx += 1) {
+                const p = pixel(png, ox + (i * ADVANCE + gx) * scale + sx, oy + gy * scale + sy);
+                if (lit) {
+                  if (p[3] === 0 || (rgb && !same(p.slice(0, 3), rgb)) || (colour && !same(p, colour))) ok = false;
+                  colour = p;
+                } else if (colour && same(p, colour)) {
+                  ok = false;
+                }
+              }
             }
           }
         }
@@ -78,6 +96,7 @@ describe('placeholder habitat layers', () => {
   if (!bowl) throw new Error('manifest has no fish/bowl habitat');
   const [gw, gh] = bowl.grid;
   const whole: Box = { x: 0, y: 0, w: gw, h: gh };
+  const scale = Math.max(1, Math.round(gw / ART_GRID_W));
 
   for (const layer of bowl.layers) {
     const file = layer.file;
@@ -85,14 +104,14 @@ describe('placeholder habitat layers', () => {
     if (layer.name === 'pantry_fill') {
       it('pantry_fill: too small for the word, so PH in the stamp colour inside pantryRect', () => {
         const png = load(file);
-        expect(findWord(png, 'PH', bowl.pantryRect, STAMP)).not.toBeNull();
+        expect(findWord(png, 'PH', bowl.pantryRect, scale, STAMP)).not.toBeNull();
       });
       continue;
     }
     it(`${layer.name}: stamped with the full word PLACEHOLDER`, () => {
       const png = load(file);
       expect([png.width, png.height]).toEqual([gw, gh]);
-      expect(findWord(png, 'PLACEHOLDER', whole)).not.toBeNull();
+      expect(findWord(png, 'PLACEHOLDER', whole, scale)).not.toBeNull();
     });
   }
 });
@@ -100,13 +119,16 @@ describe('placeholder habitat layers', () => {
 describe('placeholder fish strips', () => {
   const fish = manifest.sprites['fish'];
   if (!fish) throw new Error('manifest has no fish sprite');
+  const bowlGrid = manifest.habitats['fish/bowl']?.grid;
+  if (!bowlGrid) throw new Error('manifest has no fish/bowl habitat');
   const [fw, fh] = fish.frame;
+  const scale = Math.max(1, Math.round(bowlGrid[0] / ART_GRID_W));
 
   for (const [state, def] of Object.entries(fish.states)) {
     it(`${state}: every frame carries PH in the stamp colour (the body box is too small for the word)`, () => {
       const png = load(def.file);
       for (let f = 0; f < def.frames; f += 1) {
-        expect(findWord(png, 'PH', { x: f * fw, y: 0, w: fw, h: fh }, STAMP), `frame ${f}`).not.toBeNull();
+        expect(findWord(png, 'PH', { x: f * fw, y: 0, w: fw, h: fh }, scale, STAMP), `frame ${f}`).not.toBeNull();
       }
     });
   }

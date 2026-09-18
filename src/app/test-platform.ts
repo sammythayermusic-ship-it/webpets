@@ -1,6 +1,6 @@
 // In-memory Platform for unit tests (src/app/*.test.ts). Not shipped.
 import type { Platform, PointerState, TrayAction, TrayMenuState, WindowGeometry } from '../platform/types';
-import type { Scale, TrayChipSize } from '../sim/constants';
+import { DEFAULT_SCALE, windowSizeForScale, type Scale, type TrayChipSize } from '../sim/constants';
 
 export interface FakePlatform extends Platform {
   /** On-disk contents: updated only by `store.save`. */
@@ -26,8 +26,7 @@ export function createFakePlatform(seedFiles: Record<string, unknown> = {}): Fak
   const geometry = (): WindowGeometry => ({
     x: 0,
     y: 0,
-    width: 528,
-    height: 408,
+    ...windowSizeForScale(DEFAULT_SCALE),
     scaleFactor: 2,
     monitorKey: 'fake@1440x900',
   });

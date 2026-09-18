@@ -1,5 +1,10 @@
 // Fish behavior state machine. Pure: no Pixi, no DOM. One step() = one 8 fps tick.
 // Imports only shared types (render/types for the contract shapes, sim/types for HungerLabel).
+//
+// Every distance and speed below is in habitat grid px (320x240). Stage 1 doubled all of them with the
+// grid so the fish covers the same fraction of the bowl per tick as it did at 160x120. Tick counts
+// (EAT_TICKS, TURN_COOLDOWN, WOBBLE_EVERY, the drift timer) and WANDER_RATE (an angular rate) are not
+// pixel quantities and did not change.
 
 import type { FishBehavior, FishInput, FishOutput, PetAnim, WaterBounds } from '../../render/types';
 import type { HungerLabel } from '../../sim/types';
@@ -9,9 +14,9 @@ const EAT_TICKS = 4;
 /** Minimum ticks between two facing changes (stops dithering at the figure-eight extremes). */
 const TURN_COOLDOWN = 6;
 /** Horizontal velocity (px/tick) needed before the fish commits to a new facing. */
-const TURN_THRESHOLD = 0.2;
+const TURN_THRESHOLD = 0.4;
 /** A flake within this many px of the body center is eaten. */
-const BITE_RANGE = 6;
+const BITE_RANGE = 12;
 /** Figure-eight phase advance per tick at full speed (period ~ 17.5 s). */
 const WANDER_RATE = 0.045;
 /** Ticks between wander wobble re-rolls. */
@@ -20,11 +25,11 @@ const WOBBLE_EVERY = 16;
 function dartSpeed(label: HungerLabel): number {
   switch (label) {
     case 'starving':
-      return 1;
-    case 'hungry':
       return 2;
+    case 'hungry':
+      return 4;
     default:
-      return 3;
+      return 6;
   }
 }
 
@@ -48,7 +53,7 @@ export function createFishBehavior(): FishBehavior {
   let wobbleX = 0;
   let wobbleY = 0;
   let wobbleTicks = 0;
-  let driftVx = 0.15;
+  let driftVx = 0.3;
   let driftTicks = 0;
   let tick = 0;
 
@@ -63,7 +68,7 @@ export function createFishBehavior(): FishBehavior {
     wobbleX = 0;
     wobbleY = 0;
     wobbleTicks = 0;
-    driftVx = 0.15;
+    driftVx = 0.3;
     driftTicks = 0;
     tick = 0;
   };
@@ -87,13 +92,13 @@ export function createFishBehavior(): FishBehavior {
     wobbleTicks += 1;
     if (wobbleTicks >= WOBBLE_EVERY) {
       wobbleTicks = 0;
-      wobbleX = (rng() - 0.5) * 6;
-      wobbleY = (rng() - 0.5) * 4;
+      wobbleX = (rng() - 0.5) * 12;
+      wobbleY = (rng() - 0.5) * 8;
     }
     const cx = bounds.rect.x + bounds.rect.w / 2;
     const cy = (yMin + yMax) / 2;
-    const ampX = Math.max(4, (bounds.rect.w / 2 - halfW) * 0.7);
-    const ampY = Math.max(2, ((yMax - yMin) / 2 - halfH) * 0.8);
+    const ampX = Math.max(8, (bounds.rect.w / 2 - halfW) * 0.7);
+    const ampY = Math.max(4, ((yMax - yMin) / 2 - halfH) * 0.8);
     return {
       x: cx + ampX * Math.sin(phase) + wobbleX,
       y: cy + ampY * Math.sin(2 * phase) + wobbleY,
@@ -111,9 +116,9 @@ export function createFishBehavior(): FishBehavior {
 
     // ---- dead: belly-up at the surface, nothing else moves
     if (!input.alive) {
-      const c = bounds.clamp(x, bounds.surfaceY + 6, halfW, halfH);
+      const c = bounds.clamp(x, bounds.surfaceY + 12, halfW, halfH);
       x = c.x;
-      y = bounds.surfaceY + 6;
+      y = bounds.surfaceY + 12;
       eatTicks = 0;
       return { x: Math.round(x), y: Math.round(y), facing, turning: false, anim: 'dead', biteFlakeIndex: null };
     }
@@ -150,8 +155,8 @@ export function createFishBehavior(): FishBehavior {
       anim = input.label === 'hungry' || input.label === 'starving' ? 'hungry' : 'idle';
     } else if (input.asleep) {
       // ---- asleep: settle near the floor and hold still
-      const ty = bounds.floorY - halfH - 1;
-      const t = moveToward(x, y, x, ty, 1);
+      const ty = bounds.floorY - halfH - 2;
+      const t = moveToward(x, y, x, ty, 2);
       ny = t.y;
       anim = 'sleep';
       lockFacing = true;
@@ -160,30 +165,30 @@ export function createFishBehavior(): FishBehavior {
       driftTicks += 1;
       if (driftTicks >= 40) {
         driftTicks = 0;
-        driftVx = (rng() < 0.5 ? -1 : 1) * 0.15;
+        driftVx = (rng() < 0.5 ? -1 : 1) * 0.3;
       }
-      const ty = bounds.floorY - halfH - 2;
-      const t = moveToward(x, y, x, ty, 0.5);
+      const ty = bounds.floorY - halfH - 4;
+      const t = moveToward(x, y, x, ty, 1);
       ny = t.y;
       nx = x + driftVx;
       anim = 'hungry';
     } else if (input.label === 'hungry') {
       // ---- hungry: half speed, hangs in the top third
       phase += WANDER_RATE * 0.5;
-      const yMin = bounds.surfaceY + halfH + 1;
+      const yMin = bounds.surfaceY + halfH + 2;
       const yMax = bounds.surfaceY + (bounds.floorY - bounds.surfaceY) / 3;
       const target = wanderTarget(bounds, halfW, halfH, yMin, yMax, rng);
-      const t = moveToward(x, y, target.x, target.y, 0.75);
+      const t = moveToward(x, y, target.x, target.y, 1.5);
       nx = t.x;
       ny = t.y;
       anim = 'hungry';
     } else {
       // ---- content: slow figure-eight through the whole bowl
       phase += WANDER_RATE;
-      const yMin = bounds.surfaceY + halfH + 2;
-      const yMax = bounds.floorY - halfH - 2;
+      const yMin = bounds.surfaceY + halfH + 4;
+      const yMax = bounds.floorY - halfH - 4;
       const target = wanderTarget(bounds, halfW, halfH, yMin, yMax, rng);
-      const t = moveToward(x, y, target.x, target.y, 1.5);
+      const t = moveToward(x, y, target.x, target.y, 3);
       nx = t.x;
       ny = t.y;
       anim = 'idle';
@@ -205,8 +210,8 @@ export function createFishBehavior(): FishBehavior {
 
     const c = bounds.clamp(nx, ny, halfW, halfH);
     // Keep sub-pixel state for smooth-but-stepped motion while clamping to the water.
-    x = Math.abs(c.x - nx) > 1 ? c.x : nx;
-    y = Math.abs(c.y - ny) > 1 ? c.y : ny;
+    x = Math.abs(c.x - nx) > 2 ? c.x : nx;
+    y = Math.abs(c.y - ny) > 2 ? c.y : ny;
     const out = bounds.clamp(Math.round(x), Math.round(y), halfW, halfH);
 
     if (eatTicks > 0) anim = 'eat';

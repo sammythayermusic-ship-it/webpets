@@ -3,9 +3,9 @@ import { pointerInside, rectContains, windowSizeForScale } from './geometry';
 
 describe('windowSizeForScale', () => {
   it('matches the contract sizes S/M/L', () => {
-    expect(windowSizeForScale(2)).toEqual({ width: 368, height: 288 });
-    expect(windowSizeForScale(3)).toEqual({ width: 528, height: 408 });
-    expect(windowSizeForScale(4)).toEqual({ width: 688, height: 528 });
+    expect(windowSizeForScale(1)).toEqual({ width: 368, height: 288 });
+    expect(windowSizeForScale(2)).toEqual({ width: 688, height: 528 });
+    expect(windowSizeForScale(3)).toEqual({ width: 1008, height: 768 });
   });
 });
 

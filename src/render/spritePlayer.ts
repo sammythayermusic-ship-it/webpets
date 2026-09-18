@@ -20,6 +20,12 @@ export interface SpritePlayer {
   destroy(): void;
 }
 
+/**
+ * The sprite frame size the fallback's pixel offsets below were authored against. The offsets scale with
+ * the real frame (x2 at 160x160), so raising the resolution does not halve the bob.
+ */
+const FALLBACK_REF_FRAME = 80;
+
 /** Bob/squash fallback for states whose strip is missing. Stepped, integer, nearest-safe. */
 const FALLBACK_SEQUENCES: Readonly<Record<string, SequenceDef>> = {
   idle: { sequence: [0, 0, 0, 0, 1, 1, 1, 1], loop: true },
@@ -35,6 +41,8 @@ export function createSpritePlayer(
   initial = 'idle',
 ): SpritePlayer {
   const [fw, fh] = def.frame;
+  /** Art-unit multiplier for the transform fallback's integer offsets. */
+  const unit = Math.max(1, Math.round(fh / FALLBACK_REF_FRAME));
   const frames = new Map<string, Texture[]>();
   for (const [name, state] of Object.entries(def.states)) {
     const strip = strips.get(state.file);
@@ -91,20 +99,20 @@ export function createSpritePlayer(
       sprite.texture = fallbackBase;
       switch (state) {
         case 'eat':
-          sy = frame === 1 ? 0.75 : 1; // 80 → 60 px, integer
+          sy = frame === 1 ? 0.75 : 1; // frame height x 3/4, integer for any multiple of 4
           break;
         case 'dead':
           sy = -1; // belly-up
-          dy = frame === 1 ? 1 : 0;
+          dy = frame === 1 ? unit : 0;
           break;
         case 'hungry':
-          dy = 2 + (reducedMotion ? 0 : frame);
+          dy = 2 * unit + (reducedMotion ? 0 : frame * unit);
           break;
         case 'sleep':
-          dy = reducedMotion ? 0 : frame;
+          dy = reducedMotion ? 0 : frame * unit;
           break;
         default:
-          dy = reducedMotion ? 0 : frame === 1 ? -1 : 0;
+          dy = reducedMotion ? 0 : frame === 1 ? -unit : 0;
       }
     }
     sprite.scale.set(turning ? 0.5 * prevFacing : facing, sy);

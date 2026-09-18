@@ -16,8 +16,8 @@
       {
         "label": "main",
         "title": "WebPets",
-        "width": 528,
-        "height": 408,
+        "width": 688,
+        "height": 528,
         "transparent": true,
         "decorations": false,
         "alwaysOnTop": true,

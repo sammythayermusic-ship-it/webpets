@@ -4,7 +4,7 @@
 // later. flush() drains everything pending. All store calls for a file are sequenced through one promise chain.
 import type { PersistApi } from '../platform/types';
 import type { GraveyardDoc, PetDoc, SettingsDoc } from './types';
-import { SCALES, type Scale } from '../sim/constants';
+import { DEFAULT_SCALE, SCALES, SCALE_M, SCALE_S, type Scale } from '../sim/constants';
 import type { PetState } from '../sim/types';
 
 export const PET_FILE = 'pet.json';
@@ -12,10 +12,13 @@ export const SETTINGS_FILE = 'settings.json';
 export const GRAVEYARD_FILE = 'graveyard.json';
 export const SAVE_THROTTLE_MS = 500;
 
+/** Current `SettingsDoc.version`. Bumped to 2 when the scale ladder moved from 2/3/4 to 1/2/3. */
+export const SETTINGS_VERSION = 2;
+
 export function defaultSettings(): SettingsDoc {
   return {
-    version: 1,
-    scale: 3,
+    version: SETTINGS_VERSION,
+    scale: DEFAULT_SCALE,
     muted: false,
     notificationsMuted: false,
     dayNight: 'auto',
@@ -70,14 +73,38 @@ export function isPetDoc(v: unknown): v is PetDoc {
   return (p === null || isNum(p)) && (d === null || isStr(d));
 }
 
-/** Settings are merged field by field over the defaults so a partially valid file still loads. */
+/**
+ * v1 `scale` -> v2 `scale`, mapped to **preserve on-screen size**, not the number.
+ *
+ * v1 ran a 160x120 grid at 2/3/4 (368x288, 528x408, 688x528); v2 runs 320x240 at 1/2/3 (368x288,
+ * 688x528, 1008x768). 2 -> 1 and 4 -> 2 are pixel-identical window sizes. v1's 3 (528x408) has no v2
+ * equivalent, so it goes up one step to 688x528 rather than down to 368x288: an unexplained shrink to
+ * under half the area is a worse surprise than an unexplained grow, and this keeps the invariant that
+ * nothing ever shrinks and nothing jumps more than one rung.
+ */
+const LEGACY_SCALE_MAP: Readonly<Record<number, Scale>> = Object.freeze({ 2: SCALE_S, 3: SCALE_M, 4: SCALE_M });
+
+/**
+ * Settings are merged field by field over the defaults so a partially valid file still loads, and a
+ * version-1 document is migrated rather than discarded — returning defaults there would silently wipe
+ * the user's mute, day/night and launch-at-login preferences.
+ */
 export function normalizeSettings(v: unknown): SettingsDoc {
   const d = defaultSettings();
-  if (!isRecord(v) || v['version'] !== 1) return d;
+  if (!isRecord(v)) return d;
+  const version = v['version'];
+  if (version !== 1 && version !== SETTINGS_VERSION) return d;
+  const legacy = version === 1;
+  const rawScale = v['scale'];
+  const scale = legacy
+    ? (typeof rawScale === 'number' ? LEGACY_SCALE_MAP[rawScale] : undefined) ?? d.scale
+    : isScale(rawScale)
+      ? rawScale
+      : d.scale;
   const dn = v['dayNight'];
   return {
-    version: 1,
-    scale: isScale(v['scale']) ? v['scale'] : d.scale,
+    version: SETTINGS_VERSION,
+    scale,
     muted: isBool(v['muted']) ? v['muted'] : d.muted,
     notificationsMuted: isBool(v['notificationsMuted']) ? v['notificationsMuted'] : d.notificationsMuted,
     dayNight: dn === 'auto' || dn === 'day' || dn === 'night' ? dn : d.dayNight,

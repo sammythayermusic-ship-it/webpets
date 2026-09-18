@@ -5,6 +5,7 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
+  BOOT_WINDOW,
   BOWL_CENTER,
   collectErrors,
   gotoFresh,
@@ -12,6 +13,7 @@ import {
   mockToggleVisibility,
   waitForBoot,
 } from './support';
+import { SCALE_L, windowSizeForScale } from '../../src/sim/constants';
 
 /** Short pause so the recording shows a state before the script moves on. */
 const BEAT_MS = 1500;
@@ -77,7 +79,7 @@ test('Phase 0 acceptance walk-through', async ({ page }) => {
   await test.step('launch: bowl renders, no console errors', async () => {
     await gotoFresh(page);
     await expect(canvas).toHaveCount(1);
-    await expect(canvas).toHaveCSS('width', '528px');
+    await expect(canvas).toHaveCSS('width', `${BOOT_WINDOW.width}px`);
     await page.waitForTimeout(2 * BEAT_MS); // fish swimming
     expect(errors).toEqual([]);
   });
@@ -218,13 +220,15 @@ test('Phase 0 acceptance walk-through', async ({ page }) => {
   });
 
   await test.step('Cmd+= / Cmd+- change the window size (M -> L -> M)', async () => {
+    const large = `${windowSizeForScale(SCALE_L).width}px`;
+    const boot = `${BOOT_WINDOW.width}px`;
     await page.keyboard.press('Meta+Equal');
-    await expect(canvas).toHaveCSS('width', '688px');
-    await expect(page.locator('#app')).toHaveCSS('width', '688px');
+    await expect(canvas).toHaveCSS('width', large);
+    await expect(page.locator('#app')).toHaveCSS('width', large);
     await page.waitForTimeout(BEAT_MS);
     await page.keyboard.press('Meta+Minus');
-    await expect(canvas).toHaveCSS('width', '528px');
-    await expect(page.locator('#app')).toHaveCSS('width', '528px');
+    await expect(canvas).toHaveCSS('width', boot);
+    await expect(page.locator('#app')).toHaveCSS('width', boot);
   });
 
   await test.step('minimize to the tray chip and back', async () => {

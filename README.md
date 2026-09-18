@@ -52,7 +52,17 @@ Tauri build is needed. Recorded videos and traces are written under `test-result
 - Drag the bowl to move it; it snaps to the nearest corner and remembers its spot per monitor.
 - Tray icon: left-click toggles the window, right-click opens the menu (feed, pantry, size,
   mute, notifications, day/night, launch at login, dev panel, new pet, show/hide, quit).
-- `⌘=` / `⌘−` change the window size (2x / 3x / 4x pixel scale) while the window has focus.
+- `⌘=` / `⌘−` change the window size while the window has focus. Three integer pixel scales over the
+  320x240 habitat grid, each plus 24 px of transparent padding on every side:
+
+  | Size | Scale | Window |
+  |---|---|---|
+  | Small | 1x | 368 x 288 |
+  | Medium (default) | 2x | 688 x 528 |
+  | Large | 3x | 1008 x 768 |
+
+  The same three are in the tray menu under **Size**; a size that does not fit the current monitor's
+  work area is greyed out there.
 - `⌥⌘D` opens the dev panel (macOS claims this chord for "Turn Dock Hiding On/Off"; if nothing happens,
   use `⇧⌥⌘D` or the tray menu's **Dev panel** item, which do the same thing): advance time (+1h / +12h / +3d), set hunger, pantry and balance,
   force a state, toggle day/night, simulate a long absence, reset the clock.
@@ -82,8 +92,8 @@ npm run gen:placeholders   # writes assets/habitats/fish/bowl/*.png and assets/s
 ```
 
 Every placeholder is stamped PLACEHOLDER. To drop in real art, replace the PNG files listed in
-`assets/manifest.json` at the same sizes (habitat layers are 160x120; sprite strips are 80x80 per
-frame, frames side by side) and keep the manifest's frame counts and layer names in sync. Layer
+`assets/manifest.json` at the sizes that file declares (habitat layers are 320x240; sprite strips are
+160x160 per frame, frames side by side) and keep the manifest's frame counts and layer names in sync. Layer
 geometry (`water`, `pantryRect`, `petAnchor`) must also match `src/species/fish/layout.ts`.
 
 ## Notifications during `tauri dev`

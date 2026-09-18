@@ -6,7 +6,7 @@ import type { FishInput, FishOutput } from '../../render/types';
 import type { HungerLabel, Rng } from '../../sim/types';
 
 const bounds = makeWaterBounds(BOWL_WATER_SHAPE);
-const body = { w: 28, h: 14 };
+const body = { w: 56, h: 28 };
 const HW = body.w / 2;
 const HH = body.h / 2;
 
@@ -72,15 +72,15 @@ describe('fish behavior', () => {
     const outs = run(600, () => input({}, seeded(7)));
     const xs = new Set(outs.map((o) => o.x));
     const ys = new Set(outs.map((o) => o.y));
-    expect(xs.size).toBeGreaterThan(20);
-    expect(ys.size).toBeGreaterThan(10);
+    expect(xs.size).toBeGreaterThan(40);
+    expect(ys.size).toBeGreaterThan(20);
     expect(outs.every((o) => o.anim === 'idle')).toBe(true);
   });
 
   it('bites a flake placed within range and reports eat for a few ticks', () => {
     const b = createFishBehavior();
     const first = b.step(input());
-    const flake = { x: first.x + 4, y: first.y - 3 };
+    const flake = { x: first.x + 8, y: first.y - 6 };
     const o = b.step(input({ flakes: [flake] }));
     expect(o.biteFlakeIndex).toBe(0);
     expect(o.anim).toBe('eat');
@@ -92,7 +92,7 @@ describe('fish behavior', () => {
   it('darts to a far flake and eats it within a few seconds', () => {
     const b = createFishBehavior();
     const first = b.step(input());
-    const flakes = [{ x: bounds.rect.x + 30, y: bounds.surfaceY + 4 }, { x: first.x, y: bounds.floorY - 5 }];
+    const flakes = [{ x: bounds.rect.x + 60, y: bounds.surfaceY + 8 }, { x: first.x, y: bounds.floorY - 10 }];
     let bitten: number | null = null;
     let ticks = 0;
     while (bitten === null && ticks < 80) {
@@ -109,19 +109,19 @@ describe('fish behavior', () => {
     const b = createFishBehavior();
     const first = b.step(input());
     const flakes = [
-      { x: first.x + 40, y: first.y },
-      { x: first.x + 5, y: first.y },
+      { x: first.x + 80, y: first.y },
+      { x: first.x + 10, y: first.y },
     ];
     const o = b.step(input({ flakes }));
     expect(o.biteFlakeIndex).toBe(1);
   });
 
-  it('dead: floats belly-up at surfaceY + 6 with the dead anim and never bites', () => {
+  it('dead: floats belly-up at surfaceY + 12 with the dead anim and never bites', () => {
     const b = createFishBehavior();
     for (let i = 0; i < 20; i += 1) b.step(input());
     for (let i = 0; i < 50; i += 1) {
-      const o = b.step(input({ alive: false, flakes: [{ x: 81, y: 30 }] }));
-      expect(o.y).toBe(bounds.surfaceY + 6);
+      const o = b.step(input({ alive: false, flakes: [{ x: 162, y: 60 }] }));
+      expect(o.y).toBe(bounds.surfaceY + 12);
       expect(o.anim).toBe('dead');
       expect(o.turning).toBe(false);
       expect(o.biteFlakeIndex).toBeNull();
@@ -153,7 +153,7 @@ describe('fish behavior', () => {
   it('hungry: hangs in the top third with the hungry anim', () => {
     const outs = run(800, () => input({ label: 'hungry', hunger: 20 }, seeded(3)));
     const settled = outs.slice(200);
-    const limit = bounds.surfaceY + (bounds.floorY - bounds.surfaceY) / 3 + HH + 2;
+    const limit = bounds.surfaceY + (bounds.floorY - bounds.surfaceY) / 3 + HH + 4;
     for (const o of settled) {
       expect(o.y).toBeLessThanOrEqual(limit);
       expect(o.anim).toBe('hungry');
@@ -168,9 +168,9 @@ describe('fish behavior', () => {
     expect(ys.size).toBeLessThanOrEqual(2);
     const last = settled[settled.length - 1];
     expect(last).toBeDefined();
-    if (last) expect(last.y).toBeGreaterThan(bounds.floorY - HH - 6);
+    if (last) expect(last.y).toBeGreaterThan(bounds.floorY - HH - 12);
     const xs = settled.map((o) => o.x);
-    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThanOrEqual(12);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThanOrEqual(24);
   });
 
   it('asleep: still near the floor with the sleep anim', () => {
@@ -184,7 +184,7 @@ describe('fish behavior', () => {
         expect(o.x).toBe(first.x);
         expect(o.y).toBe(first.y);
       }
-      expect(o.y).toBeGreaterThan(bounds.floorY - HH - 6);
+      expect(o.y).toBeGreaterThan(bounds.floorY - HH - 12);
     }
   });
 
@@ -193,7 +193,7 @@ describe('fish behavior', () => {
     for (let i = 0; i < 300; i += 1) b.step(input({}, seeded(8)));
     b.reset();
     const o = b.step(input());
-    expect(Math.abs(o.x - 81)).toBeLessThanOrEqual(2);
-    expect(Math.abs(o.y - 60)).toBeLessThanOrEqual(3);
+    expect(Math.abs(o.x - 162)).toBeLessThanOrEqual(4);
+    expect(Math.abs(o.y - 120)).toBeLessThanOrEqual(6);
   });
 });
