@@ -5,9 +5,16 @@ import { parseManifest } from './manifest';
 
 /**
  * Blueprint section 12: generated placeholder art is marked PLACEHOLDER visibly. tools/gen_placeholders.py
- * stamps the full word on every habitat layer and abbreviates it to `PH` (in the STAMP colour) only where the
- * word cannot fit: inside the fish body box and inside pantryRect. This decodes the checked-in PNGs and looks
- * for the glyph pattern, so a hand-drawn or half-clipped stamp fails here and not in a review.
+ * stamps the full word on every synthetic habitat layer and abbreviates it to `PH` (in the STAMP colour) only
+ * inside pantryRect, which is too narrow for the word. This decodes the checked-in PNGs and looks for the
+ * glyph pattern, so a hand-drawn or half-clipped stamp fails here and not in a review.
+ *
+ * Two assets are deliberately NOT stamped, because as of Stage 2 they are not placeholders:
+ *   - `bg` is derived from assets/reference/habitats-hires/fish-bowl.png by tools/gen_bg.py;
+ *   - the fish strips are derived from the goldfish painted into that same render by tools/gen_fish.py.
+ * The stamp contract is therefore two-sided: the synthetic layers must carry the word, and the real art must
+ * carry no stamp pixel at all. The second half is what fails if someone regenerates the strips with the old
+ * placeholder code path. src/render/bgArt.test.ts asserts the rest of what makes that art real.
  *
  * The stamp is drawn at the generator's font scale, which is the art-unit multiplier `grid width / 160`
  * (2 at 320x240): one font pixel becomes a SCALE x SCALE block. `findWord` takes that scale, so raising the
@@ -100,7 +107,7 @@ describe('placeholder habitat layers', () => {
 
   for (const layer of bowl.layers) {
     const file = layer.file;
-    if (!file || layer.name === 'bg') continue; // bg is the concept render, not generated
+    if (!file || layer.name === 'bg') continue; // bg is real derived art, not placeholder geometry
     if (layer.name === 'pantry_fill') {
       it('pantry_fill: too small for the word, so PH in the stamp colour inside pantryRect', () => {
         const png = load(file);
@@ -116,20 +123,24 @@ describe('placeholder habitat layers', () => {
   }
 });
 
-describe('placeholder fish strips', () => {
+describe('real fish strips', () => {
   const fish = manifest.sprites['fish'];
   if (!fish) throw new Error('manifest has no fish sprite');
-  const bowlGrid = manifest.habitats['fish/bowl']?.grid;
-  if (!bowlGrid) throw new Error('manifest has no fish/bowl habitat');
-  const [fw, fh] = fish.frame;
-  const scale = Math.max(1, Math.round(bowlGrid[0] / ART_GRID_W));
 
   for (const [state, def] of Object.entries(fish.states)) {
-    it(`${state}: every frame carries PH in the stamp colour (the body box is too small for the word)`, () => {
+    it(`${state}: carries no placeholder stamp -- it is art, not scaffolding`, () => {
       const png = load(def.file);
-      for (let f = 0; f < def.frames; f += 1) {
-        expect(findWord(png, 'PH', { x: f * fw, y: 0, w: fw, h: fh }, scale, STAMP), `frame ${f}`).not.toBeNull();
+      const stamped: string[] = [];
+      for (let y = 0; y < png.height && stamped.length < 8; y += 1) {
+        for (let x = 0; x < png.width && stamped.length < 8; x += 1) {
+          const i = (y * png.width + x) * 4;
+          if (png.data[i] === STAMP[0] && png.data[i + 1] === STAMP[1]
+            && png.data[i + 2] === STAMP[2] && (png.data[i + 3] ?? 0) > 0) {
+            stamped.push(`${x},${y}`);
+          }
+        }
       }
+      expect(stamped).toEqual([]);
     });
   }
 });

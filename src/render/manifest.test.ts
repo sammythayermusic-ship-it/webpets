@@ -16,7 +16,11 @@ describe('parseManifest', () => {
     ]);
     const fish = m.sprites['fish'];
     expect(fish?.frame).toEqual([160, 160]);
-    expect(Object.keys(fish?.states ?? {})).toEqual(['idle', 'eat', 'hungry', 'sleep', 'dead']);
+    // happy/excited/curious ship ahead of the code that plays them: PetAnim does not name them yet, and
+    // the sprite player only ever looks up the state it is asked for, so declaring them is inert.
+    expect(Object.keys(fish?.states ?? {})).toEqual([
+      'idle', 'eat', 'hungry', 'sleep', 'dead', 'happy', 'excited', 'curious',
+    ]);
     expect(fish?.states['eat']?.returnTo).toBe('idle');
   });
 

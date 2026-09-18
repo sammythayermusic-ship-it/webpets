@@ -83,15 +83,21 @@ are `localStorage` keys named `webpets:<file>`.
 
 ## Art
 
-Real fish, hamster, frog and chicken sprites are still to come. Until then the bowl uses the concept
-render in `assets/habitats-160x120/fish-bowl.png` as the `bg` layer and generated placeholders for
-everything else:
+The bowl background and the fish are real art, derived from the project's own concept render
+(`assets/reference/habitats-hires/fish-bowl.png`, 1168x880) and quantized to the 38 colours the Phase 0
+160x120 art uses, so the result is the same art with four times the detail. Hamster, frog and chicken are
+still to come, and so are the remaining bowl layers (plants, glass, feeder, night tint), which are generated
+placeholders:
 
 ```sh
-npm run gen:placeholders   # writes assets/habitats/fish/bowl/*.png and assets/sprites/fish/*.png
+python3 tools/gen_bg.py            # assets/habitats/fish/bowl/bg.png + the geometry measurement report
+python3 tools/gen_fish.py          # assets/sprites/fish/*.png (strips + emotes)
+npm run gen:placeholders           # the synthetic layers: assets/habitats/fish/bowl/*.png
 ```
 
-Every placeholder is stamped PLACEHOLDER. To drop in real art, replace the PNG files listed in
+Every placeholder is stamped PLACEHOLDER; the real art carries no stamp, and the tests assert both halves.
+`tools/gen_bg.py --report-only` reprints the measurements behind `assets/manifest.json` without writing
+anything. To drop in real art, replace the PNG files listed in
 `assets/manifest.json` at the sizes that file declares (habitat layers are 320x240; sprite strips are
 160x160 per frame, frames side by side) and keep the manifest's frame counts and layer names in sync. Layer
 geometry (`water`, `pantryRect`, `petAnchor`) must also match `src/species/fish/layout.ts`.

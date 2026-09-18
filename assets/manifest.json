@@ -18,23 +18,26 @@
         { "name": "night", "file": "habitats/fish/bowl/night.png", "z": 0, "blend": "multiply" },
         { "name": "shadow", "z": 0 }
       ],
-      "water": { "x": 82, "y": 46, "w": 160, "h": 148 },
-      "waterShape": { "cx": 162, "cy": 116, "rx": 80, "ry": 84, "surfaceY": 46, "floorY": 192 },
-      "pantryRect": { "x": 186, "y": 10, "w": 36, "h": 30 },
+      "water": { "x": 81, "y": 44, "w": 158, "h": 147 },
+      "waterShape": { "cx": 160, "cy": 116, "rx": 78, "ry": 80, "surfaceY": 44, "floorY": 190 },
+      "pantryRect": { "x": 180, "y": 11, "w": 36, "h": 29 },
       "petAnchor": [160, 120],
-      "opaqueRect": { "x": 80, "y": 8, "w": 168, "h": 230 }
+      "opaqueRect": { "x": 79, "y": 8, "w": 162, "h": 224 }
     }
   },
   "sprites": {
     "fish": {
       "frame": [160, 160],
-      "body": { "w": 56, "h": 28 },
+      "body": { "w": 56, "h": 46 },
       "states": {
-        "idle": { "file": "sprites/fish/idle.png", "frames": 4, "sequence": [0, 0, 0, 0, 1, 1, 0, 0, 2, 0, 0, 3, 3, 0], "loop": true },
-        "eat": { "file": "sprites/fish/eat.png", "frames": 4, "sequence": [0, 1, 2, 3], "loop": false, "returnTo": "idle" },
-        "hungry": { "file": "sprites/fish/hungry.png", "frames": 4, "sequence": [0, 0, 1, 1, 2, 2, 3, 3], "loop": true },
-        "sleep": { "file": "sprites/fish/sleep.png", "frames": 2, "sequence": [0, 0, 0, 1, 1, 1], "loop": true },
-        "dead": { "file": "sprites/fish/dead.png", "frames": 2, "sequence": [0, 0, 0, 0, 1, 1, 1, 1], "loop": true }
+        "idle": { "file": "sprites/fish/idle.png", "frames": 6, "sequence": [0, 1, 2, 3, 0, 1, 2, 3, 4, 0, 1, 2, 3, 5], "loop": true },
+        "eat": { "file": "sprites/fish/eat.png", "frames": 5, "sequence": [0, 1, 2, 3, 4], "loop": false, "returnTo": "idle" },
+        "hungry": { "file": "sprites/fish/hungry.png", "frames": 5, "sequence": [0, 0, 1, 1, 2, 2, 3, 3, 4, 4], "loop": true },
+        "sleep": { "file": "sprites/fish/sleep.png", "frames": 4, "sequence": [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3], "loop": true },
+        "dead": { "file": "sprites/fish/dead.png", "frames": 4, "sequence": [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3], "loop": true },
+        "happy": { "file": "sprites/fish/happy.png", "frames": 5, "sequence": [0, 1, 2, 3, 4], "loop": true },
+        "excited": { "file": "sprites/fish/excited.png", "frames": 6, "sequence": [0, 1, 2, 3, 4, 5], "loop": true },
+        "curious": { "file": "sprites/fish/curious.png", "frames": 4, "sequence": [0, 1, 2, 3, 2, 1], "loop": true }
       }
     }
   }

@@ -15,7 +15,8 @@ function signature here is binding. The shared type files are the source of trut
 | `src-tauri/**` | shell | Window, tray, click-through poller, notifications, clock, autostart, shortcut, single-instance. |
 | `src/render/**` | render | PixiJS scene, layers, sprite player, FX, scaling, tray chip painter. |
 | `src/species/fish/**` | render | Pure behavior state machine + bowl layout + speech line pools (`lines.ts`). No Pixi imports in `behavior.ts`. |
-| `tools/gen_placeholders.py`, `assets/manifest.json`, `assets/habitats/**`, `assets/sprites/fish/**` | render | Placeholder PNGs stamped with the full word PLACEHOLDER; `PH` in the stamp colour only where the word cannot fit (fish body box, `pantry_fill`). Asserted by `src/render/placeholderStamps.test.ts`. |
+| `tools/gen_placeholders.py`, `assets/manifest.json`, `assets/habitats/**` | render | Synthetic layers, stamped with the full word PLACEHOLDER; `PH` in the stamp colour only inside `pantry_fill`, which is too narrow for the word. Asserted by `src/render/placeholderStamps.test.ts`. |
+| `tools/gen_bg.py`, `tools/gen_fish.py`, `assets/sprites/fish/**` | render | Real art derived from `assets/reference/habitats-hires/fish-bowl.png`: the bowl `bg` and the fish strips. Carries no stamp; asserted by `src/render/bgArt.test.ts` and `src/render/spriteStrips.test.ts`. |
 | `src/ui/**`, `src/audio/**` | ui | DOM HUD, dev panel, speech bubbles, pantry dialog, montage, memorial card, tray wiring, audio hooks. |
 | `src/main.ts` | integration | Boot sequence and all cross-module wiring. Written last. |
 | `vite.config.ts`, `index.html`, `package.json`, `tsconfig.json`, `vitest.config.ts` | integration | Already configured; changes require a contract edit. |
@@ -43,17 +44,26 @@ Never name an asset with an `@2x`/`@Nx` suffix: Pixi's resolver would halve its 
 assets/
   manifest.json                     habitats + sprites index (schema = Manifest in src/render/types.ts)
   habitats/fish/bowl/<layer>.png    320x240 layers: bg medium decor_back pantry pantry_fill decor_front glass night memorial
-  habitats-160x120/fish-bowl.png    concept art; `tools/gen_bg.py` derives `habitats/fish/bowl/bg.png` from it
-                                    (Stage 1: a 2x NEAREST upscale, so the flip is a verifiable no-op)
-  sprites/fish/<state>.png          160x160 strips: idle eat hungry sleep dead (frames left to right); the PH stamp
-                                    stays inside the centred `body` box (src/render/spriteStrips.test.ts checks it)
+  habitats-160x120/fish-bowl.png    the Phase 0 art; now the PALETTE source (38 opaque colours) `tools/gen_bg.py`
+                                    quantizes against. The pixels come from the hi-res reference, not from here.
+  reference/habitats-hires/*.png    1168x880 concept renders. Source, never shipped (a build plugin drops them).
+                                    `tools/gen_bg.py` derives `habitats/fish/bowl/bg.png` and `tools/gen_fish.py`
+                                    derives the fish strips from `fish-bowl.png`.
+  sprites/fish/<state>.png          160x160 strips: idle eat hungry sleep dead happy excited curious (frames left to
+                                    right, one row). Real art, no stamp. The drawn fish is ~64x48 and is deliberately
+                                    LARGER than the manifest `body` box in both axes, so fins and tail may brush the
+                                    glass while the water clamp holds the body inside (src/render/spriteStrips.test.ts).
+  sprites/fish/emotes.png           6-frame 16x16 overlay strip (heart note zzz sweat excl question), unwired as yet
   sprites/strips-80/*.png           reference strips (gus-*, doink-idle) for validating the player
   fonts/PressStart2P-Regular.ttf    HUD font (OFL)
   audio/fish/{ambient,feed,alert,death}.ogg   optional; missing files are silently skipped
 ```
 
-`manifest.json` for the bowl (values are the contract; the render builder may refine `waterShape`/`pantryRect` by
-looking at the art, and must keep the manifest and `src/species/fish/layout.ts` in sync):
+`manifest.json` for the bowl. Every number below is MEASURED from `habitats/fish/bowl/bg.png` by
+`tools/gen_bg.py --report-only`, not authored; the art on disk is the source of truth and the manifest and
+`src/species/fish/layout.ts` must agree with it and with each other. `opaqueRect` is the bg's alpha bbox
+**exactly** — `habitatHitRect()` is `pad + opaqueRect * scale`, so any slack there either eats clicks at the
+bowl's rim or makes the transparent pad steal clicks from the apps behind the window:
 
 ```json
 {
@@ -76,17 +86,17 @@ looking at the art, and must keep the manifest and `src/species/fish/layout.ts` 
         { "name": "night",       "file": "habitats/fish/bowl/night.png", "z": 0, "blend": "multiply" },
         { "name": "shadow", "z": 0 }
       ],
-      "water": { "x": 82, "y": 46, "w": 160, "h": 148 },
-      "waterShape": { "cx": 162, "cy": 116, "rx": 80, "ry": 84, "surfaceY": 46, "floorY": 192 },
-      "pantryRect": { "x": 186, "y": 10, "w": 36, "h": 30 },
+      "water": { "x": 81, "y": 44, "w": 158, "h": 147 },
+      "waterShape": { "cx": 160, "cy": 116, "rx": 78, "ry": 80, "surfaceY": 44, "floorY": 190 },
+      "pantryRect": { "x": 180, "y": 11, "w": 36, "h": 29 },
       "petAnchor": [160, 120],
-      "opaqueRect": { "x": 80, "y": 8, "w": 168, "h": 230 }
+      "opaqueRect": { "x": 79, "y": 8, "w": 162, "h": 224 }
     }
   },
   "sprites": {
     "fish": {
       "frame": [160, 160],
-      "body": { "w": 56, "h": 28 },
+      "body": { "w": 56, "h": 46 },
       "states": {
         "idle":   { "file": "sprites/fish/idle.png",   "frames": 4, "sequence": [0,0,0,0,1,1,0,0,2,0,0,3,3,0], "loop": true },
         "eat":    { "file": "sprites/fish/eat.png",    "frames": 4, "sequence": [0,1,2,3], "loop": false, "returnTo": "idle" },
@@ -99,14 +109,23 @@ looking at the art, and must keep the manifest and `src/species/fish/layout.ts` 
 }
 ```
 
-Measured from the concept art (grid px at 320x240; Stage 1 doubled the grid, so these are the old 160x120
-measurements x2): the bowl's opaque pixels span x 80..245, y 8..235 and `opaqueRect` is that box rounded out
-by one art unit on the right and bottom; the water spans y 46..192 with rows about x 82..242 at the widest
-(y 94..130) narrowing near the surface and the gravel. `waterShape` is the ellipse approximation of that;
-behavior keeps the body box inside it. `water` is the water's bounding rect and is inclusive of the floor row
-(h = floorY - surfaceY + 1 = 148); `makeWaterBounds().rect` is the half-open surface..floor band (h = 146).
+Measured from `habitats/fish/bowl/bg.png` (grid px at 320x240): the bowl's opaque pixels span x 79..240,
+y 8..231, and `opaqueRect` is exactly that box. The bowl's interior spans y 44..190, with rows x 81..238 at
+the widest (y 104..128) narrowing to about x 115..190 at the rim and x 137..182 at the gravel; `waterShape`
+is a least-squares ellipse fit to those rows (rms 0.58px), rounded inward. `surfaceY` is the bowl's topmost
+opaque row, not the painted meniscus -- the fish may swim into the air gap, which is Phase 0 behaviour that
+Stage 2 re-measured rather than redesigned. `water` is the bounding rect of those rows and is inclusive of
+the floor row (h = floorY - surfaceY + 1 = 147); `makeWaterBounds().rect` is the half-open surface..floor band
+(h = 146). Behavior keeps the `body` box inside the ellipse, and `body` (56x46) is smaller than the drawn
+fish (~64x48) in both axes so fins and tail may brush the glass.
+
+These numbers are NOT the Stage 1 values doubled. The shipped 160x120 art is about 3% larger than any
+downscale of the current hi-res reference, anchored at its top-left, so the doubles were 1-6px wide of the
+real art on the right and bottom edges. The art on disk wins; `tools/gen_bg.py --report-only` reprints the
+whole measurement report, and `src/render/bgArt.test.ts` pins `opaqueRect` to the alpha bbox.
+
 Every distance in `src/species/fish/behavior.ts`, `src/render/food.ts` and `src/render/fx.ts`, and the drop
-shadow offsets in `src/render/scene.ts`, are grid px and were doubled with the grid.
+shadow offsets in `src/render/scene.ts`, are grid px and were doubled with the grid in Stage 1.
 
 Layer semantics: `layers[].name` must be one of the 13 names in `LayerName`; the draw order is the fixed slot order
 (shadow, bg/memorial, medium, decor_back, pantry, pantry_fill, pet, food, decor_front, glass, fx, night) with `z`

@@ -2,7 +2,10 @@
 
 Outputs (all stamped with a tiny bitmap "PLACEHOLDER" label), sized from assets/manifest.json:
   assets/habitats/fish/bowl/{medium,decor_back,pantry,pantry_fill,decor_front,glass,night,memorial}.png
-  assets/sprites/fish/{idle,eat,hungry,sleep,dead}.png  (strips, 4/4/4/2/2 frames)
+
+The fish strips are NOT generated here. As of Stage 2 they are real art derived from the goldfish painted
+into the concept render; `tools/gen_fish.py` builds them. `bg` is likewise real art, from `tools/gen_bg.py`.
+What is left here is the genuinely synthetic scaffolding, and only it carries the PLACEHOLDER stamp.
 
 Resolution is a variable, not a literal. Every size and rect comes from the manifest:
 
@@ -10,8 +13,6 @@ Resolution is a variable, not a literal. Every size and rect comes from the mani
   WATER            habitats['fish/bowl'].waterShape
   PANTRY_RECT      habitats['fish/bowl'].pantryRect
   OPAQUE_RECT      habitats['fish/bowl'].opaqueRect
-  FRAME_W, FRAME_H sprites.fish.frame
-  FISH_BODY        sprites.fish.body
 
 FEEDER_BOX is the one piece of geometry the manifest does not carry; it is derived as PANTRY_RECT
 inflated by one art unit on each side, so it can never drift from the rect the fill lives in.
@@ -22,23 +23,22 @@ Two multipliers do all the resolution work:
                      those art units, and `u(n)` maps one to the drawing canvas.
   U = GRID_W / ART_W the art-unit multiplier (2.0 at 320x240).
   UPSCALE            how much of U is applied as a final NEAREST upscale rather than by drawing bigger
-                     (default `int(U)`, override with --upscale).
+                     (default 1, override with --upscale).
 
-With the default UPSCALE = int(U) each layer is drawn at GRID/UPSCALE and nearest-upscaled, so the
-output is *provably* the old art scaled up: every UPSCALE x UPSCALE block is one colour and
-downsampling reproduces the previous bytes. That is what makes the 320x240 flip a verifiable no-op —
-real 320x240 art is a later stage, and it arrives by running with `--upscale 1`, where `u(n)` becomes
-`round(n * U)` and the drawing happens natively at the full grid.
+UPSCALE 1 draws natively at the full grid: `u(n)` is `round(n * U)` and circles, lines and gradients get
+the resolution they are drawn at. Stage 1 used `--upscale 2`, which draws at GRID/2 and NEAREST-upscales,
+so the output was *provably* the old 160x120 art scaled up (every 2x2 block one colour). That mode is kept
+because it is the only way to re-verify that claim.
 
 Stamp rule: every habitat layer carries the full word PLACEHOLDER (43x5 px in the 3x5 font, times the
 effective stamp scale U). The word is abbreviated to `PH` in the STAMP colour only where it cannot fit:
-the fish strips (the stamp must stay inside the body box, see `finish`) and `pantry_fill` (its opaque
-pixels must stay inside pantryRect, see `check_pantry_fill`). `src/render/placeholderStamps.test.ts`
-decodes the checked-in PNGs and asserts this.
+`pantry_fill`, whose opaque pixels must stay inside pantryRect (see `check_pantry_fill`).
+`src/render/placeholderStamps.test.ts` decodes the checked-in PNGs and asserts this.
 
-`bg` is the concept art; `tools/gen_bg.py` writes it and it is NOT regenerated here.
+`bg` is real art from `tools/gen_bg.py` and the fish strips are real art from `tools/gen_fish.py`; neither
+is regenerated here.
 
-Run: python3 tools/gen_placeholders.py [--grid W H] [--frame W H] [--upscale N]
+Run: python3 tools/gen_placeholders.py [--grid W H] [--upscale N]
 """
 from __future__ import annotations
 
@@ -53,7 +53,6 @@ from PIL import Image, ImageDraw
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 ASSETS = os.path.join(ROOT, 'assets')
 BOWL_DIR = os.path.join(ASSETS, 'habitats', 'fish', 'bowl')
-FISH_DIR = os.path.join(ASSETS, 'sprites', 'fish')
 MANIFEST = os.path.join(ASSETS, 'manifest.json')
 
 #: The grid the hand-placed coordinates in this file were authored on.
@@ -61,10 +60,8 @@ ART_W = 160
 
 # --- filled in by `configure()` from the manifest ---------------------------------------------------
 GRID_W = GRID_H = 0          # habitat grid, final px
-FRAME_W = FRAME_H = 0        # sprite frame, final px
 UPSCALE = 1                  # final NEAREST upscale factor
 CANVAS_W = CANVAS_H = 0      # habitat drawing canvas = GRID / UPSCALE
-CFRAME_W = CFRAME_H = 0      # sprite drawing canvas frame = FRAME / UPSCALE
 S = 1.0                      # art-unit -> drawing-canvas multiplier (= U / UPSCALE)
 FONT_SCALE = 1               # stamp font scale on the drawing canvas
 CONCEPT = ''                 # bg layer file, from the manifest
@@ -74,11 +71,9 @@ WATER: dict[str, int] = {}
 PANTRY_RECT: dict[str, int] = {}
 FEEDER_BOX: dict[str, int] = {}
 OPAQUE_RECT: dict[str, int] = {}
-FISH_BODY: dict[str, int] = {}
 
 # Geometry in final px, straight from the manifest (the generation-time asserts check against these).
 PANTRY_RECT_PX: dict[str, int] = {}
-FISH_BODY_PX: dict[str, int] = {}
 
 
 def u(n: float) -> int:
@@ -91,32 +86,26 @@ def m(n: float) -> int:
     return int(round(n / UPSCALE))
 
 
-def configure(grid: tuple[int, int] | None = None, frame: tuple[int, int] | None = None,
-              upscale: int | None = None) -> None:
+def configure(grid: tuple[int, int] | None = None, upscale: int | None = None) -> None:
     """Read every size and rect from assets/manifest.json and derive the drawing canvas."""
-    global GRID_W, GRID_H, FRAME_W, FRAME_H, UPSCALE, CANVAS_W, CANVAS_H, CFRAME_W, CFRAME_H
-    global S, FONT_SCALE, CONCEPT, WATER, PANTRY_RECT, FEEDER_BOX, OPAQUE_RECT, FISH_BODY
-    global PANTRY_RECT_PX, FISH_BODY_PX
+    global GRID_W, GRID_H, UPSCALE, CANVAS_W, CANVAS_H
+    global S, FONT_SCALE, CONCEPT, WATER, PANTRY_RECT, FEEDER_BOX, OPAQUE_RECT, PANTRY_RECT_PX
 
     with open(MANIFEST, encoding='utf8') as fh:
         manifest = json.load(fh)
     bowl = manifest['habitats']['fish/bowl']
-    fish = manifest['sprites']['fish']
 
     GRID_W, GRID_H = grid if grid else (int(bowl['grid'][0]), int(bowl['grid'][1]))
-    FRAME_W, FRAME_H = frame if frame else (int(fish['frame'][0]), int(fish['frame'][1]))
 
     art_u = GRID_W / ART_W
-    UPSCALE = upscale if upscale else max(1, int(art_u))
-    for name, value in (('grid width', GRID_W), ('grid height', GRID_H),
-                        ('frame width', FRAME_W), ('frame height', FRAME_H)):
+    UPSCALE = upscale if upscale else 1
+    for name, value in (('grid width', GRID_W), ('grid height', GRID_H)):
         if value % UPSCALE:
             raise SystemExit(f'{name} {value} is not divisible by --upscale {UPSCALE}')
     S = art_u / UPSCALE
     FONT_SCALE = max(1, int(round(S)))
 
     CANVAS_W, CANVAS_H = GRID_W // UPSCALE, GRID_H // UPSCALE
-    CFRAME_W, CFRAME_H = FRAME_W // UPSCALE, FRAME_H // UPSCALE
 
     bg = next(layer for layer in bowl['layers'] if layer['name'] == 'bg')
     CONCEPT = os.path.join(ASSETS, *bg['file'].split('/'))
@@ -126,8 +115,6 @@ def configure(grid: tuple[int, int] | None = None, frame: tuple[int, int] | None
     PANTRY_RECT_PX = {k: int(bowl['pantryRect'][k]) for k in ('x', 'y', 'w', 'h')}
     PANTRY_RECT = {k: m(v) for k, v in PANTRY_RECT_PX.items()}
     OPAQUE_RECT = {k: m(int(bowl['opaqueRect'][k])) for k in ('x', 'y', 'w', 'h')}
-    FISH_BODY_PX = {k: int(fish['body'][k]) for k in ('w', 'h')}
-    FISH_BODY = {k: m(v) for k, v in FISH_BODY_PX.items()}
 
     # The feeder outline as drawn in the concept art: pantryRect inflated by one art unit on each side.
     pad = u(1)
@@ -150,13 +137,6 @@ SHEEN = (255, 255, 255, 70)
 NIGHT_BLUE = (70, 84, 150, 255)
 WHITE = (255, 255, 255, 255)
 STAMP = (255, 40, 200, 255)
-FISH_ORANGE = (255, 140, 40, 255)
-FISH_LIGHT = (255, 190, 90, 255)
-FISH_DARK = (200, 90, 20, 255)
-FISH_GRAY = (150, 150, 160, 255)
-FISH_GRAY_DARK = (100, 100, 110, 255)
-EYE_WHITE = (255, 255, 255, 255)
-EYE_BLACK = (20, 20, 30, 255)
 
 # 3x5 bitmap font (rows top→bottom, 1 = lit). Enough for the stamps.
 FONT: dict[str, tuple[str, ...]] = {
@@ -200,6 +180,32 @@ def stamp(im: Image.Image, x: int, y: int, text: str, color=STAMP, scale: int | 
                             if 0 <= xx < im.width and 0 <= yy < im.height:
                                 px[xx, yy] = color
         x += 4 * step
+
+
+def stamp_spot(mask: Image.Image, text: str, prefer_y: int, scale: int | None = None) -> tuple[int, int]:
+    """Find a fully opaque place in `mask` for `text`, nearest to (canvas centre, prefer_y).
+
+    The night layer is clipped to the bowl's alpha, so a stamp drawn over transparent pixels loses its
+    glyphs and `src/render/placeholderStamps.test.ts` stops finding the word. Searching the mask instead of
+    hardcoding a spot means new background art cannot silently erase the stamp.
+    """
+    step = FONT_SCALE if scale is None else scale
+    w, h = (len(text) * 4 - 1) * step, 5 * step
+    px = mask.load()
+    cols = [[px[x, y][3] > 0 for x in range(mask.width)] for y in range(mask.height)]
+    best: tuple[float, int, int] | None = None
+    for y in range(mask.height - h + 1):
+        if not all(cols[y + j][mask.width // 2] for j in range(h)):
+            continue
+        for x in range(mask.width - w + 1):
+            if not all(cols[y + j][x + i] for j in range(h) for i in range(w)):
+                continue
+            cost = abs(x + w / 2 - mask.width / 2) + 2 * abs(y - prefer_y)
+            if best is None or cost < best[0]:
+                best = (cost, x, y)
+    if best is None:
+        raise SystemExit(f'no fully opaque {w}x{h} spot for the stamp "{text}"')
+    return best[1], best[2]
 
 
 def new_layer() -> Image.Image:
@@ -360,13 +366,16 @@ def gen_night() -> Image.Image:
     b = FEEDER_BOX
     d.rectangle((b['x'] - u(2), b['y'] - u(2), b['x'] + b['w'] + u(2) - 1, b['y'] + b['h'] + u(2) - 1),
                 fill=WHITE)
-    # the alpha mask below clips this layer to the concept bowl, whose base is opaque around x 52..110
-    # (art units) on these rows; a stamp further left would lose its first glyphs
-    stamp(im, u(56), u(100), 'NIGHT', color=(200, 210, 255, 255))
-    stamp(im, u(56), u(106), 'PLACEHOLDER', color=(200, 210, 255, 255))
+    # The alpha mask below clips this layer to the bowl, so both stamps must sit on opaque art; the spot is
+    # searched for rather than hardcoded (see stamp_spot).
+    concept_im = concept_art()
+    wx, wy = stamp_spot(concept_im, 'PLACEHOLDER', u(106))
+    stamp(im, wx, wy, 'PLACEHOLDER', color=(200, 210, 255, 255))
+    nx, ny = stamp_spot(concept_im, 'NIGHT', wy - 6 * FONT_SCALE)
+    stamp(im, nx, ny, 'NIGHT', color=(200, 210, 255, 255))
     # Multiply over a transparent pixel yields opaque black (DST_COLOR * src + dst * (1 - srcA) with dst = 0,
     # alpha ONE * srcA), so the night layer must be transparent wherever the bowl itself is transparent.
-    concept = concept_art().load()
+    concept = concept_im.load()
     px = im.load()
     for y in range(CANVAS_H):
         for x in range(CANVAS_W):
@@ -399,120 +408,6 @@ def gen_memorial() -> Image.Image:
     stamp(im, u(60), u(40), 'MEMORIAL', color=(120, 120, 130, 255))
     stamp(im, u(60), u(46), 'PLACEHOLDER', color=(120, 120, 130, 255))
     return im
-
-
-# ----------------------------------------------------------------------------- fish strips
-
-def draw_fish(frame: Image.Image, ox: int, *, tail: int = 0, mouth: int = 0, droop: int = 0,
-              eyes: str = 'open', belly_up: bool = False, gray: bool = False) -> None:
-    """Draw one fish (the manifest body size) facing right, centered in the frame at column offset `ox`.
-
-    tail: -1/0/1 tail wag; mouth: 0..2 open amount; droop: extra art-units the head sinks; eyes: open|closed|x.
-    """
-    body = FISH_GRAY if gray else FISH_ORANGE
-    light = FISH_GRAY_DARK if gray else FISH_LIGHT
-    dark = FISH_GRAY_DARK if gray else FISH_DARK
-    cx, cy = ox + CFRAME_W // 2, CFRAME_H // 2  # body center inside the frame
-    d = ImageDraw.Draw(frame)
-    # body: an ellipse centered slightly right of center (head at the right)
-    bx0, by0 = cx - u(8), cy - u(6) + u(droop)
-    d.ellipse((bx0, by0, bx0 + u(20) - 1, by0 + u(12) - 1), fill=body, outline=dark, width=u(1))
-    # belly highlight stripe
-    d.rectangle((bx0 + u(4), by0 + u(7), bx0 + u(15) - 1, by0 + u(9) - 1), fill=light)
-    # tail: a triangle pointing left, wagging up/down
-    tx = bx0 - u(1)
-    ty = cy + u(droop) + u(tail * 2)
-    d.polygon([(tx, ty), (tx - u(7), ty - u(6) + u(tail)), (tx - u(7), ty + u(6) + u(tail))],
-              fill=body, outline=dark)
-    # top fin
-    d.polygon([(bx0 + u(6), by0), (bx0 + u(12), by0), (bx0 + u(10), by0 - u(3))], fill=dark)
-    # eye
-    ex, ey = bx0 + u(14), by0 + u(3)
-    if eyes == 'open':
-        d.rectangle((ex, ey, ex + u(2) - 1, ey + u(2) - 1), fill=EYE_WHITE)
-        d.rectangle((ex + u(1), ey + u(1), ex + u(2) - 1, ey + u(2) - 1), fill=EYE_BLACK)
-    elif eyes == 'closed':
-        d.rectangle((ex, ey + u(1), ex + u(2) - 1, ey + u(2) - 1), fill=EYE_BLACK)
-    else:  # 'x'
-        d.rectangle((ex, ey, ex + u(2) - 1, ey + u(2) - 1), fill=EYE_BLACK)
-    # mouth
-    mx, my = bx0 + u(19), by0 + u(7)
-    if mouth == 0:
-        d.rectangle((mx, my, mx + u(1) - 1, my + u(1) - 1), fill=dark)
-    else:
-        d.rectangle((mx - u(1), my - u(mouth), mx + u(2) - 1, my + u(mouth) + u(1) - 1), fill=EYE_BLACK)
-        d.rectangle((mx + u(1), my, mx + u(2) - 1, my + u(1) - 1), fill=dark)
-    if belly_up:
-        # flip the whole frame region vertically around the body center
-        region = frame.crop((ox, 0, ox + CFRAME_W, CFRAME_H)).transpose(Image.FLIP_TOP_BOTTOM)
-        frame.paste(region, (ox, 0))
-
-
-def strip(frames: int) -> Image.Image:
-    return Image.new('RGBA', (CFRAME_W * frames, CFRAME_H), (0, 0, 0, 0))
-
-
-def body_box(ox: int, frame_w: int, frame_h: int, body: dict[str, int]) -> tuple[int, int, int, int]:
-    """Inclusive (x0, y0, x1, y1) of the manifest body box centred in a frame at column offset `ox`."""
-    x0 = ox + frame_w // 2 - body['w'] // 2
-    y0 = frame_h // 2 - body['h'] // 2
-    return x0, y0, x0 + body['w'] - 1, y0 + body['h'] - 1
-
-
-def finish(im: Image.Image, frames: int) -> Image.Image:
-    # The stamp must sit inside the body box: behavior only keeps that box in the water, and the sprite is
-    # drawn with anchor 0.5, so anything outside it can land on the rim or in the transparent pad. The box
-    # is too narrow for the full word PLACEHOLDER (43 font px); `PH` is the sanctioned abbreviation here.
-    for i in range(frames):
-        x0, y0, _, _ = body_box(i * CFRAME_W, CFRAME_W, CFRAME_H, FISH_BODY)
-        stamp(im, x0 + u(11), y0 + u(5), 'PH', color=STAMP)  # over the middle of the body
-    return im
-
-
-def check_stamp_in_body(im: Image.Image, frames: int) -> None:
-    """Final-size check against the manifest body box (the contract src/render/spriteStrips.test.ts asserts)."""
-    px = im.load()
-    for i in range(frames):
-        x0, y0, x1, y1 = body_box(i * FRAME_W, FRAME_W, FRAME_H, FISH_BODY_PX)
-        for y in range(FRAME_H):
-            for x in range(i * FRAME_W, (i + 1) * FRAME_W):
-                if px[x, y] == STAMP:
-                    assert x0 <= x <= x1 and y0 <= y <= y1, f'stamp pixel outside the body box at {x},{y}'
-
-
-def gen_idle() -> Image.Image:
-    im = strip(4)
-    for i, tail in enumerate((0, 1, 0, -1)):
-        draw_fish(im, i * CFRAME_W, tail=tail)
-    return finish(im, 4)
-
-
-def gen_eat() -> Image.Image:
-    im = strip(4)
-    for i, (tail, mouth) in enumerate(((0, 1), (1, 2), (0, 2), (-1, 0))):
-        draw_fish(im, i * CFRAME_W, tail=tail, mouth=mouth)
-    return finish(im, 4)
-
-
-def gen_hungry() -> Image.Image:
-    im = strip(4)
-    for i, (tail, droop) in enumerate(((0, 2), (1, 3), (0, 2), (-1, 3))):
-        draw_fish(im, i * CFRAME_W, tail=tail, droop=droop)
-    return finish(im, 4)
-
-
-def gen_sleep() -> Image.Image:
-    im = strip(2)
-    for i, droop in enumerate((0, 1)):
-        draw_fish(im, i * CFRAME_W, tail=0, droop=droop, eyes='closed')
-    return finish(im, 2)
-
-
-def gen_dead() -> Image.Image:
-    im = strip(2)
-    for i, tail in enumerate((0, 1)):
-        draw_fish(im, i * CFRAME_W, tail=tail, eyes='x', belly_up=True, gray=True)
-    return finish(im, 2)
 
 
 # ----------------------------------------------------------------------------- main
@@ -548,10 +443,8 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--grid', nargs=2, type=int, metavar=('W', 'H'),
                    help='habitat grid override (default: assets/manifest.json)')
-    p.add_argument('--frame', nargs=2, type=int, metavar=('W', 'H'),
-                   help='sprite frame override (default: assets/manifest.json)')
     p.add_argument('--upscale', type=int, metavar='N',
-                   help='draw at grid/N and NEAREST-upscale by N (default: int(GRID_W / 160))')
+                   help='draw at grid/N and NEAREST-upscale by N (default: 1, i.e. draw natively)')
     return p.parse_args(list(argv))
 
 
@@ -559,11 +452,10 @@ def main(argv: Iterable[str] = ()) -> None:
     args = parse_args(argv)
     configure(
         grid=(args.grid[0], args.grid[1]) if args.grid else None,
-        frame=(args.frame[0], args.frame[1]) if args.frame else None,
         upscale=args.upscale,
     )
-    print(f'grid {GRID_W}x{GRID_H}, frame {FRAME_W}x{FRAME_H}, canvas {CANVAS_W}x{CANVAS_H}, '
-          f'upscale {UPSCALE}x, art unit {S}, font scale {FONT_SCALE}')
+    print(f'grid {GRID_W}x{GRID_H}, canvas {CANVAS_W}x{CANVAS_H}, upscale {UPSCALE}x, '
+          f'art unit {S}, font scale {FONT_SCALE}')
 
     grid_size = (GRID_W, GRID_H)
     layers = {
@@ -581,17 +473,6 @@ def main(argv: Iterable[str] = ()) -> None:
     for name, im in final.items():
         save(im, os.path.join(BOWL_DIR, f'{name}.png'), grid_size)
 
-    strips = {
-        'idle': (gen_idle(), 4),
-        'eat': (gen_eat(), 4),
-        'hungry': (gen_hungry(), 4),
-        'sleep': (gen_sleep(), 2),
-        'dead': (gen_dead(), 2),
-    }
-    for name, (im, n) in strips.items():
-        out = upscaled(im, (FRAME_W * n, FRAME_H))
-        check_stamp_in_body(out, n)
-        save(out, os.path.join(FISH_DIR, f'{name}.png'), (FRAME_W * n, FRAME_H))
 
 
 if __name__ == '__main__':
