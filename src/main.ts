@@ -25,6 +25,21 @@ import { hungerLabel } from './sim';
 
 /** HUD stays visible this long after the pointer leaves the hit regions (contract rule 3). */
 const HUD_GRACE_MS = 400;
+/**
+ * macOS window collection-behaviour bits, for decoding the layering read-back into something readable.
+ *
+ * Named rather than reported raw because the point of recording this at all is that someone reading a
+ * boot report can see at a glance which flag is missing. A bitmask cannot do that.
+ */
+const COLLECTION_BEHAVIOR = {
+  canJoinAllSpaces: 1 << 0,
+  moveToActiveSpace: 1 << 1,
+  managed: 1 << 2,
+  transient: 1 << 3,
+  stationary: 1 << 4,
+  fullScreenAuxiliary: 1 << 8,
+} as const;
+
 /** Window the boot report measures the scene's frame rate over. */
 const RATE_SAMPLE_MS = 1500;
 /** Day/night is re-evaluated (via a store tick) this often. */
@@ -89,6 +104,18 @@ async function writeBootReport(
     }
   } catch (e) {
     report['scene'] = `debugState threw: ${String(e)}`;
+  }
+  // What the window ACTUALLY has, not what was asked for. The layering failure that prompted this
+  // was invisible precisely because the window config kept the window floating whatever else failed,
+  // so the intended state and the visible symptom disagreed and nothing recorded the difference.
+  try {
+    const { level, behavior } = await platform.window.getLayering();
+    report['layering'] = {
+      level,
+      ...Object.fromEntries(Object.entries(COLLECTION_BEHAVIOR).map(([k, bit]) => [k, (behavior & bit) !== 0])),
+    };
+  } catch (e) {
+    report['layering'] = `read-back failed: ${String(e)}`;
   }
   if (s) {
     report['scale'] = s.settings.scale;

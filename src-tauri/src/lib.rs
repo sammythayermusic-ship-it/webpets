@@ -56,6 +56,7 @@ pub fn run() {
             commands::clock_now,
             commands::set_scale,
             commands::set_layering,
+            commands::get_layering,
             commands::set_scale_live,
             commands::set_interaction_lock,
             commands::set_hit_regions,
@@ -80,11 +81,19 @@ pub fn run() {
             // The window is created hidden (tauri.conf.json visible: false); TS shows it at the
             // end of boot. Rust never shows it on its own except the 10 s safety fallback.
             if let Some(w) = handle.get_webview_window(window::MAIN_WINDOW) {
-                // Layering is no longer forced here. The frontend applies all three flags from the
-                // persisted settings just before it shows the window (see main.ts), which is what makes
-                // them switchable at all -- this call could only ever be on. Worth knowing when the
-                // all-desktops flag is off: on macOS that same collection behavior is what keeps Stage
-                // Manager from shrinking and re-arranging the window like an app window.
+                // Layering, from the persisted settings, here on the main thread before the event
+                // loop and before anything can show the window.
+                //
+                // This used to be an unconditional `set_visible_on_all_workspaces(true)`. Turning it
+                // into a setting moved it to a call the frontend makes near the end of boot, and that
+                // was a mistake: any failure earlier in boot, the ten-second safety show, or the call
+                // itself rejecting all left the window with NO collection behaviour, while the window
+                // config kept it floating so it still looked like "always on top" worked. On a Mac
+                // with Stage Manager on, a window without that behaviour is treated as an ordinary app
+                // window and shuffled behind whatever has focus.
+                if let Err(e) = window::set_layering(&handle, window::layering_from_settings(&handle)) {
+                    eprintln!("[webpets] applying layering at startup failed: {e}");
+                }
                 let visible = w.is_visible().unwrap_or(false);
                 handle
                     .state::<ShellState>()

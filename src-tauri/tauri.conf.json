@@ -16,11 +16,10 @@
       {
         "label": "main",
         "title": "WebPets",
-        "width": 688,
-        "height": 528,
+        "width": 288,
+        "height": 228,
         "transparent": true,
         "decorations": false,
-        "alwaysOnTop": true,
         "skipTaskbar": true,
         "resizable": false,
         "maximizable": false,

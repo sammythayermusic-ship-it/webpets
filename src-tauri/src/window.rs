@@ -15,6 +15,9 @@ use tauri::{
 };
 use tauri_plugin_store::StoreExt;
 
+#[cfg(target_os = "macos")]
+use objc2_app_kit::{NSNormalWindowLevel, NSStatusWindowLevel, NSWindow, NSWindowCollectionBehavior};
+
 use crate::state::ShellState;
 
 pub const MAIN_WINDOW: &str = "main";
@@ -30,12 +33,12 @@ const WINDOW_PAD: f64 = 24.0;
 const SCALE_STEPS_PER_UNIT: f64 = 8.0;
 /// The named rungs the tray's Size menu offers (contract: `SCALE_S`/`SCALE_M`/`SCALE_L`). `tray.rs`
 /// checks its menu against these rather than against bare numbers.
-pub const SCALE_S: u8 = 8;
+pub const SCALE_S: u8 = 6;
 pub const SCALE_M: u8 = 16;
 pub const SCALE_L: u8 = 24;
-/// Lowest and highest scale accepted by `set_scale` (contract: `MIN_SCALE`/`MAX_SCALE`). 0.75x to 4x;
+/// Lowest and highest scale accepted by `set_scale` (contract: `MIN_SCALE`/`MAX_SCALE`). 0.5x to 4x;
 /// the ceiling is where the habitat is drawn 1:1 with the resolution its art was rendered at.
-const MIN_SCALE: u8 = 6;
+const MIN_SCALE: u8 = 4;
 const MAX_SCALE: u8 = 32;
 /// Snap to a work-area edge when within this many logical px (contract `SNAP_PX`).
 const SNAP_PX: f64 = 16.0;
@@ -49,6 +52,9 @@ const SELF_MOVE_SUPPRESS_MS: u64 = 250;
 const SAFETY_SHOW_MS: u64 = 10_000;
 
 const SETTINGS_FILE: &str = "settings.json";
+/// The key the frontend writes its whole settings document under. Rust reads the layering flags out
+/// of it at startup; it owns only `positions` beside it.
+const SETTINGS_DOC_KEY: &str = "doc";
 /// Top-level key in settings.json owned by Rust. TS only ever writes the key `doc`.
 const POSITIONS_KEY: &str = "positions";
 /// Entry inside `positions` holding the monitor key that was persisted most recently. Monitor keys
@@ -500,55 +506,141 @@ fn settle_position(app: &AppHandle) -> Result<(), String> {
     app.emit("window-moved", geometry).map_err(err)
 }
 
-/// Applies all three layering flags together.
-///
-/// Together rather than one at a time because on macOS they are facets of two window properties — the
-/// level and the collection behavior — and the collection behavior is a bitmask that has to be read,
-/// modified and written. Applying them as a set keeps that read-modify-write in one place.
-pub fn set_layering(
-    app: &AppHandle,
-    always_on_top: bool,
-    all_desktops: bool,
-    over_fullscreen: bool,
-) -> Result<(), String> {
-    let window = main_window(app)?;
-    window.set_always_on_top(always_on_top).map_err(err)?;
-    // Sets/clears NSWindowCollectionBehaviorCanJoinAllSpaces under the hood.
-    window.set_visible_on_all_workspaces(all_desktops).map_err(err)?;
-    set_over_fullscreen(&window, over_fullscreen)?;
-    Ok(())
+/// How the habitat window sits relative to other windows, desktops and fullscreen apps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Layering {
+    pub always_on_top: bool,
+    pub all_desktops: bool,
+    pub over_fullscreen: bool,
 }
 
-/// Sets `NSWindowCollectionBehaviorFullScreenAuxiliary`, which is what lets a floating window appear
-/// over an app that has gone fullscreen. A high window level alone is not enough: macOS moves a
-/// fullscreen app to its own Space, and a window that has not asked for this flag simply is not there.
+impl Default for Layering {
+    /// What the app did unconditionally before any of this was a setting.
+    fn default() -> Self {
+        Self { always_on_top: true, all_desktops: true, over_fullscreen: true }
+    }
+}
+
+/// Reads the layering flags the frontend persisted, falling back to the defaults.
+///
+/// Rust reads them so that startup can apply them itself, before the window is ever shown and without
+/// depending on the frontend booting at all. That guarantee is the whole point: when it lived only in
+/// a frontend call, a failure anywhere earlier in boot left the window with no collection behaviour
+/// and nothing said so.
+pub fn layering_from_settings(app: &AppHandle) -> Layering {
+    let d = Layering::default();
+    let Some(store) = positions_store(app) else { return d };
+    let Some(doc) = store.get(SETTINGS_DOC_KEY) else { return d };
+    let flag = |name: &str, fallback: bool| doc.get(name).and_then(Value::as_bool).unwrap_or(fallback);
+    Layering {
+        always_on_top: flag("alwaysOnTop", d.always_on_top),
+        all_desktops: flag("allDesktops", d.all_desktops),
+        over_fullscreen: flag("overFullscreen", d.over_fullscreen),
+    }
+}
+
+/// Applies all three layering flags together.
+///
+/// Together, and in one native block, because on macOS they are facets of two properties of the same
+/// window — its level and its collection behavior — and the collection behavior is a bitmask that has
+/// to be read, modified and written. Doing them separately meant the level went through the window
+/// runtime (which defers to the main thread) while the bitmask was poked directly from whatever thread
+/// the command arrived on, so the ordering between them was accidental. It also meant a failure in the
+/// last of three left the first two applied and returned a blanket error.
+pub fn set_layering(app: &AppHandle, layering: Layering) -> Result<(), String> {
+    let window = main_window(app)?;
+    apply_layering(&window, layering)
+}
+
 #[cfg(target_os = "macos")]
-fn set_over_fullscreen(window: &WebviewWindow<Wry>, on: bool) -> Result<(), String> {
-    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
-    let ptr = window.ns_window().map_err(err)?;
-    if ptr.is_null() {
-        return Err("window has no NSWindow yet".to_string());
-    }
-    // SAFETY: `ns_window` hands back this window's live NSWindow, borrowed only for this call. Tauri
-    // guarantees the window outlives the handle we fetched it from, and nothing here retains it.
-    unsafe {
-        let ns: &NSWindow = &*ptr.cast::<NSWindow>();
-        let mut behavior = ns.collectionBehavior();
-        behavior.set(NSWindowCollectionBehavior::FullScreenAuxiliary, on);
-        ns.setCollectionBehavior(behavior);
-    }
-    Ok(())
+fn apply_layering(window: &WebviewWindow<Wry>, layering: Layering) -> Result<(), String> {
+    // `-[NSWindow setLevel:]` and `-[NSWindow setCollectionBehavior:]` are main-thread-only. The
+    // window handle is fetched INSIDE the closure rather than captured: a raw pointer is not `Send`,
+    // and a window handle fetched on another thread is not something to smuggle across one anyway.
+    let handle = window.clone();
+    window
+        .run_on_main_thread(move || {
+            let Ok(ptr) = handle.ns_window() else { return };
+            // SAFETY: `ns_window` hands back this window's live NSWindow, on the thread that owns it.
+            // Tauri guarantees the window outlives the handle it came from, this borrows it only for
+            // the call, and nothing retains it.
+            unsafe {
+                let ns: &NSWindow = &*ptr.cast::<NSWindow>();
+                // Status level, not floating. "Above every window" has to mean above other apps'
+                // floating panels too — a picture-in-picture video, a palette, a HUD — and floating
+                // level only clears ordinary windows. Being above the menu bar's level is harmless
+                // here because the window is always clamped into the monitor's WORK area, which
+                // excludes the menu bar, so it can never actually sit over it.
+                ns.setLevel(if layering.always_on_top { NSStatusWindowLevel } else { NSNormalWindowLevel });
+
+                let mut behavior = ns.collectionBehavior();
+                behavior.set(NSWindowCollectionBehavior::CanJoinAllSpaces, layering.all_desktops);
+                behavior.set(NSWindowCollectionBehavior::FullScreenAuxiliary, layering.over_fullscreen);
+                // Stationary is the flag that says this window is not part of the managed window
+                // layout: Mission Control and Stage Manager leave it where it is instead of shuffling
+                // it about like an app window. Without it a pet on a Mac with Stage Manager on gets
+                // treated as an ordinary window and pushed behind whatever has focus, which is the
+                // symptom that looks like "always on top isn't working" but is not about the level.
+                behavior.set(NSWindowCollectionBehavior::Stationary, layering.all_desktops);
+                // The two halves of that pair are mutually exclusive per AppKit; asking for both
+                // raises. Clearing Managed is what lets Stationary take effect.
+                if layering.all_desktops {
+                    behavior.remove(NSWindowCollectionBehavior::Managed);
+                }
+                ns.setCollectionBehavior(behavior);
+            }
+        })
+        .map_err(err)
 }
 
 #[cfg(not(target_os = "macos"))]
-fn set_over_fullscreen(_window: &WebviewWindow<Wry>, _on: bool) -> Result<(), String> {
+fn apply_layering(_window: &WebviewWindow<Wry>, _layering: Layering) -> Result<(), String> {
     Ok(())
 }
+
+/// The window's level and collection-behavior bits, read back off the live window.
+///
+/// For the boot report. The failure this exists to catch was invisible: the window config floats the
+/// window at creation whatever else happens, so "always on top" kept looking like it worked while the
+/// collection behavior was silently never applied. Reporting what was intended would have caught
+/// nothing; this reports what the window actually has.
+#[cfg(target_os = "macos")]
+pub fn layering_readback(app: &AppHandle) -> Result<(i64, u64), String> {
+    let window = main_window(app)?;
+    let handle = window.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
+    window
+        .run_on_main_thread(move || {
+            let Ok(ptr) = handle.ns_window() else { return };
+            // SAFETY: as in `apply_layering`.
+            let out = unsafe {
+                let ns: &NSWindow = &*ptr.cast::<NSWindow>();
+                (ns.level() as i64, ns.collectionBehavior().bits() as u64)
+            };
+            let _ = tx.send(out);
+        })
+        .map_err(err)?;
+    rx.recv_timeout(std::time::Duration::from_millis(500))
+        .map_err(|e| format!("layering read-back timed out: {e}"))
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn layering_readback(_app: &AppHandle) -> Result<(i64, u64), String> {
+    Ok((0, 0))
+}
+
 
 /// Shows the window without focusing it. Never calls `set_focus`: with the Accessory activation
 /// policy `show()` orders the window front without activating the app.
 pub fn show(app: &AppHandle) -> Result<(), String> {
     let window = main_window(app)?;
+    // Re-applied on every show, not just at startup. Nothing used to: not this, not the ten-second
+    // safety fallback, not the second-launch handler, not the minimise toggle. One shot at boot whose
+    // failure went to a console nobody can read is how the window ended up with no collection
+    // behaviour at all. It is two property writes; doing them again costs nothing.
+    if let Err(e) = apply_layering(&window, layering_from_settings(app)) {
+        eprintln!("[webpets] re-applying layering on show failed: {e}");
+    }
     window.show().map_err(err)?;
     let state = app.state::<ShellState>();
     state.shown.store(true, Ordering::SeqCst);
@@ -591,10 +683,30 @@ mod tests {
     };
 
     #[test]
+    fn layering_defaults_to_everything_on() {
+        // What the app did unconditionally before any of this was a setting, and what a missing or
+        // unreadable settings file has to fall back to. The regression this pins is the one that
+        // shipped: the guarantee moved to a frontend call, every path that skipped it left the window
+        // with no collection behaviour, and nothing said so.
+        let d = Layering::default();
+        assert!(d.always_on_top, "a pet nobody can see is not a pet");
+        assert!(d.all_desktops);
+        assert!(d.over_fullscreen);
+    }
+
+    #[test]
     fn window_sizes_match_contract() {
-        assert_eq!(window_size_for_scale(SCALE_S), (368.0, 288.0));
+        // Small moved from 1x to 0.75x so that a fresh install starts ON a named rung; Medium and
+        // Large are unchanged, so no existing window resizes on upgrade.
+        assert_eq!(window_size_for_scale(SCALE_S), (288.0, 228.0));
         assert_eq!(window_size_for_scale(SCALE_M), (688.0, 528.0));
         assert_eq!(window_size_for_scale(SCALE_L), (1008.0, 768.0));
+        // Every legal scale lands on whole pixels; this is the property the eighths exist for.
+        for n in MIN_SCALE..=MAX_SCALE {
+            let (w, h) = window_size_for_scale(n);
+            assert_eq!(w.fract(), 0.0, "width at scale {n} is {w}");
+            assert_eq!(h.fract(), 0.0, "height at scale {n} is {h}");
+        }
     }
 
     #[test]

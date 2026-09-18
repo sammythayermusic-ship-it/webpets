@@ -55,7 +55,20 @@ pub fn set_layering(
     all_desktops: bool,
     over_fullscreen: bool,
 ) -> Result<(), String> {
-    window::set_layering(&app, always_on_top, all_desktops, over_fullscreen)
+    window::set_layering(&app, window::Layering { always_on_top, all_desktops, over_fullscreen })
+}
+
+/// The window's level and collection-behavior bits, read off the live window. For the boot report.
+#[tauri::command]
+pub fn get_layering(app: AppHandle) -> Result<LayeringReadback, String> {
+    let (level, behavior) = window::layering_readback(&app)?;
+    Ok(LayeringReadback { level, behavior })
+}
+
+#[derive(serde::Serialize)]
+pub struct LayeringReadback {
+    pub level: i64,
+    pub behavior: u64,
 }
 
 #[tauri::command]

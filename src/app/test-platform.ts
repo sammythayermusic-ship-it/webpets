@@ -89,6 +89,7 @@ export function createFakePlatform(seedFiles: Record<string, unknown> = {}): Fak
       setInteractionLock: async (ms) => {
         p.interactionLockCalls.push(ms);
       },
+      getLayering: async () => ({ level: 0, behavior: 0 }),
       setLayering: async (opts) => {
         p.layeringCalls.push({ ...opts });
       },

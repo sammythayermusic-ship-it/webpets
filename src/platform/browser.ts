@@ -369,6 +369,7 @@ export function createBrowserPlatform(): Platform {
       // resize and there is no pointer to hand anywhere.
       setScaleLive: (s: Scale): Promise<WindowGeometry> => platform.window.setScale(s),
       setInteractionLock: async () => undefined,
+      getLayering: async () => ({ level: 0, behavior: 0 }),
       setLayering: async () => undefined,
     },
     tray: {

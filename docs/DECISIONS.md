@@ -566,3 +566,46 @@ drew on a pixel grid. That constraint went with the pixel art, so the scale is n
 - Small, Medium and Large are still 1x, 2x and 3x, so nobody's window changes size on upgrade. The
   keyboard shortcuts now step by a quarter of the grid rather than jumping between rungs: at one eighth
   the range is 26 presses end to end, which is not a shortcut.
+
+### the layering regression: a guarantee moved into a place it could silently not happen
+The pet stopped staying above other windows, stopped following between desktops and vanished under
+fullscreen apps — while its settings all read `true`. One cause, and I introduced it two commits
+earlier while turning the behaviour into a setting.
+
+- **What was lost.** `set_visible_on_all_workspaces(true)` used to run in `.setup()`: main thread,
+  before the event loop, unconditionally, with no dependency on anything else working. Making it a
+  setting moved it to a call the frontend makes near the end of boot, whose rejection is swallowed into
+  a `console.warn` a packaged app cannot display. Three paths show the window having never made that
+  call at all — a boot error (the catch shows the window anyway), the ten-second safety show, and the
+  call simply rejecting.
+- **And the window config hid it.** `tauri.conf.json` still declared `alwaysOnTop: true`, so the window
+  kept floating at creation whatever else failed. "Always on top" therefore *looked* like it worked
+  while the two collection-behaviour flags were silently absent — the exact fingerprint of the bug. It
+  also meant turning the setting off only held until the next launch. Removed; startup is authoritative.
+- **Why a normal window could cover it**, which is the part that does not sound like a Spaces problem:
+  the same collection behaviour is what stops **Stage Manager** treating the window as an ordinary app
+  window and shuffling it behind whatever has focus. Two notes in this file already said so, both
+  written when Rust still guaranteed it. `Stationary` is now set explicitly, and `Managed` cleared —
+  AppKit treats those as mutually exclusive, so asking for one means clearing the other.
+- **One native block, on the main thread.** The level went through the window runtime, which defers to
+  the main thread, while the collection bitmask was read-modify-written directly from whatever thread
+  the command arrived on. `-[NSWindow setCollectionBehavior:]` is main-thread-only and the ordering
+  between the two was accidental. Doing both in one `run_on_main_thread` block also makes good on the
+  comment claiming they are applied as a set: previously a failure in the last of three left the first
+  two applied and returned a blanket error.
+- **Status level, not floating.** "Above every window" has to include other apps' floating panels — a
+  picture-in-picture video, a palette — and floating level only clears ordinary windows. Being above
+  the menu bar's level is harmless because the window is always clamped into the monitor's WORK area,
+  which excludes the menu bar, so it can never actually sit over it.
+- **Re-applied on every show**, not once at boot. Nothing used to: not the minimise toggle, not the
+  safety fallback, not the second-launch handler.
+- **The boot report now records what the window ACTUALLY has** — its level and its collection-behaviour
+  bits, read back off the live window after the writes, decoded into named flags. Recording what was
+  *intended* would have caught none of this. This is the same rule that turned "it feels glitchy" into
+  a number: the app already recorded `visibilityState` and `hasFocus` and not the one thing failing.
+
+### the default size is the size it is used at
+0.75×, which is where the user settled, and which is what the window now starts at. The floor dropped
+to 0.5× so the default is not pinned at the bottom of its own range — a default at the edge of its
+range is a sign the range is wrong. "Small" in the tray moved from 1× to 0.75× so a fresh install lands
+ON a named rung rather than between two; Medium and Large are unchanged, so no existing window resizes.

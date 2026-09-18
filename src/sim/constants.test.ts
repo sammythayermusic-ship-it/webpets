@@ -43,14 +43,19 @@ describe('the scale', () => {
       expect(rung).toBeGreaterThanOrEqual(MIN_SCALE);
       expect(rung).toBeLessThanOrEqual(MAX_SCALE);
     }
-    // Small/Medium/Large are still 1x/2x/3x, so nobody's window changes size on upgrade.
-    expect(windowSizeForScale(SCALE_S)).toEqual({ width: 368, height: 288 });
+    // Small moved from 1x to 0.75x so that a fresh install starts ON a named rung rather than between
+    // two; Medium and Large are unchanged, so no existing window resizes on upgrade.
+    expect(windowSizeForScale(SCALE_S)).toEqual({ width: 288, height: 228 });
     expect(windowSizeForScale(SCALE_M)).toEqual({ width: 688, height: 528 });
     expect(windowSizeForScale(SCALE_L)).toEqual({ width: 1008, height: 768 });
   });
 
-  it('defaults to Medium', () => {
-    expect(DEFAULT_SCALE).toBe(SCALE_M);
+  it('defaults to Small, and the default is not at the edge of its own range', () => {
+    // A default sitting at the very bottom of the range is a sign the range is wrong: the size the app
+    // starts at should have room below it as well as above.
+    expect(DEFAULT_SCALE).toBe(SCALE_S);
+    expect(DEFAULT_SCALE).toBeGreaterThan(MIN_SCALE);
+    expect(DEFAULT_SCALE).toBeLessThan(MAX_SCALE);
   });
 
   it('is the grid at scaleFactor plus WINDOW_PAD on every side', () => {

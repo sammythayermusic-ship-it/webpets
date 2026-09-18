@@ -119,6 +119,7 @@ export function createTauriPlatform(): Platform {
       onMoved: (cb) => subscribe<WindowGeometry>('window-moved', cb),
       setScaleLive: (scale: Scale, live: boolean) => invoke<WindowGeometry>('set_scale_live', { scale, live }),
       setInteractionLock: (ms: number) => invoke<void>('set_interaction_lock', { ms }),
+      getLayering: () => invoke<{ level: number; behavior: number }>('get_layering'),
       setLayering: (opts) =>
         invoke<void>('set_layering', {
           alwaysOnTop: opts.alwaysOnTop,

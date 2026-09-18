@@ -48,7 +48,7 @@ describe('nextScale', () => {
       seen.push(n);
     }
     expect(n, 'reaches the ceiling').toBe(MAX_SCALE);
-    expect(seen.length, 'in a sensible number of presses').toBeLessThan(15);
+    expect(seen.length, 'in a sensible number of presses').toBeLessThanOrEqual(16);
   });
 });
 

@@ -45,16 +45,21 @@ export const GRID_H = 240;
  */
 export type Scale = number;
 export const SCALE_STEPS_PER_UNIT = 8;
-/** 0.75x. Below this the pet is too small to read. */
-export const MIN_SCALE = 6;
+/** 0.5x. Half the grid; below this the fish stops being readable at all. */
+export const MIN_SCALE = 4;
 /** 4x, which is exactly 1:1 with the art's own resolution and so the natural ceiling. */
 export const MAX_SCALE = 32;
-/** The named rungs the tray menu offers and the +/- buttons snap to. */
-export const SCALE_S: Scale = 8;
+/**
+ * The named rungs the tray menu offers.
+ *
+ * Small is 0.75x rather than 1x so that it is the size the app starts at: a fresh install landing
+ * between two named rungs would show no tick in the Size menu.
+ */
+export const SCALE_S: Scale = 6;
 export const SCALE_M: Scale = 16;
 export const SCALE_L: Scale = 24;
 /** Scale a fresh install boots at, and the pre-boot fallback size in `src-tauri/tauri.conf.json`. */
-export const DEFAULT_SCALE: Scale = 16;
+export const DEFAULT_SCALE: Scale = 6;
 /** Transparent padding around the habitat on every side, in CSS px: room for the HUD pill, caption and drop shadow. */
 export const WINDOW_PAD = 24;
 

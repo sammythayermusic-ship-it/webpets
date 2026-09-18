@@ -120,6 +120,14 @@ export interface WindowApi {
    * pointerup cannot leave the padding permanently opaque.
    */
   setInteractionLock(ms: number): Promise<void>;
+  /**
+   * The window's level and collection-behaviour bits, read back off the LIVE window.
+   *
+   * What was intended is not worth reporting; what the window actually has is. The failure this exists
+   * to catch was invisible for exactly that reason — the window kept floating whatever else failed, so
+   * "always on top" looked fine while the collection behaviour was silently never applied.
+   */
+  getLayering(): Promise<{ level: number; behavior: number }>;
 }
 
 /** How the habitat window relates to other windows, desktops and fullscreen apps. */
