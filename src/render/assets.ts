@@ -1,16 +1,23 @@
-// Texture loading. Every texture is loaded nearest-neighbor from an absolute `/...` URL
+// Texture loading. Every texture is loaded with LINEAR filtering from an absolute `/...` URL
 // (Vite publicDir = assets/, so `habitats/fish/bowl/bg.png` is served at `/habitats/fish/bowl/bg.png`).
 // Manifest parsing lives in ./manifest.ts (pure).
 
 import { ImageSource, Texture, TextureStyle, loadTextures as pixiLoadTextures } from 'pixi.js';
 
-export { loadManifest, parseManifest, ManifestError, MANIFEST_URL } from './manifest';
+export { loadManifest, parseManifest, stateFiles, ManifestError, MANIFEST_URL } from './manifest';
 
 /**
  * Must run before any texture is created; idempotent.
  *
- * Two jobs. Nearest scaling is the pixel-art requirement. Disabling Pixi's worker loader is what makes
- * the packaged app render at all: by default Pixi loads every texture inside a Web Worker created from
+ * Two jobs.
+ *
+ * Linear scaling is the smooth-3D requirement. The art is pre-rendered at 6x the logical grid, so it is
+ * DOWNSCALED at every window size but the largest — exactly the case nearest filtering handles worst,
+ * since it point-samples one texel in six and aliases every soft edge the renders have. This was
+ * 'nearest' for the whole pixel-art era and was the structural half of that contract.
+ *
+ * Disabling Pixi's worker loader is what makes the packaged app render at all: by default Pixi loads
+ * every texture inside a Web Worker created from
  * a `blob:` URL, and that worker calls plain `fetch()`. Under the dev server's `http://localhost:1420`
  * that is fine, but the packaged app is served from `tauri://localhost`, and a fetch of a custom-scheme
  * URL from a blob-worker never reaches Tauri's protocol handler — so every texture failed and the app
@@ -22,7 +29,7 @@ export { loadManifest, parseManifest, ManifestError, MANIFEST_URL } from './mani
  * is decoding about a dozen small PNGs on the main thread once at boot.
  */
 export function configureAssetPipeline(): void {
-  TextureStyle.defaultOptions.scaleMode = 'nearest';
+  TextureStyle.defaultOptions.scaleMode = 'linear';
   // `config` is optional in Pixi's LoaderParser type but always present on this built-in parser.
   const config = pixiLoadTextures.config;
   if (config) config.preferWorkers = false;
@@ -45,7 +52,7 @@ export function assetUrl(file: string): string {
 }
 
 /**
- * Loads one PNG as a nearest-neighbour Texture.
+ * Loads one PNG as a linear-filtered Texture.
  *
  * Deliberately does NOT go through `Assets.load`. Pixi's resolver rewrites the URL using a helper that
  * is blind to custom schemes (see {@link assetUrl}), so under `tauri://` it asks for a path that does
@@ -72,7 +79,13 @@ export async function loadTexture(file: string): Promise<Texture> {
   const source = new ImageSource({
     resource: bitmap,
     alphaMode: 'premultiply-alpha-on-upload',
-    scaleMode: 'nearest',
+    scaleMode: 'linear',
+    // Mipmaps are not a nicety here. The art is several times the logical grid, so at the smallest
+    // window it is minified 4:1 or worse, and bilinear-only minification of a large texture crawls and
+    // shimmers as the sprite moves — the exact artefact smooth art is supposed to remove. This is also
+    // why animation frames are separate files rather than one packed sheet: neighbouring frames in a
+    // sheet bleed into each other at low mip levels.
+    autoGenerateMipmaps: true,
     label: url,
   });
   return new Texture({ source, label: url });

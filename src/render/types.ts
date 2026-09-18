@@ -41,6 +41,12 @@ export interface WaterShape {
 }
 
 export interface ManifestHabitat {
+  /**
+   * The LOGICAL habitat size. It defines behaviour, water bounds and hit regions, and it does NOT
+   * change when the art's resolution does: a 1280x960 layer set and a 320x240 one both describe this
+   * same 320x240 grid, and the renderer scales each layer by grid/texture to cover it. The factor is
+   * derived from the texture rather than declared here precisely so the two can never drift.
+   */
   grid: [number, number];
   layers: ManifestLayer[];
   /** Bounding rect of the water. */
@@ -57,8 +63,21 @@ export interface ManifestHabitat {
   opaqueRect: Rect;
 }
 
+/**
+ * Where a state's frames live.
+ *
+ * `strip` is the Phase 0 pixel-art layout: one PNG, frames left to right in a single row.
+ * `sequence` is one PNG per frame, which is what a 3D render produces — and which is the only one of
+ * the two that can be mipmapped, because neighbouring frames in a strip bleed into each other at low
+ * mip levels. Mipmaps are not optional here: at the smallest window the art is minified several times
+ * over, and bilinear-only minification of a large texture crawls as the sprite moves.
+ */
+export type FrameSource =
+  | { readonly kind: 'strip'; readonly file: string }
+  | { readonly kind: 'sequence'; readonly files: readonly string[] };
+
 export interface ManifestSpriteState {
-  file: string;
+  source: FrameSource;
   frames: number;
   sequence: number[];
   loop: boolean;
@@ -68,7 +87,17 @@ export interface ManifestSpriteState {
 }
 
 export interface ManifestSprite {
+  /**
+   * The frame's LOGICAL footprint in grid px. The texture may be any integer multiple of this, so
+   * raising the art's resolution never changes how big the pet is drawn — that is what `frame` means.
+   */
   frame: [number, number];
+  /**
+   * Frames per second the art was authored at, independent of the simulation's tick rate. Defaults to
+   * PET_FPS so the Phase 0 strips, whose `sequence` tables were hand-written as 8 Hz step tables, keep
+   * their exact timing while newer art declares its own.
+   */
+  fps?: number;
   /** Size of the drawn body inside the frame (centered), so behavior can keep it inside the water. */
   body: { w: number; h: number };
   states: Record<string, ManifestSpriteState>;
@@ -165,7 +194,11 @@ export interface FishOutput {
   x: number;
   y: number;
   facing: 1 | -1;
-  /** True for exactly one 8 fps step when facing changes; the player draws that frame at half width. */
+  /**
+   * True for exactly one tick when facing changes, and the tick the behaviour holds position for.
+   * The sprite player ignores it and tweens the flip off the facing change itself, which cannot be
+   * missed or double-triggered by the several rendered frames that share one tick.
+   */
   turning: boolean;
   anim: PetAnim;
   /** Index into input.flakes that was eaten this tick, else null. */

@@ -1,17 +1,29 @@
-// The habitat scene. Everything except the drop shadow renders into a RenderTexture the size of the
-// manifest habitat's grid (nearest, resolution 1) in grid units; that one texture is drawn at (WINDOW_PAD, WINDOW_PAD) scaled by the integer
-// scale, which is the structural pixel-grid guarantee. Pet + flakes step at PET_FPS via a deltaMS
-// accumulator; bubbles, the pantry blink and the night fade run at ticker rate.
+// The habitat scene. The layer stack is drawn straight to the stage in GRID units: `layers.root` sits
+// at (WINDOW_PAD, WINDOW_PAD) and carries the window scale, while each file-backed layer carries the
+// reciprocal of its own art resolution. Everything between those two — parallax, flakes, bubbles, the
+// fog, the pet's centre — therefore still speaks plain grid px.
+//
+// This used to composite into a 320x240 RenderTexture at resolution 1 and upscale it with nearest
+// filtering. That indirection existed ONLY to guarantee big square pixels, and it is what the drop
+// shadow was made of (two black-tinted copies of that one texture). Both are gone with the pixel-art
+// direction; the 3D bowl art carries its own baked contact shadow.
+//
+// Three clocks, which is the other half of the change:
+//   - the behaviour steps at PET_FPS (8 Hz) and still returns clamped integer grid positions;
+//   - the pet's animation advances at the ART's frame rate, inside the sprite player;
+//   - the drawn position is interpolated across the current tick on EVERY rendered frame.
+// Bubbles, the pantry blink and the night fade run at ticker rate as before.
 
-import { Application, Container, RenderTexture, Sprite, type Ticker } from 'pixi.js';
+import { Application, Container, Rectangle, type Ticker } from 'pixi.js';
 import { DEFAULT_SCALE, GRID_H, GRID_W, PET_FPS, WINDOW_PAD, windowSizeForScale, type Scale } from '../sim/constants';
 import type { Rect, Rng } from '../sim/types';
 import { createFishBehavior } from '../species/fish/behavior';
 import { configureAssetPipeline, loadTextures } from './assets';
-import { ART_UNIT, createBubbles, createSheen, parallaxOffset, type Bubbles, type Sheen } from './fx';
+import { createBubbles, createSheen, parallaxOffset, type Bubbles, type Sheen } from './fx';
 import { createFlakes, type Flakes } from './food';
 import { buildLayers, type LayerStack } from './layers';
 import { createSpritePlayer, type SpritePlayer } from './spritePlayer';
+import { stateFiles } from './manifest';
 import { makeWaterBounds } from './water';
 import type { FishBehavior, HabitatScene, Manifest, ManifestHabitat, ManifestSprite, SceneEvent, SceneView, WaterBounds } from './types';
 
@@ -20,13 +32,6 @@ const STEP_MS = 1000 / PET_FPS;
 const MAX_ACC_MS = 1000;
 /** Drive the scene from a timer once rAF has been quiet this long (see the watchdog in mount). */
 const WATCHDOG_STALL_MS = 400;
-/**
- * Drop shadow offsets in grid px. They are ART_UNIT-scaled because the shadow is drawn in CSS px
- * (`offset * scale`): a grid px is physically smaller on a finer grid, so a literal 1/2 here would halve
- * the shadow on screen when the grid doubled.
- */
-const SHADOW_NEAR_PX = 1 * ART_UNIT;
-const SHADOW_FAR_PX = 2 * ART_UNIT;
 const HABITAT_KEY = 'fish/bowl';
 const SPRITE_KEY = 'fish';
 
@@ -38,10 +43,6 @@ export function windowSize(scale: Scale): { w: number; h: number } {
 
 interface Mounted {
   app: Application;
-  rt: RenderTexture;
-  habitatSprite: Sprite;
-  shadowFar: Sprite;
-  shadowNear: Sprite;
   layers: LayerStack;
   player: SpritePlayer;
   behavior: FishBehavior;
@@ -49,6 +50,8 @@ interface Mounted {
   flakes: Flakes;
   bubbles: Bubbles;
   sheen: Sheen;
+  /** Advance every clock by `dtMs` and redraw. The single funnel: ticker, watchdog and snapshot all use it. */
+  advance: (dtMs: number) => void;
   tick: (t: Ticker) => void;
   watchdog: ReturnType<typeof setInterval>;
 }
@@ -58,9 +61,9 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
   const spriteDef: ManifestSprite | undefined = manifest.sprites[SPRITE_KEY];
   if (!habitat) throw new Error(`manifest has no habitat "${HABITAT_KEY}"`);
   if (!spriteDef) throw new Error(`manifest has no sprite "${SPRITE_KEY}"`);
-  // The RenderTexture is sized from the manifest's grid, but the window geometry around it comes from
-  // the constants, so the two must agree: a manifest with a different grid would be drawn into a
-  // texture the window has no room for.
+  // The window geometry is derived from the constants, so a manifest describing a different logical
+  // grid would be drawn into a window with no room for it. The art's RESOLUTION is free to differ —
+  // that factor is derived per texture in layers.ts — but the logical grid is not.
   const [gridW, gridH] = habitat.grid;
   if (gridW !== GRID_W || gridH !== GRID_H)
     throw new Error(
@@ -73,6 +76,13 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
   let pointer: { x: number; y: number } | null = null;
   let acc = 0;
   let lastAdvanceAt = 0;
+  /**
+   * Body centre at the start and end of the CURRENT behaviour tick, grid px. Both are seeded to the
+   * pet anchor and are never null, which is what makes it impossible for the fish to lerp in from
+   * (0, 0) — the failure the old "hidden until the first step" placement had in a different form.
+   */
+  let poseFrom = { x: habitat.petAnchor[0], y: habitat.petAnchor[1] };
+  let poseTo = { x: habitat.petAnchor[0], y: habitat.petAnchor[1] };
   /** False until the behavior has positioned the pet once; the sprite stays hidden so it never flashes at (0, 0). */
   let placed = false;
   const listeners: Record<SceneEvent, Set<() => void>> = { bite: new Set(), 'flakes-gone': new Set() };
@@ -85,14 +95,10 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
     if (!m) return;
     const { w, h } = windowSize(scale);
     m.app.renderer.resize(w, h);
-    m.habitatSprite.position.set(WINDOW_PAD, WINDOW_PAD);
-    m.habitatSprite.scale.set(scale);
-    // Stepped 2-tone drop shadow: two black-tinted copies of the habitat texture, offset by SHADOW_NEAR_PX
-    // and SHADOW_FAR_PX grid px (2 and 4 CSS px at scale 1, unchanged from the 160x120 grid at scale 2).
-    m.shadowNear.position.set(WINDOW_PAD + SHADOW_NEAR_PX * scale, WINDOW_PAD + SHADOW_NEAR_PX * scale);
-    m.shadowNear.scale.set(scale);
-    m.shadowFar.position.set(WINDOW_PAD + SHADOW_FAR_PX * scale, WINDOW_PAD + SHADOW_FAR_PX * scale);
-    m.shadowFar.scale.set(scale);
+    // The whole transform chain: grid px -> CSS px happens here, CSS px -> device px is the renderer's
+    // resolution, and texture px -> grid px is on each leaf. Nothing in between needs to know.
+    m.layers.root.position.set(WINDOW_PAD, WINDOW_PAD);
+    m.layers.root.scale.set(scale);
   };
 
   const applyPointer = (): void => {
@@ -113,7 +119,18 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       m.bubbles.setEnabled(alive);
       m.player.sprite.visible = next.phase !== 'memorial';
       if (!alive) m.flakes.clear();
-      if (alive && prev && prev.phase !== 'alive') m.behavior.reset(); // new pet
+      if (alive && prev && prev.phase !== 'alive') {
+        // New pet. The behaviour re-inits at the water centre on its next step, but the RENDER-side
+        // pose still holds the corpse's: at the surface, possibly far off-centre, facing whichever way
+        // it died. Without this the new fish slides in from the dead one's position and plays a
+        // spurious flip on the way.
+        m.behavior.reset();
+        const [ax, ay] = habitat.petAnchor;
+        poseFrom = { x: ax, y: ay };
+        poseTo = { x: ax, y: ay };
+        acc = 0; // the new pet's first tick is a whole one
+        m.player.resetPose(ax, ay, 1);
+      }
     }
     if (!prev || prev.label !== next.label || prev.phase !== next.phase) {
       m.layers.setStarving(alive && next.label === 'starving');
@@ -154,9 +171,12 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
     }
     m.player.play(out.anim);
     m.player.setFacing(out.facing, out.turning);
-    m.player.setPosition(out.x, out.y);
+    // Roll the segment forward INSIDE the step loop. After a catch-up burst that leaves poseFrom and
+    // poseTo bracketing only the final tick, so the fish resumes from where it is rather than
+    // rubber-banding through every tick it missed.
+    poseFrom = poseTo;
+    poseTo = { x: out.x, y: out.y };
     placed = true;
-    m.player.step();
     if (ate) emit('bite');
     if (before > 0 && m.flakes.count() === 0 && (ate || dissolved > 0)) emit('flakes-gone');
   };
@@ -173,8 +193,13 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
         height: h,
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
-        roundPixels: true,
+        // roundPixels snaps to the RENDER TARGET's pixel grid. That target used to be the 320x240
+        // RenderTexture, which is precisely how big square pixels were guaranteed; now it is the canvas
+        // in device px, where snapping would quantise the interpolated motion and jitter the sampling
+        // of a minified sprite. Off.
+        roundPixels: false,
         backgroundAlpha: 0,
+        // MSAA on geometry edges; textured quads do not benefit and this is all textured quads.
         antialias: false,
         preference: 'webgl',
       });
@@ -194,7 +219,11 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
         (l.name === 'bg' ? required : optional).push(l.file);
       }
       for (const [state, st] of Object.entries(spriteDef.states)) {
-        (state === 'idle' ? required : optional).push(st.file);
+        // Fans out: a strip contributes one path, a rendered sequence one per frame. Every idle frame
+        // is required, which is stricter than before and deliberate — a pet missing a frame of its
+        // resting animation is broken, and a silent gap there reads as a stutter nobody can place.
+        const bucket = state === 'idle' ? required : optional;
+        for (const f of stateFiles(st)) bucket.push(f);
       }
       const [requiredTex, optionalTex] = await Promise.all([
         loadTextures(required, false),
@@ -204,7 +233,10 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
 
       const layers = buildLayers(habitat, textures);
       const bounds = makeWaterBounds(habitat.waterShape);
-      const player = createSpritePlayer(spriteDef, textures);
+      // The scene is the one module that legitimately knows both clocks, so it passes the tick length
+      // in rather than the player importing PET_FPS: a flip then covers exactly the tick the behaviour
+      // holds position for, and the fish spins in place before swimming on.
+      const player = createSpritePlayer(spriteDef, textures, { turnMs: STEP_MS });
       // Placed at its anchor and shown immediately, NOT hidden until the first behaviour step. The
       // sprite used to start invisible at (0, 0) so a one-frame flash there could not be seen, but
       // that made the fish's visibility depend on the ticker actually running: in a packaged app whose
@@ -214,7 +246,7 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       // Through the player's API, not sprite.position: the player re-derives sprite.position from its
       // own px/py inside refresh(), which play()/setFacing() call, so a direct assignment is wiped the
       // first time the view is applied.
-      player.setPosition(habitat.petAnchor[0], habitat.petAnchor[1]);
+      player.resetPose(habitat.petAnchor[0], habitat.petAnchor[1], 1);
       layers.slots.pet.addChild(player.sprite);
       const flakes = createFlakes(habitat.waterShape, bounds);
       layers.slots.food.addChild(flakes.container);
@@ -223,19 +255,8 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       const sheen = createSheen();
       layers.slots.glass.addChild(sheen.sprite);
 
-      const rt = RenderTexture.create({
-        width: gridW,
-        height: gridH,
-        resolution: 1,
-        scaleMode: 'nearest',
-        antialias: false,
-        label: 'habitat-rt',
-      });
-      const shadowFar = new Sprite({ texture: rt, tint: 0x000000, alpha: 0.1, label: 'shadow-far', roundPixels: true });
-      const shadowNear = new Sprite({ texture: rt, tint: 0x000000, alpha: 0.16, label: 'shadow-near', roundPixels: true });
-      const habitatSprite = new Sprite({ texture: rt, label: 'habitat', roundPixels: true });
       const stage: Container = app.stage;
-      stage.addChild(shadowFar, shadowNear, habitatSprite);
+      stage.addChild(layers.root);
 
       /** Advance and redraw by `dtMs`, from whichever clock is driving us. */
       const advance = (dtMs: number): void => {
@@ -246,9 +267,20 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
           acc -= STEP_MS;
           stepOnce();
         }
+        // What is left of the current tick, in [0, 1). Deriving the interpolation from the SAME
+        // accumulator that drives the steps means the two can never drift apart, which a second timer
+        // would eventually do.
+        //
+        // Interpolating between two clamped positions is always legal, and not merely close enough:
+        // the legal set for a body centre is the water ellipse eroded by the body box and cut to the
+        // surface/floor band. Eroding a convex set leaves it convex and intersecting convex sets keeps
+        // them convex, so every point on the segment between two legal centres is itself legal.
+        const t = acc / STEP_MS;
+        m.player.setPosition(poseFrom.x + (poseTo.x - poseFrom.x) * t, poseFrom.y + (poseTo.y - poseFrom.y) * t);
+        m.player.advance(dtMs);
         m.bubbles.update(dtMs, rng);
         m.layers.update(dtMs);
-        m.app.renderer.render({ container: m.layers.root, target: m.rt });
+        m.app.render();
       };
 
       const tick = (t: Ticker): void => advance(t.deltaMS);
@@ -272,12 +304,12 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
         if (since >= WATCHDOG_STALL_MS) advance(Math.min(MAX_ACC_MS, since));
       }, STEP_MS);
 
-      m = { app, rt, habitatSprite, shadowFar, shadowNear, layers, player, behavior: createFishBehavior(), bounds, flakes, bubbles, sheen, tick, watchdog };
+      m = { app, layers, player, behavior: createFishBehavior(), bounds, flakes, bubbles, sheen, advance, tick, watchdog };
       layoutHabitat();
       if (view) applyView(view, null);
       applyPointer();
-      // Render one frame into the RT before the first ticker callback so the shadow/habitat are not blank.
-      app.renderer.render({ container: layers.root, target: rt });
+      // Draw once before the first ticker callback so the window never shows an empty frame.
+      app.render();
       app.ticker.add(tick);
     },
 
@@ -346,11 +378,14 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       return {
         petVisible: sprite.visible,
         petAnim: m.player.state(),
-        petPos: { x: Math.round(sprite.x), y: Math.round(sprite.y) },
+        // The behaviour's own last position, not the live sprite's. The sprite is mid-interpolation
+        // between ticks, and mid-flip its measured width passes through ZERO as scale.x sweeps across
+        // — a report of a 0px-wide fish would send someone hunting a bug that does not exist.
+        petPos: { x: poseTo.x, y: poseTo.y },
         steps,
         stepSkips,
         hasView: view !== null,
-        petFrame: { w: Math.round(sprite.width), h: Math.round(sprite.height) },
+        petFrame: { w: spriteDef.frame[0], h: spriteDef.frame[1] },
         layerAlpha,
       };
     },
@@ -358,13 +393,16 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
     async snapshot() {
       if (!m) throw new Error('scene not mounted');
       // A hidden tab or a suspended webview gets no ticker callbacks, so nothing here can be assumed
-      // to have run. Step the behaviour at least once before rendering: the pet sprite stays hidden at
-      // (0, 0) until its first step places it, so without this a capture of a backgrounded page shows
-      // a bowl with no fish in it and looks like a rendering bug.
-      if (!placed) stepOnce();
-      m.app.renderer.render({ container: m.layers.root, target: m.rt });
+      // to have run. Drive one whole tick first, or a capture of a backgrounded page shows a pet that
+      // has never been placed and looks like a rendering bug.
+      if (!placed) m.advance(STEP_MS);
       m.app.render();
-      return m.app.renderer.extract.base64({ target: m.app.stage, format: 'png' });
+      const { w, h } = windowSize(scale);
+      // Framed explicitly to the canvas. Without this the extract frames the STAGE's bounds, which are
+      // now the union of the layer sprites rather than one habitat sprite: the transparent pad would be
+      // cropped away and anything overhanging the canvas would be included, so captures would silently
+      // stop being comparable with each other or with the window.
+      return m.app.renderer.extract.base64({ target: m.app.stage, frame: new Rectangle(0, 0, w, h), format: 'png' });
     },
 
     destroy() {
@@ -378,7 +416,6 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       cur.sheen.destroy();
       cur.player.destroy();
       cur.layers.destroy();
-      cur.rt.destroy(true);
       cur.app.destroy({ removeView: true }, { children: true });
       listeners.bite.clear();
       listeners['flakes-gone'].clear();

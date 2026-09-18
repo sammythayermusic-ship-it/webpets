@@ -31,7 +31,12 @@ body {
 
 #app > canvas {
   display: block;
-  image-rendering: pixelated;
+  /*
+   * Deliberately NOT `image-rendering: pixelated`. This is outside Pixi's control: the browser scales
+   * the canvas backing store to CSS px, so on a fractional device pixel ratio a `pixelated` canvas
+   * re-introduces hard stair-steps on the smooth 3D art no matter how the textures are filtered.
+   * The `#ui canvas` rule below keeps it, because the tray chip really is pixel art.
+   */
 }
 
 #ui {

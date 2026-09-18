@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadTextures as pixiLoadTextures } from 'pixi.js';
+import { TextureStyle, loadTextures as pixiLoadTextures } from 'pixi.js';
 import { assetUrl, configureAssetPipeline, loadTextures } from './assets';
 
 // These pin the fix for a bug that shipped in a release build and that NO other test here can catch:
@@ -16,6 +16,14 @@ describe('asset pipeline configuration', () => {
       pixiLoadTextures.config?.preferWorkers,
       'Pixi must not load textures in a blob worker: its fetch cannot reach tauri://localhost',
     ).toBe(false);
+  });
+
+  it('filters linearly, because the art is minified at every window but the largest', () => {
+    configureAssetPipeline();
+    // Nothing guarded this before, which is how a one-word change could have silently undone the whole
+    // smooth-art switch: no other test in the suite can see a filter mode. The art is rendered at
+    // several times the logical grid, so nearest would point-sample one texel in four and crawl.
+    expect(TextureStyle.defaultOptions.scaleMode).toBe('linear');
   });
 
   it('keeps createImageBitmap enabled', () => {

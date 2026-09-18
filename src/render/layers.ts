@@ -1,6 +1,13 @@
-// Layer stack inside the habitat RenderTexture. Fixed slot order (shadow is NOT here: it is drawn in CSS px
-// under the habitat sprite by the scene). `memorial` is the bg variant; `pantry_fill` is cropped via a
-// dynamic texture frame; `night` multiplies with a 2 s stepped fade.
+// Layer stack for the habitat. Fixed slot order (`shadow` is NOT here — the bowl art carries its own
+// baked contact shadow). `memorial` is the bg variant; `pantry_fill` is cropped via a dynamic texture
+// frame; `night` multiplies with a 2 s stepped fade.
+//
+// Everything in this container is positioned in GRID px. A file-backed layer's art may be any integer
+// multiple of the grid, so each such sprite is scaled by grid/texture to cover exactly its grid rect.
+// The factor is DERIVED from the texture rather than declared in the manifest, so the two cannot drift
+// — and it means a 1x pixel layer and a 4x rendered one can coexist while art is migrated one layer at
+// a time. Keeping one set of coordinates for art, procedural sprites and hit regions alike is what
+// lets the art's resolution change without touching anything that reasons about position.
 
 import { Container, Graphics, Rectangle, Sprite, Texture } from 'pixi.js';
 import type { LayerName, ManifestHabitat, ManifestLayer, ScenePhase } from './types';
@@ -62,13 +69,33 @@ export interface LayerStack {
   destroy(): void;
 }
 
-function fileSprite(layer: ManifestLayer, textures: ReadonlyMap<string, Texture>): Sprite | null {
+/** Art px per grid px for one layer texture, or a thrown error naming art that does not fit the grid. */
+function layerArtScale(file: string, tex: Texture, grid: readonly [number, number]): number {
+  const kx = tex.width / grid[0];
+  const ky = tex.height / grid[1];
+  // Loud, because the silent version is a squashed bowl that still looks plausible: a 1920x1080 export
+  // of a 4:3 habitat would simply render slightly wrong and nobody would know which file to blame.
+  if (kx !== ky || !Number.isInteger(kx) || kx < 1) {
+    throw new Error(
+      `[render] ${file}: ${tex.width}x${tex.height} is not an integer multiple of the ${grid[0]}x${grid[1]} habitat grid`,
+    );
+  }
+  return kx;
+}
+
+function fileSprite(
+  layer: ManifestLayer,
+  textures: ReadonlyMap<string, Texture>,
+  grid: readonly [number, number],
+): { sprite: Sprite; artScale: number } | null {
   if (layer.file === undefined) return null;
   const tex = textures.get(layer.file);
   if (!tex) return null;
+  const artScale = layerArtScale(layer.file, tex, grid);
   const s = new Sprite({ texture: tex, label: layer.name });
+  s.scale.set(1 / artScale);
   if (layer.blend === 'multiply') s.blendMode = 'multiply';
-  return s;
+  return { sprite: s, artScale };
 }
 
 export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<string, Texture>): LayerStack {
@@ -80,6 +107,8 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
   let memorial: Sprite | null = null;
   let medium: Sprite | null = null;
   let pantryFill: Sprite | null = null;
+  /** Art px per grid px for the pantry_fill texture; its crop rect addresses TEXELS, not grid px. */
+  let pantryArt = 1;
   let night: Sprite | null = null;
 
   const sorted = habitat.layers
@@ -90,8 +119,9 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
   for (const { l } of sorted) {
     if (l.name === 'shadow') continue;
     const slot = slots[SLOT_OF[l.name]];
-    const sprite = fileSprite(l, textures);
-    if (!sprite) continue;
+    const built = fileSprite(l, textures, habitat.grid);
+    if (!built) continue;
+    const { sprite, artScale: art } = built;
     switch (l.name) {
       case 'bg':
         bg = sprite;
@@ -106,14 +136,17 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
       case 'pantry_fill': {
         const r = habitat.pantryRect;
         if (!r) break; // no in-scene gauge in this habitat
+        // The crop rect is in grid px but addresses the TEXTURE, so it scales with the art; the sprite's
+        // own position stays in grid px because the 1/artScale on the sprite converts for us.
         sprite.texture = new Texture({
           source: sprite.texture.source,
-          frame: new Rectangle(r.x, r.y, r.w, r.h),
+          frame: new Rectangle(r.x * art, r.y * art, r.w * art, r.h * art),
           dynamic: true,
           label: 'pantry_fill:crop',
         });
         sprite.position.set(r.x, r.y);
         pantryFill = sprite;
+        pantryArt = art;
         break;
       }
       case 'night':
@@ -157,11 +190,13 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
     if (!pantryFill || !r) return;
     const top = r.y + Math.round(r.h * (1 - pantryFraction));
     const h = r.y + r.h - top;
+    // The frame addresses the texture, so it is in art px; the sprite's position stays in grid px,
+    // because the 1/artScale already on the sprite converts the framed size back for us.
     const frame = pantryFill.texture.frame;
-    frame.x = r.x;
-    frame.y = top;
-    frame.width = r.w;
-    frame.height = Math.max(0, h);
+    frame.x = r.x * pantryArt;
+    frame.y = top * pantryArt;
+    frame.width = r.w * pantryArt;
+    frame.height = Math.max(0, h * pantryArt);
     // update() recomputes the UVs and (because the texture is dynamic) notifies the sprite to re-measure.
     pantryFill.texture.update();
     pantryFill.position.set(r.x, top);

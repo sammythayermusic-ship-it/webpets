@@ -1,6 +1,6 @@
 // Manifest schema validation + fetch. Pure (no Pixi) so it is testable in node.
 
-import type { LayerName, Manifest, ManifestHabitat, ManifestLayer, ManifestSprite, ManifestSpriteState } from './types';
+import type { FrameSource, LayerName, Manifest, ManifestHabitat, ManifestLayer, ManifestSprite, ManifestSpriteState } from './types';
 import type { Rect } from '../sim/types';
 
 export const MANIFEST_URL = '/manifest.json';
@@ -43,6 +43,12 @@ function int(v: unknown, path: string): number {
   return n;
 }
 
+function positive(v: unknown, path: string): number {
+  const n = num(v, path);
+  if (n <= 0) throw new ManifestError(path, 'must be > 0');
+  return n;
+}
+
 function str(v: unknown, path: string): string {
   if (typeof v !== 'string' || v.length === 0) throw new ManifestError(path, 'expected a non-empty string');
   return v;
@@ -73,6 +79,35 @@ function assetPath(v: unknown, path: string): string {
   if (s.startsWith('/') || s.includes('..')) throw new ManifestError(path, 'must be relative to the assets root');
   if (/@\d+x\./.test(s)) throw new ManifestError(path, '@Nx suffixes are forbidden (Pixi would halve the size)');
   return s;
+}
+
+/**
+ * A state's frames. A bare string is the Phase 0 shorthand for a one-row strip, kept so the pixel-art
+ * manifest parses unchanged while states are migrated to rendered sequences one at a time.
+ *
+ * `files.length` is checked against `frames` here rather than at load time. That is the argument for
+ * listing every path instead of a `{dir, prefix, pad}` template: a template can only be validated by
+ * touching the filesystem, and a sequence that is quietly one frame short is exactly the kind of bug
+ * that shows up as a stutter nobody can place.
+ */
+function frameSource(v: unknown, frames: number, path: string): FrameSource {
+  if (typeof v === 'string') return { kind: 'strip', file: assetPath(v, path) };
+  if (!isRecord(v)) throw new ManifestError(path, 'expected a file string or a source object');
+  const kind = v['kind'];
+  if (kind === 'strip') return { kind: 'strip', file: assetPath(v['file'], `${path}.file`) };
+  if (kind === 'sequence') {
+    if (!Array.isArray(v['files'])) throw new ManifestError(`${path}.files`, 'expected an array');
+    if (v['files'].length !== frames) {
+      throw new ManifestError(`${path}.files`, `expected ${frames} files to match "frames", got ${v['files'].length}`);
+    }
+    return { kind: 'sequence', files: v['files'].map((f, i) => assetPath(f, `${path}.files[${i}]`)) };
+  }
+  throw new ManifestError(`${path}.kind`, 'expected "strip" | "sequence"');
+}
+
+/** Every asset path a state needs: one for a strip, one per frame for a sequence. */
+export function stateFiles(state: ManifestSpriteState): readonly string[] {
+  return state.source.kind === 'strip' ? [state.source.file] : state.source.files;
 }
 
 function layer(v: unknown, path: string): ManifestLayer {
@@ -127,7 +162,7 @@ function spriteState(v: unknown, path: string): ManifestSpriteState {
     return n;
   });
   const out: ManifestSpriteState = {
-    file: assetPath(v['file'], `${path}.file`),
+    source: frameSource(v['source'] ?? v['file'], frames, `${path}.${v['source'] === undefined ? 'file' : 'source'}`),
     frames,
     sequence,
     loop: bool(v['loop'], `${path}.loop`),
@@ -157,6 +192,7 @@ function sprite(v: unknown, path: string): ManifestSprite {
   }
   return {
     frame: pair(v['frame'], `${path}.frame`),
+    ...(v['fps'] === undefined ? {} : { fps: positive(v['fps'], `${path}.fps`) }),
     body: { w: int(body['w'], `${path}.body.w`), h: int(body['h'], `${path}.body.h`) },
     states,
   };

@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { STAMP, decodePng, type Rgba } from '../../tests/unit/decodePng';
+import type { ManifestSpriteState } from './types';
 import { parseManifest } from './manifest';
+
+/** The strip PNG for a state, or a clear failure for a state that has moved to rendered frames. */
+function stripFile(def: ManifestSpriteState): string {
+  if (def.source.kind !== 'strip') throw new Error('this test describes strip art; rewrite it for rendered sequences');
+  return def.source.file;
+}
 
 /**
  * Blueprint section 12: generated placeholder art is marked PLACEHOLDER visibly. tools/gen_placeholders.py
@@ -153,7 +160,7 @@ describe('real fish strips', () => {
 
   for (const [state, def] of Object.entries(fish.states)) {
     it(`${state}: carries no placeholder stamp -- it is art, not scaffolding`, () => {
-      const png = load(def.file);
+      const png = load(stripFile(def));
       const stamped: string[] = [];
       for (let y = 0; y < png.height && stamped.length < 8; y += 1) {
         for (let x = 0; x < png.width && stamped.length < 8; x += 1) {

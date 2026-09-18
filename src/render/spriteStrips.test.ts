@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { decodePng, type Rgba } from '../../tests/unit/decodePng';
+import type { ManifestSpriteState } from './types';
 import { parseManifest } from './manifest';
+
+/** The strip PNG for a state, or a clear failure for a state that has moved to rendered frames. */
+function stripFile(def: ManifestSpriteState): string {
+  if (def.source.kind !== 'strip') throw new Error('this test describes strip art; rewrite it for rendered sequences');
+  return def.source.file;
+}
 
 /**
  * The layout contract for the fish strips, now that they are real art (tools/gen_fish.py) rather than
@@ -74,7 +81,7 @@ describe('fish sprite strips', () => {
 
   for (const [state, def] of Object.entries(fish.states)) {
     describe(state, () => {
-      const png = load(def.file);
+      const png = load(stripFile(def));
       const extents = Array.from({ length: def.frames }, (_, f) => frameExtent(png, f, fw, fh));
 
       it('is one row of frame-sized cells', () => {

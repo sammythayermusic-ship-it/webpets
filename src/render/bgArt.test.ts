@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { decodePng, type Rgba } from '../../tests/unit/decodePng';
+import type { ManifestSpriteState } from './types';
 import { parseManifest } from './manifest';
+
+/** The strip PNG for a state, or a clear failure for a state that has moved to rendered frames. */
+function stripFile(def: ManifestSpriteState): string {
+  if (def.source.kind !== 'strip') throw new Error('this test describes strip art; rewrite it for rendered sequences');
+  return def.source.file;
+}
 
 /**
  * The bowl background and the fish strips stopped being placeholders in Stage 2: `tools/gen_bg.py`
@@ -110,7 +117,7 @@ describe('fish sprite art', () => {
 
   for (const [state, def] of Object.entries(fish.states)) {
     it(`${state}: drawn from the bowl's own palette, hard alpha`, () => {
-      const png = load(def.file);
+      const png = load(stripFile(def));
       const alphas = new Set<number>();
       for (let i = 3; i < png.data.length; i += 4) alphas.add(png.data[i] ?? 0);
       expect([...alphas].sort((a, b) => a - b)).toEqual([0, 255]);

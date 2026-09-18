@@ -215,3 +215,57 @@ Two visual complaints from running the beta, both traced to the same root: geome
 - **`petAnchor` was the centre of the glass**, not of the water, so the pet mounted above the surface. Now the water centre, and `layout.test.ts` derives it rather than hardcoding a literal — a literal is exactly what went stale here.
 - **The feeder is gone.** Two layers drew it: the concept art paints a detailed one onto the rim, and `pantry.png` then covered it with a flat `#262A34` slab, which is what read as a big black square. Erasing it is geometric rather than a hand-typed rectangle — the feeder and its clip are the only opaque pixels in the top-right quadrant lying **outside the bowl's own outer glass ellipse** (fitted from the art at cx 160, cy 116, rx 81, ry 72), which a literal box cannot express because the clip crosses the rim. The flakes painted falling from its spout go too, but only above the waterline: the plant below has orange fronds that must survive.
 - **Consequences, all verified.** `opaqueRect` shrinks to `{79, 44, 162, 188}` — the feeder housing used to be the topmost opaque thing in the art, so the click-through region was reaching well above the bowl. `pantryRect` and the `pantry`/`pantry_fill` layers are removed and `ManifestHabitat.pantryRect` is now optional, because a habitat need not carry an in-scene food gauge. The pantry level reads in the hover caption instead, which **deviates from the Blueprint's visible away-mode gauge** (section 6, item 4) at the user's explicit direction. Gravel reach is unaffected: the lowest legal body centre stays at 167 and bite distance is measured from the body box, so the settled-flake regression test passes untouched.
+
+### stage 2 (render): pixel-perfect out, smooth out of the same coordinates
+The art direction reversed — cozy pixel art out, soft 3D in — at the user's explicit direction, after
+running the beta. This is the render half of that. The rule that made it cheap: **the 320x240 grid stays
+as LOGICAL coordinates and only its presentation changes.** Behaviour, water bounds, hit regions, the
+manifest geometry and every test that reasons in grid units survive untouched.
+
+- **The RenderTexture is gone.** Compositing into a 320x240 texture at resolution 1 and upscaling it
+  nearest existed for exactly one reason: to guarantee big square pixels. `layers.root` now draws
+  straight to the stage, carrying the window scale, while each file-backed layer carries the reciprocal
+  of its own art resolution. One transform chain, three places, none of them in the middle.
+- **Art resolution is DERIVED from the texture, never declared.** `layerArtScale()` computes
+  `texture.width / grid.w` and throws by name if it is not a whole number or the axes disagree. A
+  manifest field would have been one more thing to drift; deriving it also lets a 1x pixel layer and a
+  4x rendered one coexist while art is migrated one layer at a time, which is what made this landable
+  in a state where the tests still pass.
+- **The drop shadow went with the RenderTexture**, being two black-tinted copies of it. Tinting the
+  layer root instead is not equivalent — it would black out the multiply night layer and the white fog.
+  The 3D bowl art carries a baked contact shadow, and a stepped offset shadow on top of a baked one
+  reads as a bug.
+- **Three clocks, not one.** `PET_FPS` drove both the simulation and the animation. Raising it to 30 to
+  get smooth motion, which is what the plan originally said, would have rescaled every per-tick constant
+  in `behavior.ts` — px/tick speeds, `TURN_COOLDOWN`, `WANDER_RATE`, `EAT_TICKS` — and invalidated their
+  tests. Instead the behaviour still ticks at 8 Hz and still returns clamped integer positions; the
+  animation advances at the art's own fps (`ManifestSprite.fps`); and the drawn position is interpolated
+  across the current tick on every rendered frame. Interpolation is derived from the SAME accumulator
+  that drives the steps, so the two cannot drift.
+- **Interpolating between two clamped positions is provably legal**, not merely close enough: the legal
+  set for a body centre is the water ellipse eroded by the body box and cut to the surface/floor band.
+  Erosion of a convex set is convex and intersections of convex sets are convex, so every point on the
+  segment between two legal centres is legal.
+- **Turning is a cosine sweep of `scale.x` through zero**, which is what a half-turn about the fish's
+  vertical axis actually projects to under an orthographic camera — the correct 3D reading of the
+  pixel-art device of drawing one frame at half width. It is keyed off the facing CHANGE rather than the
+  behaviour's one-tick `turning` pulse, because several rendered frames now share one tick and a pulse
+  can be missed or re-applied.
+- **Frames may be a strip or a sequence of files**, and the new art will be sequences. Not only because
+  that is what a renderer emits: a strip **cannot be mipmapped**, since neighbouring frames bleed into
+  each other at low mip levels. Mipmaps are mandatory here — at the smallest window the art is minified
+  4:1 or worse, and bilinear-only minification of a large texture crawls as the sprite moves, which is
+  the exact artefact smooth art is supposed to remove.
+- **`image-rendering: pixelated` is off the habitat canvas.** It is outside Pixi's control: the browser
+  scales the backing store to CSS px, so at a fractional device pixel ratio it re-introduces hard
+  stair-steps no matter how the textures are filtered. The `#ui canvas` rule stays, because the tray
+  chip really is pixel art.
+- **Two things now have guards that never existed.** Nothing asserted the filter mode, so the entire
+  smooth switch could have been silently undone by one word; and nothing could see the clock split.
+  `assets.test.ts` pins `linear`, and `spritePlayer.test.ts` pins fractional positions, the art-scale
+  invariance, the turn sweep and the art-rate frame clock. All four were verified by mutation — each
+  fails on the obvious regression.
+- **Checkpoint deliberately taken with the OLD art still in place**, so that the clock and transform
+  work is proven green before any pixel changes. A later regression is then unambiguously about the art.
+  Verified: 244 unit tests, both Playwright specs, and a captured frame showing the bowl, fish, plant
+  and bubbles drawing correctly through the new path with no console errors.
