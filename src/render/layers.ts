@@ -62,7 +62,8 @@ export const STARVING_TINT = 0xe6ffe6;
 /** Cool blue the habitat fades toward at night, matching the wash the painted night layer used. */
 export const NIGHT_TINT = 0x465496;
 const NIGHT_FADE_MS = 2000;
-const NIGHT_FADE_STEPS = 8;
+/** How long the starving colour shift takes. Short, but not a single frame. */
+const STARVING_FADE_MS = 600;
 const BLINK_MS = 500;
 const BLINK_LOW_ALPHA = 0.6;
 const FOG_ALPHA = 0.5;
@@ -200,9 +201,17 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
   let pantryLow = false;
   let blinkClock = 0;
   let blinkOn = true;
-  let nightTarget = 0;
-  let nightStep = 0; // 0..NIGHT_FADE_STEPS
-  let nightClock = 0;
+  /**
+   * Night and starvation as continuous 0..1 amounts, eased at ticker rate.
+   *
+   * Night used to advance in eight discrete jumps over two seconds — one visible step every 250 ms,
+   * which bands on the gradients the rendered art is made of. Starvation had no transition at all: the
+   * whole bowl changed colour in a single frame. Both were the last stepped things in a renderer that
+   * had gone continuous everywhere else.
+   */
+  let nightT = 0;
+  let nightTargetT = 0;
+  let starvingT = 0;
 
   const applyPantry = (): void => {
     const r = habitat.pantryRect;
@@ -238,15 +247,14 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
   };
 
   const applyWorldTint = (): void => {
-    const tint = mixTint(towards(NIGHT_TINT, nightStep / NIGHT_FADE_STEPS), starving ? STARVING_TINT : 0xffffff);
+    const tint = mixTint(towards(NIGHT_TINT, nightT), towards(STARVING_TINT, starvingT));
     for (const sp of worldSprites) sp.tint = tint;
     // A habitat that still ships a painted night overlay keeps working; the bowl no longer has one.
     if (night) {
-      night.alpha = nightStep / NIGHT_FADE_STEPS;
-      night.visible = nightStep > 0;
+      night.alpha = nightT;
+      night.visible = nightT > 0;
     }
   };
-  const applyNight = applyWorldTint;
 
   applyWorldTint();
   applyPantry();
@@ -268,7 +276,7 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
       applyPantry();
     },
     setNight(on) {
-      nightTarget = on ? NIGHT_FADE_STEPS : 0;
+      nightTargetT = on ? 1 : 0;
     },
     setPhase(phase) {
       const showMemorial = phase === 'memorial';
@@ -280,7 +288,6 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
     },
     setStarving(b) {
       starving = b;
-      applyWorldTint();
       if (medium) medium.tint = b ? STARVING_TINT : 0xffffff;
     },
     setParallax(dx, dy) {
@@ -300,16 +307,17 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
           applyPantry();
         }
       }
-      if (nightStep !== nightTarget) {
-        nightClock += deltaMS;
-        const stepMs = NIGHT_FADE_MS / NIGHT_FADE_STEPS;
-        while (nightClock >= stepMs && nightStep !== nightTarget) {
-          nightClock -= stepMs;
-          nightStep += nightStep < nightTarget ? 1 : -1;
-          applyNight();
-        }
-      } else {
-        nightClock = 0;
+      const toward = (v: number, target: number, ms: number): number => {
+        if (v === target) return v;
+        const step = deltaMS / ms;
+        return v < target ? Math.min(target, v + step) : Math.max(target, v - step);
+      };
+      const nextNight = toward(nightT, nightTargetT, NIGHT_FADE_MS);
+      const nextStarving = toward(starvingT, starving ? 1 : 0, STARVING_FADE_MS);
+      if (nextNight !== nightT || nextStarving !== starvingT) {
+        nightT = nextNight;
+        starvingT = nextStarving;
+        applyWorldTint();
       }
     },
     destroy() {

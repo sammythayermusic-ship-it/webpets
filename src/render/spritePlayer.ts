@@ -153,10 +153,17 @@ export function createSpritePlayer(
     if (art) {
       sprite.texture = art.textures[frame] ?? fallbackBase.texture;
       texScale = art.texScale;
+      // Registration first: this state's body sits somewhere in its frame, and every state has to put
+      // it in the same place or the simulation's idea of where the pet is stops matching the pixels.
+      const reg = def.states[state]?.anchor;
+      if (reg) {
+        dx -= reg[0];
+        dy -= reg[1];
+      }
       const off = def.states[state]?.offsets?.[frame];
       if (off) {
-        dx = off[0];
-        dy = off[1];
+        dx += off[0];
+        dy += off[1];
       }
     } else {
       // Transform fallback: the base frame with a bob / squash / flip.

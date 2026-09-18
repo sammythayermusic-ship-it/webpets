@@ -64,8 +64,8 @@ describe('fish behavior', () => {
       return input({ label, asleep }, rng);
     });
     for (const o of outs) {
-      expect(Number.isInteger(o.x)).toBe(true);
-      expect(Number.isInteger(o.y)).toBe(true);
+      expect(Number.isFinite(o.x)).toBe(true);
+      expect(Number.isFinite(o.y)).toBe(true);
       expect(boxInside(o)).toBe(true);
     }
   });

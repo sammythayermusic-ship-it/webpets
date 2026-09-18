@@ -88,6 +88,8 @@ function sheenTexture(): Texture {
 
 interface Bubble {
   sprite: Sprite;
+  /** 0..1 fade, so a bubble grows into existence and thins out instead of blinking on and off. */
+  fade: number;
   x: number;
   y: number;
   vy: number; // px/s upward
@@ -106,6 +108,9 @@ export interface Bubbles {
 }
 
 const BUBBLE_COUNT = 5;
+/** Seconds a bubble takes to fade in at the gravel and out at the surface. */
+const BUBBLE_FADE_S = 0.35;
+const BUBBLE_ALPHA = 0.85;
 
 export function createBubbles(shape: WaterShape, bounds: WaterBounds): Bubbles {
   const container = new Container({ label: 'bubbles' });
@@ -122,10 +127,10 @@ export function createBubbles(shape: WaterShape, bounds: WaterBounds): Bubbles {
   for (let i = 0; i < BUBBLE_COUNT; i += 1) {
     // anchor 0.5 + the 1/FX_SS scale means everything below positions a bubble by its CENTRE in grid
     // px, which is what the physics already computes. The old code offset by half the texture instead.
-    const sprite = new Sprite({ texture: tex, alpha: 0.85, visible: false, anchor: 0.5 });
+    const sprite = new Sprite({ texture: tex, alpha: 0, visible: false, anchor: 0.5 });
     sprite.scale.set(1 / FX_SS);
     container.addChild(sprite);
-    bubbles.push({ sprite, x: 0, y: 0, vy: 20, phase: 0, wobble: 2, active: false, delayMs: 300 + i * 700 });
+    bubbles.push({ sprite, x: 0, y: 0, vy: 20, phase: 0, wobble: 2, active: false, delayMs: 300 + i * 700, fade: 0 });
   }
 
   const spawn = (b: Bubble, rng: Rng): void => {
@@ -137,6 +142,8 @@ export function createBubbles(shape: WaterShape, bounds: WaterBounds): Bubbles {
     b.phase = rng() * Math.PI * 2;
     b.wobble = 2 + rng() * 2;
     b.active = true;
+    b.fade = 0;
+    b.sprite.alpha = 0;
     b.sprite.visible = true;
   };
 
@@ -155,11 +162,19 @@ export function createBubbles(shape: WaterShape, bounds: WaterBounds): Bubbles {
         b.phase += dt * 3;
         const x = b.x + Math.sin(b.phase) * b.wobble;
         if (b.y <= bounds.surfaceY + 2 || !bounds.inside(x, b.y)) {
-          b.active = false;
-          b.sprite.visible = false;
-          b.delayMs = 400 + rng() * 2200;
-          continue;
+          // Fade out where it leaves rather than vanishing. A bubble that wobbles past the ellipse
+          // edge used to blink out mid-water, which reads as a dropped sprite, not as a bubble.
+          b.fade -= dt / BUBBLE_FADE_S;
+          if (b.fade <= 0) {
+            b.active = false;
+            b.sprite.visible = false;
+            b.delayMs = 400 + rng() * 2200;
+            continue;
+          }
+        } else if (b.fade < 1) {
+          b.fade = Math.min(1, b.fade + dt / BUBBLE_FADE_S);
         }
+        b.sprite.alpha = BUBBLE_ALPHA * b.fade;
         b.sprite.position.set(x, b.y);
       }
     },

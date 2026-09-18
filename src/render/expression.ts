@@ -11,6 +11,16 @@ export type Expression = 'happy' | 'excited' | 'curious';
 export interface ExpressionGate {
   /** Feed the mood's current request (or null for none) and get back the pose to actually play. */
   update(wanted: Expression | null): Expression | null;
+  /**
+   * The simulation is driving the pose this tick, so the mood has no say — but it has not changed its
+   * mind either. Keeps what is held and cancels anything pending.
+   *
+   * Without this the gate could not tell "the pet stopped feeling happy" from "the pet is mid-bite".
+   * Both arrived as a null request, so a single bite dropped the expression instantly and then made
+   * the pet earn it back over a full second: two pose changes and a second of wrong face, for an event
+   * that lasts half a second and that the user caused on purpose.
+   */
+  hold(): Expression | null;
   current(): Expression | null;
   reset(): void;
 }
@@ -43,6 +53,11 @@ export function createExpressionGate(holdTicks: number): ExpressionGate {
         pending = null;
         ticks = 0;
       }
+      return held;
+    },
+    hold() {
+      pending = null;
+      ticks = 0;
       return held;
     },
     current() {

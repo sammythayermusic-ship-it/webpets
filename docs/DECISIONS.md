@@ -410,3 +410,67 @@ character count times font size, which is exact for Press Start 2P (a bitmap fac
 glyph) and meaningless for the proportional face that replaced it. The constant is now documented as a
 generous upper bound rather than a measurement, and the guarantee that nothing overflows rests where it
 always really did: `.modal .line` wraps.
+
+### stage 4 (motion): why the pet did not flow
+"Make it move smoothly and don't glitch" turned into an audit of the whole motion pipeline. Thirteen
+distinct causes; these are the ones that mattered, and two of them were bad enough on their own.
+
+- **The pet ran at 2 frames per second, in four-tick lurches.** The fallback timer that drives the
+  scene when the browser throttles `requestAnimationFrame` ticked every 125 ms but only acted after
+  400 ms of quiet, so the first firing that passed the gate was at 500 ms and ran FOUR simulation steps
+  at once. Worse, 500 is an exact multiple of the tick, so the accumulator landed on zero every time
+  and the interpolation added the previous round contributed *nothing*. For a window that is hidden at
+  launch, unfocused and click-through — exactly what WebKit throttles — this was very likely the normal
+  path rather than the exception. **Measured after the fix: 30 advances/s instead of 2, with the
+  simulation at its correct 8 Hz.**
+  - The gate was also on the wrong timestamp: `advance()` bumps `lastAdvanceAt`, so the watchdog was
+    re-gating against its own output and could not distinguish "rAF is running" from "I ran a moment
+    ago". It now gates on a timestamp only the ticker writes. Tuning the old constants could not have
+    fixed it — a gate at or below the interval double-fires against healthy rAF, and above it the rate
+    halves.
+  - Same timer, second bug: `lastAdvanceAt` started at 0, so its first firing computed an elapsed time
+    of "now", clamped to a second, and ran eight steps before the first frame anyone saw.
+- **The art and the simulation disagreed permanently, not just during transitions.** The eight states
+  were rendered from separate poses whose bodies sit at different heights in the frame, and every
+  simulation constant was tuned against the idle art. Measured across all 62 frames: `hungry` sits
+  4.9 px low, `dead` 9.6 px high. That is **4.25 px of a starving fish's belly drawn inside the gravel
+  and 9.25 px of a dead fish's tail drawn above the waterline** — the exact failure the water clamp
+  exists to prevent, arriving through the art rather than through the geometry, and invisible to every
+  test in the repo. Fixed with a per-state registration offset measured from the art, which lands both
+  within half a pixel of the boundary the simulation declares. That agreement is the evidence the
+  numbers are right.
+- **The motion was quantised below the smoothing.** `behavior.ts` and `water.ts` rounded every position
+  to a whole grid px, and the fish's top vertical speed is 0.85 px/tick, so the honest sequence was
+  160, 160, 161, 161, 162 — hold, ramp one px, hold. Position continuous, velocity an 8 Hz square wave.
+  Rounding was a pixel-art contract, like `roundPixels` and `image-rendering: pixelated` before it.
+  - **A render-layer filter was the wrong fix, and I built one before proving it wrong.** A spring soft
+    enough to hide a 125 ms staircase (ω≈8) trails a darting fish by 12 grid px; one stiff enough not to
+    (ω≈40) smooths nothing. Worse, `BITE_RANGE` is measured from the body box in the *simulation*, so
+    any render-side lag makes the drawn fish lunge at water the flake has already left. The general
+    form: a render-layer filter desynchronises the drawn pet from every simulation-side predicate, and
+    the simulation is pure and can never know about it. Deleted.
+  - Removing the rounding also made `water.ts`'s clamp genuinely convex for the first time. The old one
+    used `floor`/`ceil`, whose image is a lattice, so the comment in `scene.ts` justifying interpolation
+    by convexity was false when it was written. The row search became a solved interval: the body fits
+    where the ellipse is at least `halfW` wide at both its top and bottom rows, which is a closed form.
+  - `inside()` needed an epsilon to match. The region is closed, and `clamp` returns its exact extreme
+    point; testing that same point with a strict `<= 1` fails about half the time on the last bit of
+    the arithmetic. That is the pet pressed against the glass, which is a position it reaches constantly.
+- **Two "glitches" were facing bugs, not position bugs.** `moveToward` already caps the step, so the
+  position could not jump — but the HEADING could. The cursor pull dropped in one tick when the pointer
+  left, and the wander wobble re-rolled in one tick every two seconds; either could cross the turn
+  threshold and throw a 125 ms spin that had nothing to do with where the fish was going. Both are now
+  eased. A third: a starving fish drifts at 0.3 against a turn threshold of 0.4, so the inference never
+  fired and it swam backwards half the time — its facing is now set from the intent when the drift is
+  re-rolled, rather than inferred from a velocity too small to read.
+- **The hungry band measured its floor and its ceiling in different spaces** — one accounted for the
+  body box and one did not — giving a band 2.3 px tall. Derived from the legal centre range now.
+- **The mood gate could not tell "stopped feeling happy" from "mid-bite".** Both arrived as a null
+  request, so one bite dropped the expression instantly and then made the pet earn it back over a full
+  second. It now holds while the simulation drives the pose.
+- **Every frame was rendered twice**, once by `advance` and once by Pixi's ticker plugin at a lower
+  priority. At the largest window that is a 2016x1536 target drawn twice for no benefit.
+- Flakes stepped at 8 Hz beside an interpolated fish and dissolved by strobing `visible` at 4 Hz;
+  bubbles blinked in and out at full alpha; the starving tint snapped in one frame and the night fade
+  banded in eight discrete steps. All were the last stepped things in a renderer that had gone
+  continuous everywhere else.

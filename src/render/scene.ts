@@ -32,10 +32,14 @@ import type { FishBehavior, HabitatScene, Manifest, ManifestHabitat, ManifestSpr
 const STEP_MS = 1000 / PET_FPS;
 /** Cap the accumulator so a background tab does not replay minutes of steps at once. */
 const MAX_ACC_MS = 1000;
-/** Drive the scene from a timer once rAF has been quiet this long (see the watchdog in mount). */
-const WATCHDOG_STALL_MS = 400;
+/** Treat requestAnimationFrame as dead once it has been quiet this long (see the watchdog in mount). */
+const WATCHDOG_STALL_MS = 250;
+/** How often the watchdog checks, and therefore the frame rate it drives when rAF is dead. */
+const WATCHDOG_INTERVAL_MS = 33;
 /** Ticks a new expressive mood must hold before the pet changes pose. One second at the sim's 8 Hz. */
 const MOOD_HOLD_TICKS = 8;
+/** How fast the pointer's pull on the pet rises and falls, per tick. Roughly half a second either way. */
+const PULL_EASE = 0.25;
 const HABITAT_KEY = 'fish/bowl';
 const SPRITE_KEY = 'fish';
 
@@ -81,6 +85,15 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
   let acc = 0;
   let lastAdvanceAt = 0;
   /**
+   * Last time the ticker ran, as distinct from the last time anything advanced.
+   *
+   * These have to be separate. The watchdog used to gate on `lastAdvanceAt`, which `advance` itself
+   * bumps, so it was re-gating against its own output: it could never tell "rAF is running" from "I ran
+   * a moment ago". Gating on a timestamp only the ticker writes is what lets it stand down the instant
+   * rAF recovers and run at its full rate the whole time rAF is dead.
+   */
+  let lastRafAt = 0;
+  /**
    * Body centre at the start and end of the CURRENT behaviour tick, grid px. Both are seeded to the
    * pet anchor and are never null, which is what makes it impossible for the fish to lerp in from
    * (0, 0) — the failure the old "hidden until the first step" placement had in a different form.
@@ -95,6 +108,18 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
    */
   let attention = 0;
   let lastInteractionAt = 0;
+  /**
+   * How strongly the pet is currently drawn toward the pointer, and the point it is drawn toward.
+   *
+   * Eased rather than switched. The pull blends the wander target up to 55% of the way to the cursor,
+   * so dropping it the instant the pointer left the hit region reversed the target by tens of px in a
+   * single tick and threw a facing flip — on every mouse exit, and repeatedly when the cursor rested
+   * near an edge, because the region test comes from a 20 Hz poll whose answer chatters there. The
+   * aim point is remembered while the pull fades so the target does not jump as well as shrink.
+   */
+  let pull = 0;
+  let pullX = 0;
+  let pullY = 0;
   let mood: Mood | null = null;
   /** Hysteresis on the mood-driven pose; see expression.ts for why a feeling has to hold before it shows. */
   const expression = createExpressionGate(MOOD_HOLD_TICKS);
@@ -146,6 +171,10 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
         acc = 0; // the new pet's first tick is a whole one
         expression.reset();
         m.player.resetPose(ax, ay, 1);
+        // `resetPose` moves the sprite but does not touch the sequencer, so the new pet was drawn
+        // using whatever state the old one died in — the belly-up `dead` art, which also carries the
+        // largest registration offset of any state — until the next behaviour tick replaced it.
+        m.player.play('idle');
       }
     }
     if (!prev || prev.label !== next.label || prev.phase !== next.phase) {
@@ -162,6 +191,9 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
 
   let steps = 0;
   let stepSkips = 0;
+  /** How many times anything advanced, and by how much. The only way to tell which clock is driving. */
+  let advances = 0;
+  let lastDtMs = 0;
   const stepOnce = (): void => {
     if (!m || !view) {
       stepSkips += 1;
@@ -186,7 +218,12 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
     // to care; `interest` already collapses when it is starving or asleep.
     const gx = pointer ? (pointer.x - WINDOW_PAD) / scale : null;
     const gy = pointer ? (pointer.y - WINDOW_PAD) / scale : null;
-    const attract = gx !== null && gy !== null && mood.interest > 0.05 ? { x: gx, y: gy, strength: mood.interest } : null;
+    if (gx !== null && gy !== null) {
+      pullX = gx;
+      pullY = gy;
+    }
+    pull += ((gx !== null && gy !== null ? mood.interest : 0) - pull) * PULL_EASE;
+    const attract = pull > 0.02 ? { x: pullX, y: pullY, strength: pull } : null;
     const out = m.behavior.step({
       hunger: view.hunger,
       label: view.label,
@@ -206,8 +243,13 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
     // The mood only ever gets to speak when the simulation has nothing to say. `idle` means "nothing in
     // particular is happening", which is exactly the gap a feeling belongs in; eating, hunger posture,
     // sleep and death are facts and outrank it.
-    const expressed = expression.update(out.anim === 'idle' ? moodAnim(mood) : null);
-    m.player.play(expressed ?? out.anim);
+    // The mood only ever gets to speak when the simulation has nothing to say. `idle` means "nothing in
+    // particular is happening", which is exactly the gap a feeling belongs in; eating, hunger posture,
+    // sleep and death are facts and outrank it. While one of those is playing the gate HOLDS rather
+    // than being told the mood wants nothing, so the pet picks its face straight back up afterwards.
+    const simDriving = out.anim !== 'idle';
+    const expressed = simDriving ? expression.hold() : expression.update(moodAnim(mood));
+    m.player.play(simDriving ? out.anim : (expressed ?? 'idle'));
     m.player.setFacing(out.facing, out.turning);
     // Roll the segment forward INSIDE the step loop. After a catch-up burst that leaves poseFrom and
     // poseTo bracketing only the final tick, so the fish resumes from where it is rather than
@@ -300,6 +342,8 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       const advance = (dtMs: number): void => {
         if (!m) return;
         lastAdvanceAt = Date.now();
+        advances += 1;
+        lastDtMs = dtMs;
         acc = Math.min(MAX_ACC_MS, acc + dtMs);
         while (acc >= STEP_MS) {
           acc -= STEP_MS;
@@ -317,12 +361,16 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
         const t = acc / STEP_MS;
         m.player.setPosition(poseFrom.x + (poseTo.x - poseFrom.x) * t, poseFrom.y + (poseTo.y - poseFrom.y) * t);
         m.player.advance(dtMs);
+        m.flakes.interpolate(t, dtMs);
         m.bubbles.update(dtMs, rng);
         m.layers.update(dtMs);
         m.app.render();
       };
 
-      const tick = (t: Ticker): void => advance(t.deltaMS);
+      const tick = (t: Ticker): void => {
+        lastRafAt = Date.now();
+        advance(t.deltaMS);
+      };
 
       // Watchdog, because requestAnimationFrame cannot be relied on here.
       //
@@ -334,19 +382,35 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       // a tick that never came. The result was a correctly drawn but completely frozen bowl.
       //
       // A pet whose clock never pauses should not have its animation depend on the compositor's opinion
-      // of whether anyone is looking. When rAF goes quiet this drives the same `advance` from a timer at
-      // the pet's own 8 fps, which is all the fidelity a stepped sprite needs and costs almost nothing.
-      // When rAF is healthy the watchdog sees a recent advance and does nothing at all.
+      // of whether anyone is looking. When rAF goes quiet this drives the same `advance` from a timer,
+      // at a rate the motion can actually be smooth at.
+      //
+      // It used to tick every 125 ms but only act after 400 ms of quiet, so the first firing that
+      // passed the gate was at 500 ms and ran FOUR simulation steps at once. The pet therefore ran at
+      // 2 fps in half-second lurches, and because 500 is an exact multiple of the tick the accumulator
+      // landed on zero every time and the interpolation between ticks contributed nothing whatsoever.
+      // For a window that is hidden at launch, unfocused and click-through — which is what WebKit
+      // throttles — that was very likely the normal path, not the exception.
       const watchdog = setInterval(() => {
         if (!m) return;
-        const since = Date.now() - lastAdvanceAt;
-        if (since >= WATCHDOG_STALL_MS) advance(Math.min(MAX_ACC_MS, since));
-      }, STEP_MS);
+        const now = Date.now();
+        if (now - lastRafAt < WATCHDOG_STALL_MS) return; // rAF is healthy; stand down
+        advance(Math.min(MAX_ACC_MS, now - lastAdvanceAt));
+      }, WATCHDOG_INTERVAL_MS);
 
       m = { app, layers, player, behavior: createFishBehavior(), bounds, flakes, bubbles, sheen, advance, tick, watchdog };
       layoutHabitat();
       if (view) applyView(view, null);
       applyPointer();
+      // Seed both clocks. `lastAdvanceAt` started at 0, so the first watchdog firing computed an
+      // elapsed time of "now", clamped it to a full second, and ran eight simulation steps before the
+      // first frame the user ever saw — the pet lurched across the bowl on launch.
+      lastAdvanceAt = Date.now();
+      lastRafAt = lastAdvanceAt;
+      // Pixi's ticker plugin renders the stage on its own at a lower priority, and `advance` renders
+      // too, so every frame was drawn twice — at the largest window, a 2016x1536 target for no benefit.
+      // `advance` is the one path both clocks share, so it keeps the render and the plugin loses it.
+      app.ticker.remove(app.render, app);
       // Draw once before the first ticker callback so the window never shows an empty frame.
       app.render();
       app.ticker.add(tick);
@@ -408,6 +472,9 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
           petVisible: false,
           petAnim: '(unmounted)',
           petPos: { x: 0, y: 0 },
+          drawnPos: { x: 0, y: 0 },
+          advances,
+          lastDtMs: 0,
           petFrame: { w: 0, h: 0 },
           steps,
           stepSkips,
@@ -426,7 +493,13 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
         // The behaviour's own last position, not the live sprite's. The sprite is mid-interpolation
         // between ticks, and mid-flip its measured width passes through ZERO as scale.x sweeps across
         // — a report of a 0px-wide fish would send someone hunting a bug that does not exist.
-        petPos: { x: poseTo.x, y: poseTo.y },
+        petPos: { x: Math.round(poseTo.x * 100) / 100, y: Math.round(poseTo.y * 100) / 100 },
+        // Where the pet is actually DRAWN, which is the simulated position plus the interpolation
+        // across the current tick and the state's registration offset. The two differing is normal;
+        // them differing by a lot is the registration bug this pins.
+        drawnPos: { x: Math.round(sprite.x * 100) / 100, y: Math.round(sprite.y * 100) / 100 },
+        advances,
+        lastDtMs: Math.round(lastDtMs * 10) / 10,
         steps,
         stepSkips,
         hasView: view !== null,

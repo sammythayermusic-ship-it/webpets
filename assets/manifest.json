@@ -139,7 +139,11 @@
             7
           ],
           "loop": false,
-          "returnTo": "idle"
+          "returnTo": "idle",
+          "anchor": [
+            0.13,
+            -0.01
+          ]
         },
         "sleep": {
           "source": {
@@ -162,7 +166,11 @@
             4,
             5
           ],
-          "loop": true
+          "loop": true,
+          "anchor": [
+            -0.47,
+            1.95
+          ]
         },
         "hungry": {
           "source": {
@@ -189,7 +197,11 @@
             6,
             7
           ],
-          "loop": true
+          "loop": true,
+          "anchor": [
+            -0.31,
+            4.87
+          ]
         },
         "dead": {
           "source": {
@@ -212,7 +224,11 @@
             4,
             5
           ],
-          "loop": true
+          "loop": true,
+          "anchor": [
+            -0.15,
+            -9.57
+          ]
         },
         "happy": {
           "source": {
@@ -239,7 +255,11 @@
             6,
             7
           ],
-          "loop": true
+          "loop": true,
+          "anchor": [
+            0.23,
+            -1.96
+          ]
         },
         "excited": {
           "source": {
@@ -266,7 +286,11 @@
             6,
             7
           ],
-          "loop": true
+          "loop": true,
+          "anchor": [
+            0.58,
+            -0.01
+          ]
         },
         "curious": {
           "source": {
@@ -289,7 +313,11 @@
             4,
             5
           ],
-          "loop": true
+          "loop": true,
+          "anchor": [
+            -0.98,
+            -2.11
+          ]
         }
       }
     }

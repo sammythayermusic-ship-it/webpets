@@ -214,6 +214,62 @@ describe('fish frames', () => {
     }
   });
 
+  it('every state is registered to the same body position', () => {
+    // The defect this pins was permanent, not transient, and no existing test could see it: the states
+    // were rendered from separate poses whose bodies sit at different heights in the frame, while every
+    // simulation constant was tuned against idle. A starving fish had 4.25 px of belly drawn inside the
+    // gravel and a dead one 9.25 px of tail drawn ABOVE the waterline -- the precise failure the water
+    // clamp exists to prevent, arriving through the art rather than through the geometry.
+    const centroid = (file: string): { x: number; y: number } => {
+      const png = load(file);
+      let sx = 0;
+      let sy = 0;
+      let sa = 0;
+      for (let y = 0; y < png.height; y += 1) {
+        for (let x = 0; x < png.width; x += 1) {
+          const a = png.data[(y * png.width + x) * 4 + 3] ?? 0;
+          sx += x * a;
+          sy += y * a;
+          sa += a;
+        }
+      }
+      return { x: sx / sa, y: sy / sa };
+    };
+    const meanCentroid = (name: string): { x: number; y: number } => {
+      const files = stateFiles(fish.states[name] as never);
+      const cs = files.map(centroid);
+      return {
+        x: cs.reduce((a, c) => a + c.x, 0) / cs.length,
+        y: cs.reduce((a, c) => a + c.y, 0) / cs.length,
+      };
+    };
+    const first = load(stateFiles(fish.states['idle'] as never)[0] as string);
+    const scale = first.width / fish.frame[0];
+    const base = meanCentroid('idle');
+    for (const name of Object.keys(fish.states)) {
+      const c = meanCentroid(name);
+      const declared = fish.states[name]?.anchor ?? [0, 0];
+      // What the art says, against what the manifest claims about it.
+      const measured = [(c.x - base.x) / scale, (c.y - base.y) / scale];
+      expect(declared[0], `${name} anchor x`).toBeCloseTo(measured[0] as number, 1);
+      expect(declared[1], `${name} anchor y`).toBeCloseTo(measured[1] as number, 1);
+    }
+  });
+
+  it('keeps the dead pose under the waterline once registered', () => {
+    // The worst instance, checked end to end rather than through the anchor number: the behaviour
+    // clamps a dead fish as high as its body box fits, and the art must not then hang out of the water.
+    const files = stateFiles(fish.states['dead'] as never);
+    const png = load(files[0] as string);
+    const scale = png.width / fish.frame[0];
+    const [, y0] = alphaBox(png, 0.02) as [number, number, number, number];
+    const anchorY = (fish.states['dead']?.anchor ?? [0, 0])[1];
+    const centre = BOWL_WATER_SHAPE.surfaceY + fish.body.h / 2;
+    const drawnTop = centre - (png.height / 2 - y0) / scale - anchorY;
+    // A fin may brush the surface; a tail may not hang above it by a body's worth.
+    expect(BOWL_WATER_SHAPE.surfaceY - drawnTop, 'grid px of dead fish drawn above the waterline').toBeLessThan(3);
+  });
+
   it('actually animates: consecutive frames differ', () => {
     for (const [name, def] of states) {
       const files = stateFiles(def);

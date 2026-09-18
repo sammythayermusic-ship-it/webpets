@@ -5,6 +5,9 @@
 // grid so the fish covers the same fraction of the bowl per tick as it did at 160x120. Tick counts
 // (EAT_TICKS, TURN_COOLDOWN, WOBBLE_EVERY, the drift timer) and WANDER_RATE (an angular rate) are not
 // pixel quantities and did not change.
+//
+// Positions are CONTINUOUS. They were rounded to whole grid px for as long as the renderer drew on a
+// pixel grid; see the note in src/render/water.ts for why that had to stop.
 
 import type { FishBehavior, FishInput, FishOutput, PetAnim, WaterBounds } from '../../render/types';
 import type { HungerLabel } from '../../sim/types';
@@ -21,6 +24,15 @@ const BITE_RANGE = 12;
 const WANDER_RATE = 0.045;
 /** Ticks between wander wobble re-rolls. */
 const WOBBLE_EVERY = 16;
+/**
+ * How fast the wobble slides to a freshly rolled value, per tick.
+ *
+ * It used to snap. The fish's POSITION could not jump, because `moveToward` caps the step — but its
+ * HEADING could, and a 12 px sideways jump in the target near a figure-eight extreme, where the real
+ * horizontal velocity is around zero, was enough to cross the turn threshold and trigger a facing flip
+ * that had nothing to do with where the fish was going. That is the twitch, once every two seconds.
+ */
+const WOBBLE_EASE = 0.4;
 /**
  * How far toward something interesting the wander target can be pulled, at `strength` 1. Capped well
  * below 1 on purpose: a fish that flew straight to the cursor would be a UI element, not an animal.
@@ -58,6 +70,8 @@ export function createFishBehavior(): FishBehavior {
   let turnCooldown = 0;
   let wobbleX = 0;
   let wobbleY = 0;
+  let wobbleToX = 0;
+  let wobbleToY = 0;
   let wobbleTicks = 0;
   let driftVx = 0.3;
   let driftTicks = 0;
@@ -73,6 +87,8 @@ export function createFishBehavior(): FishBehavior {
     turnCooldown = 0;
     wobbleX = 0;
     wobbleY = 0;
+    wobbleToX = 0;
+    wobbleToY = 0;
     wobbleTicks = 0;
     driftVx = 0.3;
     driftTicks = 0;
@@ -97,9 +113,11 @@ export function createFishBehavior(): FishBehavior {
     wobbleTicks += 1;
     if (wobbleTicks >= WOBBLE_EVERY) {
       wobbleTicks = 0;
-      wobbleX = (rng() - 0.5) * 12;
-      wobbleY = (rng() - 0.5) * 8;
+      wobbleToX = (rng() - 0.5) * 12;
+      wobbleToY = (rng() - 0.5) * 8;
     }
+    wobbleX += (wobbleToX - wobbleX) * WOBBLE_EASE;
+    wobbleY += (wobbleToY - wobbleY) * WOBBLE_EASE;
     const cx = bounds.rect.x + bounds.rect.w / 2;
     const cy = (yMin + yMax) / 2;
     const ampX = Math.max(8, (bounds.rect.w / 2 - halfW) * 0.7);
@@ -133,7 +151,7 @@ export function createFishBehavior(): FishBehavior {
       x = c.x;
       y = c.y;
       eatTicks = 0;
-      return { x: Math.round(x), y: Math.round(y), facing, turning: false, anim: 'dead', biteFlakeIndex: null };
+      return { x, y, facing, turning: false, anim: 'dead', biteFlakeIndex: null };
     }
 
     const prevX = x;
@@ -186,6 +204,11 @@ export function createFishBehavior(): FishBehavior {
       if (driftTicks >= 40) {
         driftTicks = 0;
         driftVx = (rng() < 0.5 ? -1 : 1) * 0.3;
+        // Set facing from the intent rather than leaving it to be inferred below. A drift of 0.3 is
+        // under TURN_THRESHOLD, so the inference never fired and a starving fish kept whichever way it
+        // happened to be pointing — swimming backwards for half of the worst hours of its life. Once
+        // per 40 ticks, so there is no dithering risk in assigning it directly.
+        facing = driftVx > 0 ? 1 : -1;
       }
       const ty = bounds.floorY - halfH - 4;
       const t = moveToward(x, y, x, ty, 1);
@@ -195,8 +218,14 @@ export function createFishBehavior(): FishBehavior {
     } else if (input.label === 'hungry') {
       // ---- hungry: half speed, hangs in the top third
       phase += WANDER_RATE * 0.5;
-      const yMin = bounds.surfaceY + halfH + 2;
-      const yMax = bounds.surfaceY + (bounds.floorY - bounds.surfaceY) / 3;
+      // The top third of where the body can legally BE, not of the water. Measured in water rows the
+      // band came out 2.3 px tall against a swim amplitude of 4, because its floor accounted for the
+      // body box and its ceiling did not — so a hungry fish spent its time pressed against the clamp
+      // instead of hanging in the upper water.
+      const legalTop = bounds.surfaceY + halfH;
+      const legalBottom = bounds.floorY - halfH;
+      const yMin = legalTop + 2;
+      const yMax = legalTop + (legalBottom - legalTop) / 3;
       const target = wanderTarget(bounds, halfW, yMin, yMax, rng);
       const t = moveToward(x, y, target.x, target.y, 1.5);
       nx = t.x;
@@ -238,14 +267,18 @@ export function createFishBehavior(): FishBehavior {
       }
     }
 
+    // Commit the clamp. This used to keep the unclamped value whenever the clamp moved it less than
+    // 2 px, which let the internal position creep outside the legal region and then stick to the glass
+    // for an extra beat when the target reversed. With continuous positions there is nothing to gain
+    // from the slack, and the clamped point is the one that is actually legal.
     const c = bounds.clamp(nx, ny, halfW, halfH);
-    // Keep sub-pixel state for smooth-but-stepped motion while clamping to the water.
-    x = Math.abs(c.x - nx) > 2 ? c.x : nx;
-    y = Math.abs(c.y - ny) > 2 ? c.y : ny;
-    const out = bounds.clamp(Math.round(x), Math.round(y), halfW, halfH);
+    x = c.x;
+    y = c.y;
 
     if (eatTicks > 0) anim = 'eat';
-    return { x: out.x, y: out.y, facing, turning, anim, biteFlakeIndex: bite };
+    // Not rounded. Whole grid px was the pixel-art contract; at under one px of travel per tick it
+    // turned the swim into an 8 Hz staircase, which is the motion the renderer then had to smooth.
+    return { x, y, facing, turning, anim, biteFlakeIndex: bite };
   };
 
   return { step, reset };

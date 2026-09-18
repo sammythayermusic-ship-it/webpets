@@ -54,3 +54,26 @@ describe('expression gate', () => {
     expect(g.update('happy')).toBeNull(); // the pending count started over
   });
 });
+
+describe('holding for the simulation', () => {
+  it('keeps the expression through a bite instead of dropping and re-earning it', () => {
+    // The event this is about: a bite takes the behaviour off idle for a few ticks. Before, that read
+    // as "the mood wants nothing", so the pet lost its face immediately and spent a second earning it
+    // back -- two pose changes for an interaction the user deliberately caused.
+    const g = createExpressionGate(8);
+    for (let i = 0; i < 8; i += 1) g.update('happy');
+    expect(g.current()).toBe('happy');
+    for (let i = 0; i < 4; i += 1) expect(g.hold(), 'mid-bite').toBe('happy');
+    expect(g.update('happy'), 'straight back, with nothing to earn').toBe('happy');
+  });
+
+  it('cancels a pending change, so a feeling interrupted mid-wait starts over', () => {
+    const g = createExpressionGate(3);
+    g.update('curious');
+    g.update('curious');
+    g.hold();
+    expect(g.update('curious')).toBeNull();
+    expect(g.update('curious')).toBeNull();
+    expect(g.update('curious')).toBe('curious');
+  });
+});

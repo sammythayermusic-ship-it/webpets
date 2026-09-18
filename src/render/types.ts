@@ -78,6 +78,20 @@ export type FrameSource =
 
 export interface ManifestSpriteState {
   source: FrameSource;
+  /**
+   * Where this state's art sits in its frame, relative to the state the simulation was tuned against,
+   * in LOGICAL grid px. Subtracted when drawing so every state puts the pet's body in the same place.
+   *
+   * Without it the art and the simulation disagree permanently, not just during a transition. The
+   * states were rendered from separate poses and their bodies sit at different heights in the frame:
+   * measured on the shipped fish, `hungry` sits 4.9 px low and `dead` 9.6 px high. Since every
+   * simulation constant was tuned against the idle art, that is 4.25 px of a starving fish's belly
+   * drawn inside the gravel and 9.25 px of a dead fish's tail drawn above the waterline — the exact
+   * failure the water clamp exists to prevent, arriving through the art instead of the geometry.
+   *
+   * Fractional. Whole numbers were a pixel-art constraint.
+   */
+  anchor?: [number, number];
   frames: number;
   sequence: number[];
   loop: boolean;

@@ -74,6 +74,12 @@ function pair(v: unknown, path: string): [number, number] {
   return [int(v[0], `${path}[0]`), int(v[1], `${path}[1]`)];
 }
 
+/** Like {@link pair} but fractional: registration offsets are measured from art, not authored on a grid. */
+function numPair(v: unknown, path: string): [number, number] {
+  if (!Array.isArray(v) || v.length !== 2) throw new ManifestError(path, 'expected [number, number]');
+  return [num(v[0], `${path}[0]`), num(v[1], `${path}[1]`)];
+}
+
 function assetPath(v: unknown, path: string): string {
   const s = str(v, path);
   if (s.startsWith('/') || s.includes('..')) throw new ManifestError(path, 'must be relative to the assets root');
@@ -167,6 +173,7 @@ function spriteState(v: unknown, path: string): ManifestSpriteState {
     sequence,
     loop: bool(v['loop'], `${path}.loop`),
   };
+  if (v['anchor'] !== undefined) out.anchor = numPair(v['anchor'], `${path}.anchor`);
   if (v['returnTo'] !== undefined) out.returnTo = str(v['returnTo'], `${path}.returnTo`);
   if (v['offsets'] !== undefined) {
     if (!Array.isArray(v['offsets']) || v['offsets'].length !== frames) {

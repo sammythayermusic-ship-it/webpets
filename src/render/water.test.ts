@@ -52,15 +52,33 @@ describe('makeWaterBounds', () => {
     expect(bounds.inside(cx - Math.floor(halfAtSurface) + 1, surfaceY)).toBe(true);
   });
 
-  it('clamp() keeps the body box inside for a grid of inputs, returning integers', () => {
-    for (let y = surfaceY - 120; y <= floorY + 120; y += 7) {
-      for (let x = cx - 200; x <= cx + 200; x += 11) {
+  it('clamp() keeps the body box inside for a grid of inputs', () => {
+    // Deliberately fractional inputs and offsets. These used to assert the result was a whole number,
+    // which was right while the renderer drew on a pixel grid: rounding a path whose speed is under
+    // 1 px/tick turned it into an 8 Hz staircase, and that was the motion that did not flow.
+    for (let y = surfaceY - 120; y <= floorY + 120; y += 6.5) {
+      for (let x = cx - 200; x <= cx + 200; x += 10.25) {
         const c = bounds.clamp(x, y, HW, HH);
-        expect(Number.isInteger(c.x)).toBe(true);
-        expect(Number.isInteger(c.y)).toBe(true);
-        expect(boxInside(c.x, c.y)).toBe(true);
+        expect(Number.isFinite(c.x)).toBe(true);
+        expect(Number.isFinite(c.y)).toBe(true);
+        expect(boxInside(c.x, c.y), `clamp(${x}, ${y}) -> (${c.x}, ${c.y})`).toBe(true);
       }
     }
+  });
+
+  it('clamp() is continuous: a small move of the input never jumps the output', () => {
+    // The property the renderer depends on. A clamp with a rounding step or a search loop in it can
+    // move the result a whole px for an arbitrarily small change of input, which shows up as the pet
+    // twitching while it swims along the glass.
+    let worst = 0;
+    for (let y = surfaceY - 20; y <= floorY + 20; y += 0.5) {
+      for (let x = cx - 120; x <= cx + 120; x += 0.5) {
+        const a = bounds.clamp(x, y, HW, HH);
+        const b = bounds.clamp(x + 0.01, y + 0.01, HW, HH);
+        worst = Math.max(worst, Math.hypot(b.x - a.x, b.y - a.y));
+      }
+    }
+    expect(worst, 'largest output move for a 0.01 px input move').toBeLessThan(0.05);
   });
 
   it('clamp() is the identity for a point whose box already fits', () => {
