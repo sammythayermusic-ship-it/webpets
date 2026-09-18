@@ -1,13 +1,13 @@
-// Flakes: entities the fish eats. Spawned at the surface on feed(), sinking with drift at 8 fps steps
-// (integer draw positions), removed on bite; leftovers settle on the gravel and dissolve after a while.
+// Flakes: entities the fish eats. Spawned at the surface on feed(), sinking with drift at 8 fps steps,
+// removed on bite; leftovers settle on the gravel and dissolve after a while.
 //
-// Sizes, offsets and speeds are in habitat grid px (320x240) and doubled with the grid in Stage 1; the
-// 2x2 flake pattern is authored on the old 160x120 art grid and nearest-upscaled by ART_UNIT, so the
-// texture is pixel-identical to the previous one at twice the size. Step counts are not pixel
-// quantities and did not change.
+// Sizes, offsets and speeds are in habitat grid px (320x240). The flake used to be a hand-authored 2x2
+// pattern nearest-upscaled to 4x4, which against smooth art read as a hard brown square; it is now a
+// soft crumb generated at FX_SS times the grid, like the bubbles and the sheen. Step counts are not
+// pixel quantities and did not change.
 
 import { Container, Sprite, type Texture } from 'pixi.js';
-import { ART_UNIT, bufferTexture, upscalePattern } from './fx';
+import { FX_SS, paintTexture, smoothstep } from './fx';
 import type { Rng } from '../sim/types';
 import type { WaterBounds, WaterShape } from './types';
 
@@ -41,12 +41,20 @@ export interface Flakes {
   destroy(): void;
 }
 
+/** Flake size in grid px. */
+const FLAKE_SIZE = 4;
+
 function flakeTexture(): Texture {
-  const px = new Uint8Array([
-    222, 160, 72, 255, 240, 190, 100, 255,
-    186, 118, 48, 255, 222, 160, 72, 255,
-  ]);
-  return bufferTexture(2 * ART_UNIT, 2 * ART_UNIT, upscalePattern(2, 2, px), 'flake');
+  // An irregular soft crumb rather than a disc: the lobes come from a cheap angular wobble of the
+  // radius, which is enough to stop six identical flakes reading as six identical dots.
+  return paintTexture(FLAKE_SIZE, FLAKE_SIZE, 'flake', (nx, ny) => {
+    const d = Math.hypot(nx, ny);
+    const wobble = 1 + 0.16 * Math.sin(Math.atan2(ny, nx) * 3);
+    const a = 1 - smoothstep(0.52 * wobble, 0.95 * wobble, d);
+    // Lit from the top-left, matching the habitat's key light, so a flake is not a flat blob.
+    const lift = (1 - smoothstep(-0.6, 0.5, ny + nx * 0.4)) * 0.25;
+    return [0.87 + lift * 0.5, 0.63 + lift * 0.6, 0.28 + lift * 0.7, a];
+  });
 }
 
 export function createFlakes(shape: WaterShape, bounds: WaterBounds): Flakes {
@@ -61,7 +69,9 @@ export function createFlakes(shape: WaterShape, bounds: WaterBounds): Flakes {
   };
 
   const draw = (f: Flake): void => {
-    f.sprite.position.set(Math.round(f.x) - ART_UNIT, Math.round(f.y) - ART_UNIT);
+    // Centre, not top-left corner: the sprites are anchored 0.5 so the physics position is the flake's
+    // middle. Unrounded, because whole grid px stopped being the smallest visible step.
+    f.sprite.position.set(f.x, f.y);
   };
 
   const kill = (f: Flake): void => {
@@ -78,7 +88,8 @@ export function createFlakes(shape: WaterShape, bounds: WaterBounds): Flakes {
       // them a handful dropped into the middle at any bowl size.
       const hw = Math.max(12, halfWidthAt(y + 4) * SPAWN_SPREAD);
       for (let i = 0; i < FLAKES_PER_FEED; i += 1) {
-        const sprite = new Sprite({ texture: tex });
+        const sprite = new Sprite({ texture: tex, anchor: 0.5 });
+        sprite.scale.set(1 / FX_SS);
         container.addChild(sprite);
         const f: Flake = {
           sprite,

@@ -269,3 +269,23 @@ manifest geometry and every test that reasons in grid units survive untouched.
   work is proven green before any pixel changes. A later regression is then unambiguously about the art.
   Verified: 244 unit tests, both Playwright specs, and a captured frame showing the bowl, fish, plant
   and bubbles drawing correctly through the new path with no console errors.
+
+### stage 2 (fx): the last pixel art in the renderer
+Bubbles, food flakes and the pointer sheen were hand-authored RGBA byte patterns on the retired 160x120
+art grid — a 3x3 bubble ring, a 2x2 flake, a 4x10 sheen — nearest-upscaled by `ART_UNIT` to fit the
+320x240 grid. That worked only because the WHOLE frame was uniformly upscaled; drawn over smooth art at
+the largest window, a flake was a 24 device-px hard-edged brown square.
+
+- They are now generated procedurally at `FX_SS` (8) texture px per grid px and drawn back down, with
+  every edge built from a smoothstep rather than a cutoff. The bubble is a bright rim with a nearly
+  clear middle and one highlight, which is what reads as a bubble rather than a dot; the flake is an
+  irregular soft crumb, lit from the top-left to match the habitat's key light, with a cheap angular
+  radius wobble so six flakes are not six identical discs.
+- **Sprites are anchored 0.5 and scaled by 1/FX_SS**, so all three are positioned by their CENTRE in
+  grid px — which is what the physics already computed. The old code offset each by half its texture
+  size at every call site instead.
+- `ART_UNIT` and `upscalePattern` are gone. `ART_UNIT` was the renderer's last dependency on the
+  160x120 grid retired two stages ago.
+- **Three things stopped rounding to whole grid px**: flake draw positions, the pointer sheen, and the
+  parallax offset. Each was correct when a grid px was the smallest thing that could move. The parallax
+  one was the most visible — a continuous slide delivered as a four-step stagger.

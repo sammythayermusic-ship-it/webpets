@@ -62,7 +62,7 @@ export interface LayerStack {
   setNight(on: boolean): void;
   setPhase(phase: ScenePhase): void;
   setStarving(b: boolean): void;
-  /** Integer grid px offset applied to glass and decor_front (parallax). */
+  /** Grid px offset applied to glass and decor_front (parallax). Fractional: the slide is continuous. */
   setParallax(dx: number, dy: number): void;
   /** Ticker-rate update for the stepped blink and the night fade. */
   update(deltaMS: number): void;
@@ -243,8 +243,10 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
       if (medium) medium.tint = b ? STARVING_MEDIUM_TINT : 0xffffff;
     },
     setParallax(dx, dy) {
-      const x = Math.round(dx);
-      const y = Math.round(dy);
+      // Unrounded. Snapping to whole grid px turned a continuous slide into a four-step stagger, which
+      // was invisible when a grid px was the smallest thing that could move and is not now.
+      const x = dx;
+      const y = dy;
       slots.glass.position.set(x, y);
       slots.decor_front.position.set(x, y);
     },
