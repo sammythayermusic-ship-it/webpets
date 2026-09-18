@@ -219,6 +219,9 @@ Commands (invoke names; args/returns are camelCase JSON matching `src/platform/t
 |---|---|---|---|
 | `clock_now` | – | `ClockReading` | epoch + monotonic |
 | `set_scale` | `{ scale }` | `WindowGeometry` | resize keeping bottom-right anchored; first call restores position |
+| `set_scale_live` | `{ scale, live }` | `WindowGeometry` | as above; `live` skips edge snapping and the position write, for a drag in flight |
+| `set_interaction_lock` | `{ ms }` | — | hands the pointer to the webview for `ms` (renewable, 0 releases); the cursor poller stands down |
+| `set_layering` | `{ alwaysOnTop, allDesktops, overFullscreen }` | — | window level and collection behaviour, applied as a set |
 | `set_hit_regions` | `{ regions: Rect[] }` | – | regions in window-local CSS px |
 | `get_geometry` | – | `WindowGeometry` | |
 | `show_window` / `hide_window` | – | – | show never focuses |
@@ -249,6 +252,11 @@ notification, autostart, global-shortcut, positioner.
 
 Notifications from `tauri dev` are posted under the Terminal identity (allow notifications for Terminal); only the
 bundled `.app` uses `com.sammythayer.webpets`. Document this in the README.
+
+The scale is an integer count of EIGHTHS of the grid: 8 is 1×, 16 is 2×, 24 is 3×, and anything from 6 to 32 is
+legal. `GRID_W` and `GRID_H` both divide by 8, so `windowSizeForScale` is `40n + 48` by `30n + 48` — whole pixels
+in both languages with no rounding rule to keep in step. It is written to disk as `scaleSteps`; the older `scale`
+key is read as a rung of the three-rung ladder it replaced.
 
 `settings.json`'s document is **version 2**. Version 1 held the old 2/3/4 scale ladder, so the same number means a
 different window size in each; `normalizeSettings` migrates a v1 document by preserving on-screen size
