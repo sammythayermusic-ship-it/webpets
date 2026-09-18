@@ -321,6 +321,13 @@ no clock and no RNG, so the same inputs always give the same mood.
 - **The mood only speaks when the simulation has nothing to say.** `moodAnim` returns `happy`,
   `excited`, `curious` or null, and the scene consults it only when the behaviour asked for `idle`.
   Eating, hunger posture, sleep and death are facts and outrank a feeling.
+- **A feeling has to hold before it shows.** Moods are continuous and the labels read off them have
+  boundaries, so a pet sitting on one asked for a different animation every tick and would have
+  flickered between two poses eight times a second. `src/render/expression.ts` is the hysteresis: a new
+  expression must be wanted for a full second before it is adopted, and dropping one is immediate —
+  waiting to STOP looking excited would leave the pet grinning through a state change the simulation had
+  just made, which reads as a bug where a delay before starting does not. Extracted from the scene
+  rather than left inline precisely so it could be tested without a renderer.
 - **Interest drives a micro-behaviour**: the fish bends its wander target toward the pointer, capped at
   55% so it drifts over and hangs about rather than tracking the cursor like a UI element. Gated to the
   content branch only — a hungry, sleeping or dead fish does not stop to investigate anything, and that

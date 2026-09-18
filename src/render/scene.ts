@@ -26,6 +26,7 @@ import { createSpritePlayer, type SpritePlayer } from './spritePlayer';
 import { stateFiles } from './manifest';
 import { makeWaterBounds } from './water';
 import { decayAttention, moodAnim, moodOf, type Mood } from '../sim/mood';
+import { createExpressionGate } from './expression';
 import type { FishBehavior, HabitatScene, Manifest, ManifestHabitat, ManifestSprite, SceneEvent, SceneView, WaterBounds } from './types';
 
 const STEP_MS = 1000 / PET_FPS;
@@ -33,6 +34,8 @@ const STEP_MS = 1000 / PET_FPS;
 const MAX_ACC_MS = 1000;
 /** Drive the scene from a timer once rAF has been quiet this long (see the watchdog in mount). */
 const WATCHDOG_STALL_MS = 400;
+/** Ticks a new expressive mood must hold before the pet changes pose. One second at the sim's 8 Hz. */
+const MOOD_HOLD_TICKS = 8;
 const HABITAT_KEY = 'fish/bowl';
 const SPRITE_KEY = 'fish';
 
@@ -93,6 +96,8 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
   let attention = 0;
   let lastInteractionAt = 0;
   let mood: Mood | null = null;
+  /** Hysteresis on the mood-driven pose; see expression.ts for why a feeling has to hold before it shows. */
+  const expression = createExpressionGate(MOOD_HOLD_TICKS);
   /** False until the behavior has positioned the pet once; the sprite stays hidden so it never flashes at (0, 0). */
   let placed = false;
   const listeners: Record<SceneEvent, Set<() => void>> = { bite: new Set(), 'flakes-gone': new Set() };
@@ -139,6 +144,7 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
         poseFrom = { x: ax, y: ay };
         poseTo = { x: ax, y: ay };
         acc = 0; // the new pet's first tick is a whole one
+        expression.reset();
         m.player.resetPose(ax, ay, 1);
       }
     }
@@ -200,8 +206,8 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
     // The mood only ever gets to speak when the simulation has nothing to say. `idle` means "nothing in
     // particular is happening", which is exactly the gap a feeling belongs in; eating, hunger posture,
     // sleep and death are facts and outrank it.
-    const expressive = out.anim === 'idle' ? moodAnim(mood) : null;
-    m.player.play(expressive ?? out.anim);
+    const expressed = expression.update(out.anim === 'idle' ? moodAnim(mood) : null);
+    m.player.play(expressed ?? out.anim);
     m.player.setFacing(out.facing, out.turning);
     // Roll the segment forward INSIDE the step loop. After a catch-up burst that leaves poseFrom and
     // poseTo bracketing only the final tick, so the fish resumes from where it is rather than
@@ -430,6 +436,7 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
           ? { label: mood.label, valence: Number(mood.valence.toFixed(3)), arousal: Number(mood.arousal.toFixed(3)), interest: Number(mood.interest.toFixed(3)) }
           : null,
         attention: Number(attention.toFixed(3)),
+        expression: expression.current(),
       };
     },
 
