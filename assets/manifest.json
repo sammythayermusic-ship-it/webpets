@@ -2,39 +2,295 @@
   "version": 1,
   "habitats": {
     "fish/bowl": {
-      "grid": [320, 240],
-      "layers": [
-        { "name": "bg", "file": "habitats/fish/bowl/bg.png", "z": 0 },
-        { "name": "memorial", "file": "habitats/fish/bowl/memorial.png", "z": 0 },
-        { "name": "medium", "file": "habitats/fish/bowl/medium.png", "z": 0 },
-        { "name": "decor_back", "file": "habitats/fish/bowl/decor_back.png", "z": 0 },
-        { "name": "pet", "z": 0 },
-        { "name": "food", "z": 0 },
-        { "name": "decor_front", "file": "habitats/fish/bowl/decor_front.png", "z": 0 },
-        { "name": "glass", "file": "habitats/fish/bowl/glass.png", "z": 0 },
-        { "name": "fx", "z": 0 },
-        { "name": "night", "file": "habitats/fish/bowl/night.png", "z": 0, "blend": "multiply" },
-        { "name": "shadow", "z": 0 }
+      "grid": [
+        320,
+        240
       ],
-      "water": { "x": 82, "y": 80, "w": 156, "h": 111 },
-      "waterShape": { "cx": 160, "cy": 116, "rx": 78, "ry": 80, "surfaceY": 80, "floorY": 190 },
-      "petAnchor": [160, 136],
-      "opaqueRect": { "x": 79, "y": 44, "w": 162, "h": 188 }
+      "layers": [
+        {
+          "name": "bg",
+          "file": "habitats/fish/bowl/bg.png",
+          "z": 0
+        },
+        {
+          "name": "memorial",
+          "file": "habitats/fish/bowl/memorial.png",
+          "z": 0
+        },
+        {
+          "name": "pet",
+          "z": 0
+        },
+        {
+          "name": "food",
+          "z": 0
+        },
+        {
+          "name": "fx",
+          "z": 0
+        },
+        {
+          "name": "decor_front",
+          "file": "habitats/fish/bowl/decor_front.png",
+          "z": 0
+        },
+        {
+          "name": "glass",
+          "file": "habitats/fish/bowl/glass.png",
+          "z": 0
+        }
+      ],
+      "water": {
+        "x": 78,
+        "y": 78,
+        "w": 164,
+        "h": 61
+      },
+      "waterShape": {
+        "cx": 160,
+        "cy": 101,
+        "rx": 82,
+        "ry": 81,
+        "surfaceY": 78,
+        "floorY": 139
+      },
+      "petAnchor": [
+        160,
+        108
+      ],
+      "opaqueRect": {
+        "x": 74,
+        "y": 22,
+        "w": 172,
+        "h": 203
+      }
     }
   },
   "sprites": {
     "fish": {
-      "frame": [160, 160],
-      "body": { "w": 56, "h": 46 },
+      "frame": [
+        80,
+        80
+      ],
+      "fps": 12,
+      "body": {
+        "w": 50,
+        "h": 32
+      },
       "states": {
-        "idle": { "file": "sprites/fish/idle.png", "frames": 6, "sequence": [0, 1, 2, 3, 0, 1, 2, 3, 4, 0, 1, 2, 3, 5], "loop": true },
-        "eat": { "file": "sprites/fish/eat.png", "frames": 5, "sequence": [0, 1, 2, 3, 4], "loop": false, "returnTo": "idle" },
-        "hungry": { "file": "sprites/fish/hungry.png", "frames": 5, "sequence": [0, 0, 1, 1, 2, 2, 3, 3, 4, 4], "loop": true },
-        "sleep": { "file": "sprites/fish/sleep.png", "frames": 4, "sequence": [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3], "loop": true },
-        "dead": { "file": "sprites/fish/dead.png", "frames": 4, "sequence": [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3], "loop": true },
-        "happy": { "file": "sprites/fish/happy.png", "frames": 5, "sequence": [0, 1, 2, 3, 4], "loop": true },
-        "excited": { "file": "sprites/fish/excited.png", "frames": 6, "sequence": [0, 1, 2, 3, 4, 5], "loop": true },
-        "curious": { "file": "sprites/fish/curious.png", "frames": 4, "sequence": [0, 1, 2, 3, 2, 1], "loop": true }
+        "idle": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/fish/idle/idle_0001.png",
+              "sprites/fish/idle/idle_0002.png",
+              "sprites/fish/idle/idle_0003.png",
+              "sprites/fish/idle/idle_0004.png",
+              "sprites/fish/idle/idle_0005.png",
+              "sprites/fish/idle/idle_0006.png",
+              "sprites/fish/idle/idle_0007.png",
+              "sprites/fish/idle/idle_0008.png",
+              "sprites/fish/idle/idle_0009.png",
+              "sprites/fish/idle/idle_0010.png",
+              "sprites/fish/idle/idle_0011.png",
+              "sprites/fish/idle/idle_0012.png"
+            ]
+          },
+          "frames": 12,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "loop": true
+        },
+        "eat": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/fish/eat/eat_0001.png",
+              "sprites/fish/eat/eat_0002.png",
+              "sprites/fish/eat/eat_0003.png",
+              "sprites/fish/eat/eat_0004.png",
+              "sprites/fish/eat/eat_0005.png",
+              "sprites/fish/eat/eat_0006.png",
+              "sprites/fish/eat/eat_0007.png",
+              "sprites/fish/eat/eat_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": false,
+          "returnTo": "idle"
+        },
+        "sleep": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/fish/sleep/sleep_0001.png",
+              "sprites/fish/sleep/sleep_0002.png",
+              "sprites/fish/sleep/sleep_0003.png",
+              "sprites/fish/sleep/sleep_0004.png",
+              "sprites/fish/sleep/sleep_0005.png",
+              "sprites/fish/sleep/sleep_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": true
+        },
+        "hungry": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/fish/hungry/hungry_0001.png",
+              "sprites/fish/hungry/hungry_0002.png",
+              "sprites/fish/hungry/hungry_0003.png",
+              "sprites/fish/hungry/hungry_0004.png",
+              "sprites/fish/hungry/hungry_0005.png",
+              "sprites/fish/hungry/hungry_0006.png",
+              "sprites/fish/hungry/hungry_0007.png",
+              "sprites/fish/hungry/hungry_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": true
+        },
+        "dead": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/fish/dead/dead_0001.png",
+              "sprites/fish/dead/dead_0002.png",
+              "sprites/fish/dead/dead_0003.png",
+              "sprites/fish/dead/dead_0004.png",
+              "sprites/fish/dead/dead_0005.png",
+              "sprites/fish/dead/dead_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": true
+        },
+        "happy": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/fish/happy/happy_0001.png",
+              "sprites/fish/happy/happy_0002.png",
+              "sprites/fish/happy/happy_0003.png",
+              "sprites/fish/happy/happy_0004.png",
+              "sprites/fish/happy/happy_0005.png",
+              "sprites/fish/happy/happy_0006.png",
+              "sprites/fish/happy/happy_0007.png",
+              "sprites/fish/happy/happy_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": true
+        },
+        "excited": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/fish/excited/excited_0001.png",
+              "sprites/fish/excited/excited_0002.png",
+              "sprites/fish/excited/excited_0003.png",
+              "sprites/fish/excited/excited_0004.png",
+              "sprites/fish/excited/excited_0005.png",
+              "sprites/fish/excited/excited_0006.png",
+              "sprites/fish/excited/excited_0007.png",
+              "sprites/fish/excited/excited_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": true
+        },
+        "curious": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/fish/curious/curious_0001.png",
+              "sprites/fish/curious/curious_0002.png",
+              "sprites/fish/curious/curious_0003.png",
+              "sprites/fish/curious/curious_0004.png",
+              "sprites/fish/curious/curious_0005.png",
+              "sprites/fish/curious/curious_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": true
+        }
       }
     }
   }

@@ -1,0 +1,172 @@
+{
+ "resolution": [
+  320,
+  320
+ ],
+ "camera": "CAM_fish",
+ "projection": "orthographic",
+ "mmPerPx": 0.50391,
+ "fps": 12,
+ "facing": "right",
+ "bodyBox": [
+  106.2,
+  37.0,
+  281.7,
+  289.6
+ ],
+ "bodyBox_perState": {
+  "idle": [
+   111.8,
+   101.1,
+   276.1,
+   256.0
+  ],
+  "eat": [
+   106.2,
+   98.5,
+   281.7,
+   258.1
+  ],
+  "sleep": [
+   111.5,
+   120.5,
+   274.7,
+   269.0
+  ],
+  "hungry": [
+   111.4,
+   134.4,
+   274.7,
+   289.6
+  ],
+  "dead": [
+   111.7,
+   37.0,
+   276.1,
+   183.2
+  ],
+  "happy": [
+   111.7,
+   85.8,
+   276.0,
+   253.8
+  ],
+  "excited": [
+   106.7,
+   88.2,
+   281.0,
+   268.9
+  ],
+  "curious": [
+   106.8,
+   92.4,
+   264.8,
+   242.7
+  ]
+ },
+ "anchor": {
+  "x": 160.0,
+  "y": 160.0,
+  "source": "RIG_fish_root at rest, i.e. the mirror axis"
+ },
+ "states": {
+  "idle": {
+   "frames": 12,
+   "loop": true
+  },
+  "eat": {
+   "frames": 8,
+   "loop": false
+  },
+  "sleep": {
+   "frames": 6,
+   "loop": true
+  },
+  "hungry": {
+   "frames": 8,
+   "loop": true
+  },
+  "dead": {
+   "frames": 6,
+   "loop": true
+  },
+  "happy": {
+   "frames": 8,
+   "loop": true
+  },
+  "excited": {
+   "frames": 8,
+   "loop": true
+  },
+  "curious": {
+   "frames": 6,
+   "loop": true
+  }
+ },
+ "contentBox": [
+  41,
+  59,
+  289,
+  257
+ ],
+ "contentBoxAlphaThreshold": 0.02,
+ "contentBox_perState": {
+  "idle": [
+   43,
+   82,
+   279,
+   238
+  ],
+  "eat": [
+   42,
+   81,
+   289,
+   236
+  ],
+  "sleep": [
+   42,
+   95,
+   277,
+   242
+  ],
+  "hungry": [
+   41,
+   105,
+   277,
+   257
+  ],
+  "dead": [
+   46,
+   59,
+   280,
+   207
+  ],
+  "happy": [
+   43,
+   70,
+   279,
+   236
+  ],
+  "excited": [
+   44,
+   72,
+   285,
+   249
+  ],
+  "curious": [
+   45,
+   76,
+   269,
+   227
+  ]
+ },
+ "contentBox_note": "union alpha bounding box across every frame of every state; crop all frames to this single box and nothing clips",
+ "bodyBox_note": "projected bounds of HERO_fish_body alone, fins and tail excluded, unioned over every frame of every state; intended as the collision box, deliberately smaller than contentBox",
+ "_pixelMeasured": [
+  "contentBox"
+ ],
+ "_projected": [
+  "bodyBox",
+  "anchor"
+ ]
+}

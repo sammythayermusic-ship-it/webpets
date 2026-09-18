@@ -45,19 +45,24 @@ manifest cannot drift. Textures load with `linear` filtering and generated mipma
 ```
 assets/
   manifest.json                     habitats + sprites index (schema = Manifest in src/render/types.ts)
-  habitats/fish/bowl/<layer>.png    320x240 layers: bg medium decor_back pantry pantry_fill decor_front glass night memorial
-  habitats-160x120/fish-bowl.png    the Phase 0 art; now the PALETTE source (38 opaque colours) `tools/gen_bg.py`
-                                    quantizes against. The pixels come from the hi-res reference, not from here.
+  habitats/fish/bowl/<layer>.png    1280x960 Blender renders = 4x the 320x240 logical grid:
+                                    bg (stand, back glass, water, gravel, plant, baked contact shadow),
+                                    decor_front (front gravel lip + frontmost plant blade), glass (front
+                                    glass only, on alpha), memorial. `decor_front` and `glass` draw AFTER
+                                    the pet slot, which is what puts the fish inside the tank.
+                                    There is no `night` layer: night is a tint on these sprites.
+  habitats/fish/bowl/geometry.json  waterline, gravel floor and inner ellipse PROJECTED out of the bowl
+                                    camera, in art px. The source of the manifest's water numbers; they
+                                    are authored by the renderer, never measured off colour.
+  sprites/fish/<state>/*.png        320x320 frames, one PNG per frame = 4x the 80x80 logical frame.
+                                    idle 12, eat 8, hungry 8, sleep 6, dead 6, happy 8, excited 8,
+                                    curious 6, rendered at 12 fps. Separate files rather than a sheet
+                                    because only separate files can be mipmapped.
+  sprites/fish/geometry.json        frame counts, fps, anchor and the projected body box.
+  habitats-160x120/*.png            the Phase 0 concept art. Reference only; nothing reads it now.
   reference/habitats-hires/*.png    1168x880 concept renders. Source, never shipped (a build plugin drops them).
-                                    `tools/gen_bg.py` derives `habitats/fish/bowl/bg.png` and `tools/gen_fish.py`
-                                    derives the fish strips from `fish-bowl.png`.
-  sprites/fish/<state>.png          160x160 strips: idle eat hungry sleep dead happy excited curious (frames left to
-                                    right, one row). Real art, no stamp. The drawn fish is ~64x48 and is deliberately
-                                    LARGER than the manifest `body` box in both axes, so fins and tail may brush the
-                                    glass while the water clamp holds the body inside (src/render/spriteStrips.test.ts).
-  sprites/fish/emotes.png           6-frame 16x16 overlay strip (heart note zzz sweat excl question), unwired as yet
-  sprites/strips-80/*.png           reference strips (gus-*, doink-idle) for validating the player
-  fonts/PressStart2P-Regular.ttf    HUD font (OFL)
+  sprites/pets-80, sprites/strips-80  earlier-round reference sprites; nothing reads them.
+  fonts/PressStart2P-Regular.ttf    unused since the chrome moved to a system typeface
   audio/fish/{ambient,feed,alert,death}.ogg   optional; missing files are silently skipped
 ```
 

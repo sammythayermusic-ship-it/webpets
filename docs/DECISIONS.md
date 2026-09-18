@@ -351,3 +351,50 @@ work, arriving in the one place nobody had looked.
   pixels are still the right answer.
 - This is a judgement call rather than something that was asked for, and it is one commit to revert.
   It is recorded here as a deviation from the Blueprint's pixel-art UI, not smuggled in.
+
+### stage 3: the 3D art, wired in
+27 renders became 68: the bowl split into layers, and all eight fish states rendered rather than three.
+
+- **The bowl is four passes, not one image.** A single composite would have forced the fish to draw on
+  top of the glass — its specular streak and rim highlight included — which is the "fish looks like it's
+  outside the tank" complaint arriving by a new route. `bg` holds everything behind the fish, `glass` is
+  the front surface on alpha (median alpha 0.17, with highlights to 1.0), `decor_front` is the front
+  gravel lip and the nearest plant blade. The layer stack already drew those two after the `pet` slot;
+  nothing about the architecture changed, only the art that fills it.
+- **Geometry is projected, not measured.** The bowl camera is orthographic with a known mm/px, so the
+  waterline, gravel floor and inner ellipse come out of the 3D scene into `geometry.json` and are divided
+  by the art scale. This is the fix for the CLASS of bug that produced the waterline problem, not another
+  instance of it: a renderer knows where its own water is, where a colour test has to guess.
+- **`surfaceY` is the NEAR edge of the surface, not its centre.** The water surface is an ellipse seen
+  from slightly above, spanning rows 56..78 rather than sitting on one line. Clamping to the centre (67)
+  would let the fish rise in front of the visible waterline — the same symptom as before, for a new
+  reason. Only the near edge is under water in every column.
+- **The body box got shorter, and that was a judgement call.** The rendered bowl has 61 logical px
+  between surface and gravel where the painted one had 110. A box tall enough to contain the dorsal and
+  pelvic fins would have left about 20 px of vertical travel and flattened the figure-eight — the exact
+  failure that once made the fish swim in a straight line. `body.h` is 32 against a drawn height of 39,
+  so the body proper stays in the water and the fins overlap the glass, which is what the box was always
+  for. `w` is 50 against a drawn 59.
+- **The Blender-projected `bodyBox` was not usable and was not used.** It disagreed with the pixels in
+  both orientations — it reported the body extending below the fish's own alpha bounding box — so the
+  collision box was measured from the shipped frames instead. Worth recording: a projected number that
+  cannot be reconciled with the art is not a better number than a measured one.
+- **Night became a tint rather than an overlay.** `night.png` was two flat colours cut to the OLD bowl's
+  silhouette; against the render it was the wrong resolution AND the wrong shape. Tinting the habitat's
+  own sprites multiplies the texture and so respects its alpha for free — aligned by construction, at
+  any art resolution, with no file to keep in step. Starvation moved the same way when `medium`, the
+  layer it used to tint, stopped existing.
+- **`fx` moved below `decor_front` and `glass`.** Bubbles rise inside the water, so the front gravel and
+  the glass's own highlights belong on top of them. It was the topmost slot, which did not matter when
+  bubbles were 6 px pixel rings and does once the glass is a real reflective surface.
+- **Three art test files were replaced, not relaxed.** They asserted hard alpha, a 38-colour palette and
+  one row of frame-sized cells — all correct for pixel art, none satisfiable by a render. The new
+  `habitatArt.test.ts` asserts what matters now: every layer is the same whole multiple of the grid,
+  `opaqueRect` is still bg's alpha bbox exactly (the click-through guard), the glass is see-through
+  enough to see a fish through, the memorial keeps the hit region in place, every state ships the frames
+  it declares, nothing is clipped at a frame edge, the fish is centred on its mirror axis, and the water
+  band leaves room to swim.
+- **`water.test.ts` stopped hard-coding one bowl.** Every literal in it went stale the day the habitat
+  was re-rendered, which is a test reporting that the art changed rather than that the maths broke. It
+  derives from `BOWL_WATER_SHAPE` and `FISH_BODY` now.
+- `tools/gen_bg.py`, `gen_fish.py` and `gen_placeholders.py` are retired with the art they produced.

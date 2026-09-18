@@ -22,9 +22,12 @@ export const SLOT_ORDER = [
   'pantry_fill',
   'pet',
   'food',
+  // fx sits UNDER decor_front and glass: bubbles rise inside the water, so the front gravel lip and the
+  // glass's own highlights belong on top of them. It used to be the topmost slot, which was invisible
+  // when the bubbles were 6 px pixel rings and is not once the glass is a real reflective surface.
+  'fx',
   'decor_front',
   'glass',
-  'fx',
   'night',
 ] as const;
 
@@ -45,8 +48,19 @@ const SLOT_OF: Readonly<Record<Exclude<LayerName, 'shadow'>, SlotName>> = {
   night: 'night',
 };
 
-/** medium.tint shifted 10 % toward green for the starving state. */
-export const STARVING_MEDIUM_TINT = 0xe6ffe6;
+/**
+ * Night and starvation are applied as a TINT on the habitat's own sprites rather than as an overlay.
+ *
+ * Night used to be a painted `night.png` multiplied on top. That art was two flat colours cut to the
+ * old bowl's silhouette, so against a re-rendered bowl it was both the wrong resolution and the wrong
+ * shape — a blue wash offset from the thing it was meant to be washing. A tint multiplies the texture
+ * and therefore respects its alpha for free: perfectly aligned by construction, at any art resolution,
+ * with no file to keep in step. Starvation moved the same way when `medium` (the layer it used to tint)
+ * stopped existing: the 3D bowl has no separate water layer to shift.
+ */
+export const STARVING_TINT = 0xe6ffe6;
+/** Cool blue the habitat fades toward at night, matching the wash the painted night layer used. */
+export const NIGHT_TINT = 0x465496;
 const NIGHT_FADE_MS = 2000;
 const NIGHT_FADE_STEPS = 8;
 const BLINK_MS = 500;
@@ -106,6 +120,8 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
   let bg: Sprite | null = null;
   let memorial: Sprite | null = null;
   let medium: Sprite | null = null;
+  /** Every sprite the world tint applies to: the habitat's own art, whichever variant is showing. */
+  const worldSprites: Sprite[] = [];
   let pantryFill: Sprite | null = null;
   /** Art px per grid px for the pantry_fill texture; its crop rect addresses TEXELS, not grid px. */
   let pantryArt = 1;
@@ -158,6 +174,9 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
       default:
         break;
     }
+    if (l.name === 'bg' || l.name === 'memorial' || l.name === 'decor_back' || l.name === 'decor_front' || l.name === 'glass') {
+      worldSprites.push(sprite);
+    }
     slot.addChild(sprite);
   }
 
@@ -204,12 +223,32 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
     pantryFill.alpha = pantryLow && !blinkOn ? BLINK_LOW_ALPHA : 1;
   };
 
-  const applyNight = (): void => {
-    if (!night) return;
-    night.alpha = nightStep / NIGHT_FADE_STEPS;
-    night.visible = nightStep > 0;
+  let starving = false;
+
+  /** Multiply two 0xRRGGBB tints channel by channel, which is what stacking two tints means. */
+  const mixTint = (a: number, b: number): number => {
+    const ch = (shift: number): number => Math.round((((a >> shift) & 0xff) * ((b >> shift) & 0xff)) / 255);
+    return (ch(16) << 16) | (ch(8) << 8) | ch(0);
   };
 
+  /** Blend `to` into white by `t`, so a fade to night is a fade of the tint itself. */
+  const towards = (to: number, t: number): number => {
+    const ch = (shift: number): number => Math.round(255 + (((to >> shift) & 0xff) - 255) * t);
+    return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+  };
+
+  const applyWorldTint = (): void => {
+    const tint = mixTint(towards(NIGHT_TINT, nightStep / NIGHT_FADE_STEPS), starving ? STARVING_TINT : 0xffffff);
+    for (const sp of worldSprites) sp.tint = tint;
+    // A habitat that still ships a painted night overlay keeps working; the bowl no longer has one.
+    if (night) {
+      night.alpha = nightStep / NIGHT_FADE_STEPS;
+      night.visible = nightStep > 0;
+    }
+  };
+  const applyNight = applyWorldTint;
+
+  applyWorldTint();
   applyPantry();
 
   return {
@@ -240,7 +279,9 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
       fog.visible = phase === 'dead';
     },
     setStarving(b) {
-      if (medium) medium.tint = b ? STARVING_MEDIUM_TINT : 0xffffff;
+      starving = b;
+      applyWorldTint();
+      if (medium) medium.tint = b ? STARVING_TINT : 0xffffff;
     },
     setParallax(dx, dy) {
       // Unrounded. Snapping to whole grid px turned a continuous slide into a four-step stagger, which
