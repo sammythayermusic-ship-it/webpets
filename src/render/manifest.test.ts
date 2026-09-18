@@ -12,7 +12,7 @@ describe('parseManifest', () => {
     expect(bowl).toBeDefined();
     expect(bowl?.grid).toEqual([320, 240]);
     expect(bowl?.layers.map((l) => l.name)).toEqual([
-      'bg', 'memorial', 'medium', 'decor_back', 'pantry', 'pantry_fill', 'pet', 'food', 'decor_front', 'glass', 'fx', 'night', 'shadow',
+      'bg', 'memorial', 'medium', 'decor_back', 'pet', 'food', 'decor_front', 'glass', 'fx', 'night', 'shadow',
     ]);
     const fish = m.sprites['fish'];
     expect(fish?.frame).toEqual([160, 160]);

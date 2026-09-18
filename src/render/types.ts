@@ -46,8 +46,12 @@ export interface ManifestHabitat {
   /** Bounding rect of the water. */
   water: Rect;
   waterShape: WaterShape;
-  /** Non-transparent pixels of pantry_fill.png lie inside this rect; the fill is cropped from the bottom up. */
-  pantryRect: Rect;
+  /**
+   * Where an in-scene food gauge lives: non-transparent pixels of pantry_fill.png lie inside this rect
+   * and the fill is cropped from the bottom up. Optional, because a habitat need not show one — the
+   * bowl's clip-on feeder was removed and its pantry level now reads only in the hover caption.
+   */
+  pantryRect?: Rect;
   petAnchor: [number, number];
   /** Bounding rect of the habitat's opaque pixels; used for hit regions and hover. */
   opaqueRect: Rect;

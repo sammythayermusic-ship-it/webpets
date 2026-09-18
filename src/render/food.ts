@@ -12,6 +12,8 @@ import type { Rng } from '../sim/types';
 import type { WaterBounds, WaterShape } from './types';
 
 export const FLAKES_PER_FEED = 6;
+/** Flake spawn spread, as a fraction of the water's half-width at the spawn row. */
+const SPAWN_SPREAD = 0.45;
 /** Settled flakes dissolve after this many 8 fps steps (30 s). */
 const DISSOLVE_STEPS = 240;
 
@@ -70,7 +72,11 @@ export function createFlakes(shape: WaterShape, bounds: WaterBounds): Flakes {
     container,
     feed(rng) {
       const y = bounds.surfaceY + 2;
-      const hw = Math.max(12, halfWidthAt(y + 4) - 12);
+      // A fraction of the surface half-width, not a fixed inset. The old `- 12` was tuned when the
+      // spawn row was the narrow top of the glass; now that it is the real waterline, where the bowl is
+      // near its widest, subtracting a constant scattered the flakes almost wall to wall. This keeps
+      // them a handful dropped into the middle at any bowl size.
+      const hw = Math.max(12, halfWidthAt(y + 4) * SPAWN_SPREAD);
       for (let i = 0; i < FLAKES_PER_FEED; i += 1) {
         const sprite = new Sprite({ texture: tex });
         container.addChild(sprite);

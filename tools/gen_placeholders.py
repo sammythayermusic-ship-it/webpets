@@ -1,7 +1,7 @@
 """Generate PLACEHOLDER art for the fish bowl (Phase 0).
 
 Outputs (all stamped with a tiny bitmap "PLACEHOLDER" label), sized from assets/manifest.json:
-  assets/habitats/fish/bowl/{medium,decor_back,pantry,pantry_fill,decor_front,glass,night,memorial}.png
+  assets/habitats/fish/bowl/{medium,decor_back,decor_front,glass,night,memorial}.png
 
 The fish strips are NOT generated here. As of Stage 2 they are real art derived from the goldfish painted
 into the concept render; `tools/gen_fish.py` builds them. `bg` is likewise real art, from `tools/gen_bg.py`.
@@ -11,11 +11,9 @@ Resolution is a variable, not a literal. Every size and rect comes from the mani
 
   GRID_W, GRID_H   habitats['fish/bowl'].grid
   WATER            habitats['fish/bowl'].waterShape
-  PANTRY_RECT      habitats['fish/bowl'].pantryRect
   OPAQUE_RECT      habitats['fish/bowl'].opaqueRect
 
-FEEDER_BOX is the one piece of geometry the manifest does not carry; it is derived as PANTRY_RECT
-inflated by one art unit on each side, so it can never drift from the rect the fill lives in.
+The bowl's clip-on feeder was removed from the art, so no feeder geometry is derived here.
 
 Two multipliers do all the resolution work:
 
@@ -32,7 +30,7 @@ because it is the only way to re-verify that claim.
 
 Stamp rule: every habitat layer carries the full word PLACEHOLDER (43x5 px in the 3x5 font, times the
 effective stamp scale U). The word is abbreviated to `PH` in the STAMP colour only where it cannot fit:
-`pantry_fill`, whose opaque pixels must stay inside pantryRect (see `check_pantry_fill`).
+the layers the concept art does not already provide.
 `src/render/placeholderStamps.test.ts` decodes the checked-in PNGs and asserts this.
 
 `bg` is real art from `tools/gen_bg.py` and the fish strips are real art from `tools/gen_fish.py`; neither
@@ -68,12 +66,9 @@ CONCEPT = ''                 # bg layer file, from the manifest
 
 # Geometry on the drawing canvas (manifest values divided by UPSCALE).
 WATER: dict[str, int] = {}
-PANTRY_RECT: dict[str, int] = {}
-FEEDER_BOX: dict[str, int] = {}
 OPAQUE_RECT: dict[str, int] = {}
 
 # Geometry in final px, straight from the manifest (the generation-time asserts check against these).
-PANTRY_RECT_PX: dict[str, int] = {}
 
 
 
@@ -94,7 +89,7 @@ def m(n: float) -> int:
 def configure(grid: tuple[int, int] | None = None, upscale: int | None = None) -> None:
     """Read every size and rect from assets/manifest.json and derive the drawing canvas."""
     global GRID_W, GRID_H, UPSCALE, CANVAS_W, CANVAS_H
-    global S, FONT_SCALE, CONCEPT, WATER, PANTRY_RECT, FEEDER_BOX, OPAQUE_RECT, PANTRY_RECT_PX
+    global S, FONT_SCALE, CONCEPT, WATER, OPAQUE_RECT
 
     with open(MANIFEST, encoding='utf8') as fh:
         manifest = json.load(fh)
@@ -117,18 +112,7 @@ def configure(grid: tuple[int, int] | None = None, upscale: int | None = None) -
 
     w = bowl['waterShape']
     WATER = {k: m(w[k]) for k in ('cx', 'cy', 'rx', 'ry', 'surfaceY', 'floorY')}
-    PANTRY_RECT_PX = {k: int(bowl['pantryRect'][k]) for k in ('x', 'y', 'w', 'h')}
-    PANTRY_RECT = {k: m(v) for k, v in PANTRY_RECT_PX.items()}
     OPAQUE_RECT = {k: m(int(bowl['opaqueRect'][k])) for k in ('x', 'y', 'w', 'h')}
-
-    # The feeder outline as drawn in the concept art: pantryRect inflated by one art unit on each side.
-    pad = u(1)
-    FEEDER_BOX = {
-        'x': PANTRY_RECT['x'] - pad,
-        'y': PANTRY_RECT['y'] - pad,
-        'w': PANTRY_RECT['w'] + 2 * pad,
-        'h': PANTRY_RECT['h'] + 2 * pad,
-    }
 
 
 # --- colours ---
@@ -381,38 +365,6 @@ def gen_decor_back() -> Image.Image:
     return im
 
 
-def gen_pantry() -> Image.Image:
-    im = new_layer()
-    d = ImageDraw.Draw(im)
-    b = FEEDER_BOX
-    # feeder box: dark opaque interior (hides the concept's painted flakes) + outline + clip down the rim
-    d.rectangle((b['x'], b['y'], b['x'] + b['w'] - 1, b['y'] + b['h'] - 1), fill=(38, 42, 52, 255),
-                outline=FEEDER_GRAY, width=u(1))
-    d.rectangle((b['x'] + u(16), b['y'] + b['h'], b['x'] + u(20) - 1, b['y'] + b['h'] + u(7) - 1),
-                fill=FEEDER_GRAY)
-    # The box above is functional, not decorative: it hides the flakes painted into the concept art so
-    # `pantry_fill` is the only thing that shows a level. Only the labels are placeholder.
-    if LABELED:
-        stamp(im, u(125), u(6), 'PANTRY')
-        stamp(im, u(114), u(12), 'PLACEHOLDER')  # right of the feeder box, ends inside the grid
-    return im
-
-
-def gen_pantry_fill() -> Image.Image:
-    im = new_layer()
-    px = im.load()
-    r = PANTRY_RECT
-    period = max(1, u(3))
-    for y in range(r['y'], r['y'] + r['h']):
-        for x in range(r['x'], r['x'] + r['w']):
-            px[x, y] = FLAKE_DARK if (x + y) % period == 0 else FLAKE_TAN
-    # pantryRect cannot hold PLACEHOLDER (43 font px); `PH` is the sanctioned abbreviation here
-    # (see module docstring).
-    stamp(im, r['x'] + u(1), r['y'] + u(2), 'PH', color=STAMP)
-    stamp(im, r['x'] + u(1), r['y'] + u(9), 'FILL', color=(120, 60, 20, 255))
-    return im
-
-
 def gen_decor_front() -> Image.Image:
     """Empty by default, for the same reason as `decor_back`."""
     im = new_layer()
@@ -459,10 +411,8 @@ def gen_night() -> Image.Image:
     d = ImageDraw.Draw(im)
     o = OPAQUE_RECT
     d.rectangle((o['x'], o['y'], o['x'] + o['w'] - 1, o['y'] + o['h'] - 1), fill=NIGHT_BLUE)
-    # the feeder/lamp area stays bright (white = unchanged under multiply)
-    b = FEEDER_BOX
-    d.rectangle((b['x'] - u(2), b['y'] - u(2), b['x'] + b['w'] + u(2) - 1, b['y'] + b['h'] + u(2) - 1),
-                fill=WHITE)
+    # There is no longer a feeder lamp to keep lit: the clip-on feeder was removed from the art, so the
+    # whole bowl dims evenly at night.
     # The alpha mask below clips this layer to the bowl, so both stamps must sit on opaque art; the spot is
     # searched for rather than hardcoded (see stamp_spot).
     concept_im = concept_art()
@@ -521,17 +471,6 @@ def save(im: Image.Image, path: str, size: tuple[int, int]) -> None:
     print('wrote', os.path.relpath(path, ROOT), im.size)
 
 
-def check_pantry_fill(im: Image.Image) -> None:
-    """Final-size check: every opaque pixel lies inside the manifest pantryRect."""
-    px = im.load()
-    r = PANTRY_RECT_PX
-    for y in range(GRID_H):
-        for x in range(GRID_W):
-            if px[x, y][3] > 0:
-                assert r['x'] <= x < r['x'] + r['w'] and r['y'] <= y < r['y'] + r['h'], \
-                    f'pantry_fill opaque pixel outside pantryRect at {x},{y}'
-
-
 def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--grid', nargs=2, type=int, metavar=('W', 'H'),
@@ -560,15 +499,12 @@ def main(argv: Iterable[str] = ()) -> None:
     layers = {
         'medium': gen_medium(),
         'decor_back': gen_decor_back(),
-        'pantry': gen_pantry(),
-        'pantry_fill': gen_pantry_fill(),
         'decor_front': gen_decor_front(),
         'glass': gen_glass(),
         'night': gen_night(),
         'memorial': gen_memorial(),
     }
     final = {name: upscaled(im, grid_size) for name, im in layers.items()}
-    check_pantry_fill(final['pantry_fill'])
     for name, im in final.items():
         save(im, os.path.join(BOWL_DIR, f'{name}.png'), grid_size)
 

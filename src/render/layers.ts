@@ -105,6 +105,7 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
         break;
       case 'pantry_fill': {
         const r = habitat.pantryRect;
+        if (!r) break; // no in-scene gauge in this habitat
         sprite.texture = new Texture({
           source: sprite.texture.source,
           frame: new Rectangle(r.x, r.y, r.w, r.h),
@@ -152,8 +153,8 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
   let nightClock = 0;
 
   const applyPantry = (): void => {
-    if (!pantryFill) return;
     const r = habitat.pantryRect;
+    if (!pantryFill || !r) return;
     const top = r.y + Math.round(r.h * (1 - pantryFraction));
     const h = r.y + r.h - top;
     const frame = pantryFill.texture.frame;

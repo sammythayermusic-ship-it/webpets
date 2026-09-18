@@ -222,7 +222,10 @@ describe('fish behavior', () => {
     for (let i = 0; i < 300; i += 1) b.step(input({}, seeded(8)));
     b.reset();
     const o = b.step(input());
+    // Derived, not hardcoded: the centre of the water band, which moved when surfaceY stopped meaning
+    // the top of the glass. A literal here is what went stale the first time.
+    const waterCentreY = (bounds.surfaceY + bounds.floorY) / 2;
     expect(Math.abs(o.x - 162)).toBeLessThanOrEqual(4);
-    expect(Math.abs(o.y - 120)).toBeLessThanOrEqual(6);
+    expect(Math.abs(o.y - waterCentreY)).toBeLessThanOrEqual(6);
   });
 });

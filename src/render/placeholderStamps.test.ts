@@ -111,18 +111,11 @@ describe('placeholder habitat layers', () => {
   // visible), and the purely decorative slots are empty: a labelled stand-in drawn over real art hides
   // the very thing it stands in for. `tools/gen_placeholders.py --labeled` restores them for debugging.
   const EMPTY_BY_DESIGN = new Set(['decor_back', 'decor_front', 'glass']);
-  const FUNCTIONAL_ONLY = new Set(['medium', 'pantry']);
+  const FUNCTIONAL_ONLY = new Set(['medium']);
 
   for (const layer of bowl.layers) {
     const file = layer.file;
     if (!file || layer.name === 'bg') continue; // bg is real derived art, not placeholder geometry
-    if (layer.name === 'pantry_fill') {
-      it('pantry_fill: too small for the word, so PH in the stamp colour inside pantryRect', () => {
-        const png = load(file);
-        expect(findWord(png, 'PH', bowl.pantryRect, scale, STAMP)).not.toBeNull();
-      });
-      continue;
-    }
     if (EMPTY_BY_DESIGN.has(layer.name)) {
       it(`${layer.name}: empty, because bg already draws it`, () => {
         const png = load(file);

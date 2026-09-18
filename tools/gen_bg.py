@@ -198,9 +198,23 @@ def alpha_bbox(im: Image.Image) -> dict[str, int]:
 
 
 def is_water(c: Sequence[int]) -> bool:
-    """The predicate the Phase 0 measurement used: opaque, clearly blue, not the pale glass highlight."""
+    """Opaque water body: clearly blue AND actually saturated.
+
+    The value gates are the point. Without them the pale blue of the air pocket seen through the glass
+    (#99D7F9 and friends) passes every colour test, and so does the rim, so the measured "water" began at
+    the top of the GLASS rather than the waterline. That is where the shipped surfaceY of 44 came from —
+    and the row it landed on had exactly two qualifying pixels, both of them inside the feeder. The fish
+    was then free to swim a quarter of the bowl above the painted surface.
+    """
     r, g, b, a = c
-    return a > 200 and b > 120 and b > r + 30 and b >= g - 10
+    if not (a > 200 and b > 120 and b > r + 30 and b >= g - 10):
+        return False
+    # Saturation separates the water body (~0.70) from the pale air pocket behind glass (~0.46-0.55);
+    # value separates it from the dark navy rim (~0.60), which is saturated but nearly black.
+    hi = max(r, g, b)
+    sat = 0 if hi == 0 else (hi - min(r, g, b)) / hi
+    val = hi / 255
+    return sat > 0.62 and val > 0.75
 
 
 def water_rows(im: Image.Image) -> list[tuple[int, int, int]]:
@@ -375,6 +389,60 @@ def report(im: Image.Image, grid: tuple[int, int]) -> dict[str, object]:
 
 # --------------------------------------------------------------------------------- main
 
+def erase_feeder(im: Image.Image) -> Image.Image:
+    """Remove the clip-on feeder the concept art paints onto the rim.
+
+    It reads as a big dark box bolted to the top of the bowl, and with the pantry gauge moved to the
+    hover caption nothing in the habitat needs it any more.
+
+    Geometric rather than a hand-typed rectangle: the feeder and its clip are the only opaque pixels in
+    the top-right that lie OUTSIDE the bowl's own outer glass ellipse, so fitting that ellipse from the
+    art and cutting outside it takes the housing and the clip while leaving the rim it overlaps intact.
+    A literal box cannot do that, because the clip crosses the rim.
+    """
+    w, h = im.size
+    px = im.load()
+    cx = w // 2
+    # Measure the silhouette BELOW the feeder, so the feeder cannot skew the fit. The widest span of an
+    # ellipse is its centre row; several rows tie at the maximum, so take their median rather than the
+    # first, which is what put the centre 16 rows too high on the first attempt.
+    spans = {y: sum(1 for x in range(w) if px[x, y][3] > 0) for y in range(h)}
+    body = {y: n for y, n in spans.items() if n > 0 and y > h // 4}
+    widest_n = max(body.values())
+    widest_rows = sorted(y for y, n in body.items() if n == widest_n)
+    cy = widest_rows[len(widest_rows) // 2]
+    xs = [x for x in range(w) if px[x, cy][3] > 0]
+    rx = max(max(xs) - cx, cx - min(xs))
+    ry = cy - min(y for y in range(h) if px[cx, y][3] > 0)
+
+    erased = 0
+    for y in range(h):
+        for x in range(w):
+            if px[x, y][3] == 0:
+                continue
+            if x < cx or y > cy:  # top-right quadrant only; the feeder lives nowhere else
+                continue
+            if ((x - cx) / (rx + 1)) ** 2 + ((y - cy) / (ry + 1)) ** 2 > 1.0:
+                px[x, y] = (0, 0, 0, 0)
+                erased += 1
+    # The feeder was also mid-drop: a trickle of flakes is painted falling from its spout. With the
+    # feeder gone they hang in the air above the waterline with nothing to have come from, so they go
+    # too. Only above the water — the plant below it has orange fronds that must survive.
+    rows = water_rows(im)
+    surface_y = rows[0][0] if rows else cy
+    crumbs = 0
+    for y in range(surface_y):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a > 200 and r > 150 and 60 < g < 200 and b < 110:
+                px[x, y] = (0, 0, 0, 0)
+                crumbs += 1
+
+    print(f'  feeder: erased {erased} px outside the outer glass ellipse '
+          f'(cx={cx} cy={cy} rx={rx} ry={ry}), plus {crumbs} px of falling food above y={surface_y}')
+    return im
+
+
 def build(grid: tuple[int, int], *, dither: str, threshold: int, outline_mode: str) -> Image.Image:
     src = Image.open(REFERENCE).convert('RGBA')
     print(f'source {os.path.relpath(REFERENCE, ROOT)} {src.width}x{src.height}')
@@ -388,6 +456,7 @@ def build(grid: tuple[int, int], *, dither: str, threshold: int, outline_mode: s
     print(f'  palette: {len(palette)} opaque colours from {os.path.relpath(PALETTE_SRC, ROOT)}, dither={dither}')
     small = quantize(small, palette, dither)
     small = outline(small, palette, outline_mode)
+    small = erase_feeder(small)
     return small
 
 

@@ -8,8 +8,6 @@
         { "name": "memorial", "file": "habitats/fish/bowl/memorial.png", "z": 0 },
         { "name": "medium", "file": "habitats/fish/bowl/medium.png", "z": 0 },
         { "name": "decor_back", "file": "habitats/fish/bowl/decor_back.png", "z": 0 },
-        { "name": "pantry", "file": "habitats/fish/bowl/pantry.png", "z": 0 },
-        { "name": "pantry_fill", "file": "habitats/fish/bowl/pantry_fill.png", "z": 1 },
         { "name": "pet", "z": 0 },
         { "name": "food", "z": 0 },
         { "name": "decor_front", "file": "habitats/fish/bowl/decor_front.png", "z": 0 },
@@ -18,11 +16,10 @@
         { "name": "night", "file": "habitats/fish/bowl/night.png", "z": 0, "blend": "multiply" },
         { "name": "shadow", "z": 0 }
       ],
-      "water": { "x": 81, "y": 44, "w": 158, "h": 147 },
-      "waterShape": { "cx": 160, "cy": 116, "rx": 78, "ry": 80, "surfaceY": 44, "floorY": 190 },
-      "pantryRect": { "x": 180, "y": 11, "w": 36, "h": 29 },
-      "petAnchor": [160, 120],
-      "opaqueRect": { "x": 79, "y": 8, "w": 162, "h": 224 }
+      "water": { "x": 82, "y": 80, "w": 156, "h": 111 },
+      "waterShape": { "cx": 160, "cy": 116, "rx": 78, "ry": 80, "surfaceY": 80, "floorY": 190 },
+      "petAnchor": [160, 136],
+      "opaqueRect": { "x": 79, "y": 44, "w": 162, "h": 188 }
     }
   },
   "sprites": {

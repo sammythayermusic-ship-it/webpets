@@ -108,7 +108,7 @@ function habitat(v: unknown, path: string): ManifestHabitat {
       surfaceY: int(ws['surfaceY'], `${path}.waterShape.surfaceY`),
       floorY: int(ws['floorY'], `${path}.waterShape.floorY`),
     },
-    pantryRect: rect(v['pantryRect'], `${path}.pantryRect`),
+    ...(v['pantryRect'] === undefined ? {} : { pantryRect: rect(v['pantryRect'], `${path}.pantryRect`) }),
     petAnchor: pair(v['petAnchor'], `${path}.petAnchor`),
     opaqueRect: rect(v['opaqueRect'], `${path}.opaqueRect`),
   };

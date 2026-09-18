@@ -84,7 +84,6 @@ export function createFishBehavior(): FishBehavior {
   const wanderTarget = (
     bounds: WaterBounds,
     halfW: number,
-    halfH: number,
     yMin: number,
     yMax: number,
     rng: () => number,
@@ -98,7 +97,11 @@ export function createFishBehavior(): FishBehavior {
     const cx = bounds.rect.x + bounds.rect.w / 2;
     const cy = (yMin + yMax) / 2;
     const ampX = Math.max(8, (bounds.rect.w / 2 - halfW) * 0.7);
-    const ampY = Math.max(4, ((yMax - yMin) / 2 - halfH) * 0.8);
+    // No second body inset here: yMin/yMax are already inset by halfH by the callers, so subtracting it
+    // again shrinks the sweep twice. It merely flattened the figure-eight while the swim band was the
+    // full glass height; once surfaceY became the real waterline the band is short enough that the
+    // double inset collapsed the vertical sweep to the 4px floor and the fish swam a straight line.
+    const ampY = Math.max(4, ((yMax - yMin) / 2) * 0.9);
     return {
       x: cx + ampX * Math.sin(phase) + wobbleX,
       y: cy + ampY * Math.sin(2 * phase) + wobbleY,
@@ -116,10 +119,11 @@ export function createFishBehavior(): FishBehavior {
 
     // ---- dead: belly-up at the surface, nothing else moves
     if (!input.alive) {
-      // Belly-up as close to the surface as the body box legally fits. Use the clamped y, not the raw
-      // target: surfaceY is the topmost water row, so `surfaceY + 12` puts the box's centre above the
-      // legal band and hangs the dorsal fin and tail outside the glass.
-      const c = bounds.clamp(x, bounds.surfaceY + 12, halfW, halfH);
+      // Belly-up as close to the waterline as the body box legally fits. Aim at the surface and let the
+      // clamp decide: any target above `surfaceY + halfH` resolves to the same row, so asking for the
+      // surface itself says what is meant. Taking the clamped y rather than the raw target is what keeps
+      // the dorsal fin and tail from hanging through the glass.
+      const c = bounds.clamp(x, bounds.surfaceY, halfW, halfH);
       x = c.x;
       y = c.y;
       eatTicks = 0;
@@ -187,7 +191,7 @@ export function createFishBehavior(): FishBehavior {
       phase += WANDER_RATE * 0.5;
       const yMin = bounds.surfaceY + halfH + 2;
       const yMax = bounds.surfaceY + (bounds.floorY - bounds.surfaceY) / 3;
-      const target = wanderTarget(bounds, halfW, halfH, yMin, yMax, rng);
+      const target = wanderTarget(bounds, halfW, yMin, yMax, rng);
       const t = moveToward(x, y, target.x, target.y, 1.5);
       nx = t.x;
       ny = t.y;
@@ -197,7 +201,7 @@ export function createFishBehavior(): FishBehavior {
       phase += WANDER_RATE;
       const yMin = bounds.surfaceY + halfH + 4;
       const yMax = bounds.floorY - halfH - 4;
-      const target = wanderTarget(bounds, halfW, halfH, yMin, yMax, rng);
+      const target = wanderTarget(bounds, halfW, yMin, yMax, rng);
       const t = moveToward(x, y, target.x, target.y, 3);
       nx = t.x;
       ny = t.y;

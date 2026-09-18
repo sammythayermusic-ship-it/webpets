@@ -21,8 +21,8 @@ function boxInside(x: number, y: number, hw = HW, hh = HH): boolean {
 
 describe('makeWaterBounds', () => {
   it('exposes the rect and the surface/floor rows', () => {
-    expect(bounds.rect).toEqual({ x: 82, y: 44, w: 156, h: 146 });
-    expect(bounds.surfaceY).toBe(44);
+    expect(bounds.rect).toEqual({ x: 82, y: 80, w: 156, h: 110 });
+    expect(bounds.surfaceY).toBe(80);
     expect(bounds.floorY).toBe(190);
   });
 
@@ -37,12 +37,15 @@ describe('makeWaterBounds', () => {
 
   it('inside() respects the ellipse and the surface/floor clip', () => {
     expect(bounds.inside(160, 120)).toBe(true);
-    expect(bounds.inside(160, 42)).toBe(false); // above the surface
+    expect(bounds.inside(160, 78)).toBe(false); // above the waterline, in the air pocket
     expect(bounds.inside(160, 192)).toBe(false); // below the floor
-    expect(bounds.inside(160, 44)).toBe(true); // surface row inside the ellipse
+    expect(bounds.inside(160, 80)).toBe(true); // the waterline row itself
     expect(bounds.inside(82, 116)).toBe(true); // left edge at the widest row
     expect(bounds.inside(80, 116)).toBe(false);
-    expect(bounds.inside(90, 44)).toBe(false); // surface row is narrower than the widest row
+    // The waterline row is narrower than the widest row, so a point that is inside at the bowl's waist
+    // is outside up here.
+    expect(bounds.inside(88, 80)).toBe(false);
+    expect(bounds.inside(95, 80)).toBe(true);
   });
 
   it('clamp() keeps the body box inside for a grid of inputs, returning integers', () => {
@@ -58,12 +61,15 @@ describe('makeWaterBounds', () => {
 
   it('clamp() is the identity for a point whose box already fits', () => {
     expect(bounds.clamp(160, 120, HW, HH)).toEqual({ x: 160, y: 120 });
-    expect(bounds.clamp(140, 90, HW, HH)).toEqual({ x: 140, y: 90 });
+    expect(bounds.clamp(140, 130, HW, HH)).toEqual({ x: 140, y: 130 });
   });
 
-  it('clamp() pushes a surface point down so the body top row stays under the surface', () => {
+  it('clamp() pushes a surface point down so the body top row stays under the waterline', () => {
+    // This is what stops the fish reading as floating outside the tank: aim anywhere above the water
+    // and the whole body box is pushed down until its top row is the waterline, never the glass rim.
     const c = bounds.clamp(160, 20, HW, HH);
-    expect(c.y).toBe(44 + HH);
+    expect(c.y).toBe(BOWL_WATER_SHAPE.surfaceY + HH);
+    expect(c.y - HH).toBe(BOWL_WATER_SHAPE.surfaceY);
     expect(boxInside(c.x, c.y)).toBe(true);
   });
 

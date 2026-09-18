@@ -78,21 +78,30 @@ describe('bowl background art', () => {
     expect(extra.map((c) => `#${c.toString(16).padStart(6, '0')}`)).toEqual([]);
   });
 
-  it('pantryRect sits on the feeder window, above the water surface', () => {
-    // pantryRect is the bounding box of an irregular enclosed region, so a handful of its corner pixels
-    // fall outside the feeder's silhouette. The pantry layer paints an opaque box over pantryRect
-    // inflated by 2px, so those pixels are backed anyway; what this guards is the rect having wandered
-    // off the feeder entirely.
-    const r = bowl.pantryRect;
-    let opaque = 0;
-    for (let y = r.y; y < r.y + r.h; y += 1) {
-      for (let x = r.x; x < r.x + r.w; x += 1) {
-        if ((png.data[(y * png.width + x) * 4 + 3] ?? 0) > 0) opaque += 1;
+  it('has no feeder bolted to the rim any more', () => {
+    // The concept art paints a clip-on feeder onto the top-right rim, and it read as a big dark box.
+    // gen_bg.py erases it geometrically: it is the only opaque thing in that quadrant lying outside the
+    // bowl's own outer glass ellipse. Assert the result rather than the method, so any way of putting
+    // it back fails here.
+    const { cx, cy } = bowl.waterShape;
+    let strays = 0;
+    for (let y = 0; y < cy; y += 1) {
+      for (let x = cx; x < png.width; x += 1) {
+        if ((png.data[(y * png.width + x) * 4 + 3] ?? 0) === 0) continue;
+        // Outside the outer glass ellipse, measured from the art: rx 81, ry 72 about (160, 116).
+        if (((x - cx) / 82) ** 2 + ((y - cy) / 73) ** 2 > 1) strays += 1;
       }
     }
-    expect(opaque / (r.w * r.h)).toBeGreaterThan(0.98);
-    expect(r.y + r.h).toBeLessThanOrEqual(bowl.waterShape.surfaceY);
+    expect(strays, 'opaque pixels above and right of the bowl mean the feeder is back').toBe(0);
   });
+
+  it('declares no in-scene pantry gauge, so nothing crops one', () => {
+    // The gauge lived inside the feeder. With the feeder gone the pantry reads in the hover caption.
+    expect(bowl.pantryRect).toBeUndefined();
+    expect(bowl.layers.map((l) => l.name)).not.toContain('pantry');
+    expect(bowl.layers.map((l) => l.name)).not.toContain('pantry_fill');
+  });
+
 });
 
 describe('fish sprite art', () => {
