@@ -25,6 +25,7 @@ export {
   GRID_H,
   GRID_W,
   HOUR_MS,
+  MINUTE_MS,
   PANTRY_LOW_DAYS,
   PANTRY_LOW_HUNGER_MAX,
   PANTRY_VISUAL_MAX,
@@ -41,6 +42,8 @@ export {
 } from './constants';
 export type { Scale, TrayChipSize } from './constants';
 export { hungerAt, hungerLabel, pantryDays, projectedDeathAt, zeroAt } from './hunger';
+export { decayAttention, moodAnim, moodOf } from './mood';
+export type { Mood, MoodInput, MoodLabel } from './mood';
 export { reconcile } from './reconcile';
 export { depositPantry, feed, withdrawPantry } from './feed';
 export { DEFAULT_HABITAT, NAME_POOLS, ageMs, formatAge, newPet, toGraveRecord } from './pet';

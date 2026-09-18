@@ -1,6 +1,6 @@
 // Render contract types. Implementation in ./scene.ts etc. (owner: render builder).
 
-import type { Habitat, HungerLabel, Rect, Rng, Species } from '../sim/types';
+import type { Habitat, HungerLabel, Personality, Rect, Rng, Species } from '../sim/types';
 import type { Scale, TrayChipSize } from '../sim/constants';
 
 export type { Rect };
@@ -117,6 +117,14 @@ export type ScenePhase = 'alive' | 'dead' | 'memorial';
 export interface SceneView {
   species: Species;
   habitat: Habitat;
+  /** Drives the mood engine's temperament. Same four personalities the speech lines use. */
+  personality: Personality;
+  /**
+   * ms epoch of the last meal. An absolute time rather than an elapsed one deliberately: the scene
+   * recomputes the post-meal glow every tick, and a "ms since" field would have to be republished
+   * continuously to stay true.
+   */
+  lastFedAt: number;
   hunger: number;
   label: HungerLabel;
   alive: boolean;
@@ -186,6 +194,12 @@ export interface FishInput {
   flakes: Array<{ x: number; y: number }>;
   bounds: WaterBounds;
   body: { w: number; h: number };
+  /**
+   * Something the pet is interested in, in grid px, with 0..1 of how much it cares. Null when there is
+   * nothing to look at or it is in no state to care. Food always outranks this: a hungry animal does
+   * not stop to investigate a cursor.
+   */
+  attract: { x: number; y: number; strength: number } | null;
   rng: Rng;
 }
 

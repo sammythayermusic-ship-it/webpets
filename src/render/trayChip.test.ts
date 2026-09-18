@@ -6,6 +6,8 @@ function view(over: Partial<SceneView> = {}): SceneView {
   return {
     species: 'fish',
     habitat: 'bowl',
+    personality: 'zen',
+    lastFedAt: 0,
     hunger: 100,
     label: 'full',
     alive: true,

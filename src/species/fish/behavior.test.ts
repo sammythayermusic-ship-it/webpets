@@ -32,6 +32,7 @@ function input(over: Partial<FishInput> = {}, rng: Rng = seeded(1)): FishInput {
     flakes: [],
     bounds,
     body,
+    attract: null,
     rng,
     ...over,
   };
@@ -227,5 +228,57 @@ describe('fish behavior', () => {
     const waterCentreY = (bounds.surfaceY + bounds.floorY) / 2;
     expect(Math.abs(o.x - 162)).toBeLessThanOrEqual(4);
     expect(Math.abs(o.y - waterCentreY)).toBeLessThanOrEqual(6);
+  });
+});
+
+describe('interest', () => {
+  // The mood engine decides whether the fish CARES; this is only about what caring looks like.
+  const run = (over: Partial<FishInput>, ticks: number): Array<{ x: number; y: number }> => {
+    const b = createFishBehavior();
+    const rng = seeded(7);
+    const outs: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i < ticks; i += 1) outs.push(b.step(input(over, rng)));
+    return outs;
+  };
+
+  it('drifts toward something it is interested in, without flying straight to it', () => {
+    const corner = { x: bounds.rect.x + 12, y: bounds.floorY - 12 };
+    const ignoring = run({ attract: null }, 120);
+    const interested = run({ attract: { ...corner, strength: 1 } }, 120);
+    const near = (o: { x: number; y: number }): number => Math.hypot(o.x - corner.x, o.y - corner.y);
+    const closest = (os: Array<{ x: number; y: number }>): number => Math.min(...os.map(near));
+    const mean = (os: Array<{ x: number; y: number }>): number => os.reduce((a, o) => a + near(o), 0) / os.length;
+
+    // It spends its time nearer the thing...
+    expect(mean(interested)).toBeLessThan(mean(ignoring));
+    // ...but it is still a fish swimming a figure-eight, not a cursor-follower: it never simply parks.
+    expect(closest(interested)).toBeGreaterThan(2);
+    const spread = new Set(interested.map((o) => `${Math.round(o.x / 8)},${Math.round(o.y / 8)}`));
+    expect(spread.size, 'still roams while interested').toBeGreaterThan(4);
+  });
+
+  it('ignores it entirely when there is food, when hungry, asleep or dead', () => {
+    const corner = { x: bounds.rect.x + 12, y: bounds.floorY - 12 };
+    const pull = { ...corner, strength: 1 };
+    const near = (o: { x: number; y: number }): number => Math.hypot(o.x - corner.x, o.y - corner.y);
+    const meanOf = (over: Partial<FishInput>): number => {
+      const outs = run(over, 120);
+      return outs.reduce((a, o) => a + near(o), 0) / outs.length;
+    };
+    // Each of these must behave identically with and without something interesting present: a hungry
+    // animal does not stop to investigate a cursor, and a dead one certainly does not.
+    for (const state of [
+      { label: 'hungry' as const, hunger: 20 },
+      { label: 'starving' as const, hunger: 0 },
+      { asleep: true },
+      { alive: false },
+    ]) {
+      expect(meanOf({ ...state, attract: pull }), JSON.stringify(state)).toBeCloseTo(meanOf({ ...state, attract: null }), 6);
+    }
+  });
+
+  it('a zero strength is the same as no interest at all', () => {
+    const pull = { x: bounds.rect.x + 12, y: bounds.floorY - 12, strength: 0 };
+    expect(run({ attract: pull }, 60)).toEqual(run({ attract: null }, 60));
   });
 });

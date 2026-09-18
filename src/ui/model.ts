@@ -81,6 +81,8 @@ export function toChipView(
   return {
     species: pet.species,
     habitat: pet.habitat,
+    personality: pet.personality,
+    lastFedAt: pet.lastFedAt,
     hunger,
     label: labelFor(hunger),
     alive: pet.alive,

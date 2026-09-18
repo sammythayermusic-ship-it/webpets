@@ -37,6 +37,8 @@ export function toSceneView(s: AppState, prefersReducedMotion: boolean): SceneVi
   return {
     species: pet.species,
     habitat: pet.habitat,
+    personality: pet.personality,
+    lastFedAt: pet.lastFedAt,
     hunger,
     label: hungerLabel(hunger),
     alive: pet.alive,

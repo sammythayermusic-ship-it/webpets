@@ -21,6 +21,12 @@ const BITE_RANGE = 12;
 const WANDER_RATE = 0.045;
 /** Ticks between wander wobble re-rolls. */
 const WOBBLE_EVERY = 16;
+/**
+ * How far toward something interesting the wander target can be pulled, at `strength` 1. Capped well
+ * below 1 on purpose: a fish that flew straight to the cursor would be a UI element, not an animal.
+ * It drifts over, hangs about, and loses interest — the wander keeps running underneath the whole time.
+ */
+const ATTRACT_MAX = 0.55;
 
 function dartSpeed(label: HungerLabel): number {
   switch (label) {
@@ -197,11 +203,21 @@ export function createFishBehavior(): FishBehavior {
       ny = t.y;
       anim = 'hungry';
     } else {
-      // ---- content: slow figure-eight through the whole bowl
+      // ---- content: slow figure-eight through the whole bowl, bent toward anything interesting
       phase += WANDER_RATE;
       const yMin = bounds.surfaceY + halfH + 4;
       const yMax = bounds.floorY - halfH - 4;
       const target = wanderTarget(bounds, halfW, yMin, yMax, rng);
+      // Only here. A hungry, starving, sleeping or dead fish has better things to do than come and look
+      // at the cursor, and the flake branch above already returned for a fish that has food to chase.
+      const pull = input.attract;
+      if (pull && pull.strength > 0) {
+        const k = Math.min(1, Math.max(0, pull.strength)) * ATTRACT_MAX;
+        // Blended into the TARGET, not added to the position: the figure-eight keeps running and the
+        // fish arrives by swimming rather than by being dragged.
+        target.x += (pull.x - target.x) * k;
+        target.y += (pull.y - target.y) * k;
+      }
       const t = moveToward(x, y, target.x, target.y, 3);
       nx = t.x;
       ny = t.y;

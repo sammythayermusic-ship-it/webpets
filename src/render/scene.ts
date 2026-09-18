@@ -25,6 +25,7 @@ import { buildLayers, type LayerStack } from './layers';
 import { createSpritePlayer, type SpritePlayer } from './spritePlayer';
 import { stateFiles } from './manifest';
 import { makeWaterBounds } from './water';
+import { decayAttention, moodAnim, moodOf, type Mood } from '../sim/mood';
 import type { FishBehavior, HabitatScene, Manifest, ManifestHabitat, ManifestSprite, SceneEvent, SceneView, WaterBounds } from './types';
 
 const STEP_MS = 1000 / PET_FPS;
@@ -83,6 +84,15 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
    */
   let poseFrom = { x: habitat.petAnchor[0], y: habitat.petAnchor[1] };
   let poseTo = { x: habitat.petAnchor[0], y: habitat.petAnchor[1] };
+  /**
+   * The mood engine's state lives HERE rather than in the store, because attention has to be advanced
+   * every rendered frame and a store write per frame would re-run every subscriber sixty times a second
+   * to move one number. Nothing else needs it, and it is cheap to reconstruct: attention is a decaying
+   * accumulator that converges within minutes of the app starting.
+   */
+  let attention = 0;
+  let lastInteractionAt = 0;
+  let mood: Mood | null = null;
   /** False until the behavior has positioned the pet once; the sprite stays hidden so it never flashes at (0, 0). */
   let placed = false;
   const listeners: Record<SceneEvent, Set<() => void>> = { bite: new Set(), 'flakes-gone': new Set() };
@@ -154,14 +164,32 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
     steps += 1;
     const before = m.flakes.count();
     const dissolved = m.flakes.step(rng);
+    const alive = view.phase === 'alive' && view.alive;
+    const now = Date.now();
+    mood = moodOf({
+      hunger: view.hunger,
+      label: view.label,
+      alive,
+      asleep: view.asleep,
+      personality: view.personality,
+      sinceFedMs: Math.max(0, now - view.lastFedAt),
+      attention,
+      sinceInteractionMs: lastInteractionAt === 0 ? Number.MAX_SAFE_INTEGER : Math.max(0, now - lastInteractionAt),
+    });
+    // Somewhere to be curious about, in grid px. Only when there IS a pointer and the pet is in a mood
+    // to care; `interest` already collapses when it is starving or asleep.
+    const gx = pointer ? (pointer.x - WINDOW_PAD) / scale : null;
+    const gy = pointer ? (pointer.y - WINDOW_PAD) / scale : null;
+    const attract = gx !== null && gy !== null && mood.interest > 0.05 ? { x: gx, y: gy, strength: mood.interest } : null;
     const out = m.behavior.step({
       hunger: view.hunger,
       label: view.label,
-      alive: view.phase === 'alive' && view.alive,
+      alive,
       asleep: view.asleep,
       flakes: m.flakes.positions(),
       bounds: m.bounds,
       body: spriteDef.body,
+      attract,
       rng,
     });
     let ate = false;
@@ -169,7 +197,11 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       m.flakes.remove(out.biteFlakeIndex);
       ate = true;
     }
-    m.player.play(out.anim);
+    // The mood only ever gets to speak when the simulation has nothing to say. `idle` means "nothing in
+    // particular is happening", which is exactly the gap a feeling belongs in; eating, hunger posture,
+    // sleep and death are facts and outrank it.
+    const expressive = out.anim === 'idle' ? moodAnim(mood) : null;
+    m.player.play(expressive ?? out.anim);
     m.player.setFacing(out.facing, out.turning);
     // Roll the segment forward INSIDE the step loop. After a catch-up burst that leaves poseFrom and
     // poseTo bracketing only the final tick, so the fish resumes from where it is rather than
@@ -275,6 +307,7 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
         // the legal set for a body centre is the water ellipse eroded by the body box and cut to the
         // surface/floor band. Eroding a convex set leaves it convex and intersecting convex sets keeps
         // them convex, so every point on the segment between two legal centres is itself legal.
+        attention = decayAttention(attention, dtMs, pointer !== null);
         const t = acc / STEP_MS;
         m.player.setPosition(poseFrom.x + (poseTo.x - poseFrom.x) * t, poseFrom.y + (poseTo.y - poseFrom.y) * t);
         m.player.advance(dtMs);
@@ -333,11 +366,17 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
 
     feed() {
       if (!m || !view || view.phase !== 'alive') return;
+      // Feeding is the strongest form of attention there is; it should not read as neglect just because
+      // it happened from the tray with the pointer nowhere near the bowl.
+      lastInteractionAt = Date.now();
+      attention = Math.max(attention, 0.6);
       m.flakes.feed(rng);
     },
 
     setPointer(x, y) {
+      const was = pointer !== null;
       pointer = x === null || y === null ? null : { x, y };
+      if (pointer && !was) lastInteractionAt = Date.now();
       applyPointer();
     },
 
@@ -387,6 +426,10 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
         hasView: view !== null,
         petFrame: { w: spriteDef.frame[0], h: spriteDef.frame[1] },
         layerAlpha,
+        mood: mood
+          ? { label: mood.label, valence: Number(mood.valence.toFixed(3)), arousal: Number(mood.arousal.toFixed(3)), interest: Number(mood.interest.toFixed(3)) }
+          : null,
+        attention: Number(attention.toFixed(3)),
       };
     },
 

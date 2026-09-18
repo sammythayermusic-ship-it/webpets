@@ -10,6 +10,7 @@ export const DEFAULT_CONSTANTS: Readonly<SimConstants> = Object.freeze({
   DEATH_AFTER_ZERO_HOURS: 24,
 });
 
+export const MINUTE_MS = 60_000;
 export const HOUR_MS = 3_600_000;
 export const DAY_MS = 24 * HOUR_MS;
 

@@ -289,3 +289,39 @@ the largest window, a flake was a 24 device-px hard-edged brown square.
 - **Three things stopped rounding to whole grid px**: flake draw positions, the pointer sheen, and the
   parallax offset. Each was correct when a grid px was the smallest thing that could move. The parallax
   one was the most visible — a continuous slide delivered as a four-step stagger.
+
+### the mood engine: feelings without a model
+The original ask was a pet that feels alive and has feelings, with "ai integrated". Resolved with the
+user to: no API, no network, no cost, built in. `src/sim/mood.ts` is the result — pure, deterministic,
+no clock and no RNG, so the same inputs always give the same mood.
+
+- **Valence and arousal, not an enum.** The circumplex model, because the interesting states are the
+  ones a flat enum cannot express: low valence with HIGH arousal is agitation, low valence with LOW
+  arousal is misery, and a pet should not play them the same way. Labels are read off the plane at the
+  end rather than tracked.
+- **Hunger's effect on arousal is deliberately not monotonic.** Hunger is agitating until it is
+  exhausting: arousal peaks around a fifth of the bar, where the animal is hunting, and collapses at
+  zero, where it has given up. A monotonic version makes a pet at death's door the liveliest thing on
+  screen, which is both wrong and horrible to look at.
+- **`vitality` gates every social term, and this was a real bug found by its own test.** The first
+  version let a friendly cursor cancel most of the misery of an empty hunger bar: a zen fish starving to
+  death read as *mildly put out* (valence -0.15). Comfort helps an animal that is basically all right
+  and does not help one that is dying, so the post-meal glow, attention and most of the temperament bias
+  now scale with how fed the pet is. Temperament is suppressed only partly — fully would make all four
+  personalities identical at the bottom.
+- **Attention is asymmetric**: it rises over 20 s of the pointer being present and falls over 3 minutes
+  of absence. A pet that forgot you the moment your cursor left would read as a state machine; one as
+  slow to notice as to miss you would never react to a passing visit.
+- **Loneliness is about absence, not about being sad.** It was first gated on low valence, which meant
+  an optimistic personality could never be lonely at all. A cheerful pet can still miss you.
+- **Where the state lives: the scene, not the store.** Attention has to advance every rendered frame,
+  and a store write per frame would re-run every subscriber sixty times a second to move one number.
+  Nothing else needs it, and it costs nothing to rebuild — a decaying accumulator converges within
+  minutes of launch, which is also why nothing about the mood is persisted.
+- **The mood only speaks when the simulation has nothing to say.** `moodAnim` returns `happy`,
+  `excited`, `curious` or null, and the scene consults it only when the behaviour asked for `idle`.
+  Eating, hunger posture, sleep and death are facts and outrank a feeling.
+- **Interest drives a micro-behaviour**: the fish bends its wander target toward the pointer, capped at
+  55% so it drifts over and hangs about rather than tracking the cursor like a UI element. Gated to the
+  content branch only — a hungry, sleeping or dead fish does not stop to investigate anything, and that
+  is asserted rather than assumed.
