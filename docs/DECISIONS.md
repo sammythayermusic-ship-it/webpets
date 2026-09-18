@@ -332,3 +332,22 @@ no clock and no RNG, so the same inputs always give the same mood.
   55% so it drifts over and hangs about rather than tracking the cursor like a UI element. Gated to the
   content branch only — a hungry, sleeping or dead fish does not stop to investigate anything, and that
   is asserted rather than assumed.
+
+### the chrome, restyled to match the art
+The HUD pill, caption, speech bubble, dev panel and modal cards were pixel art too: Press Start 2P at
+8 px, hard 1 px black borders, offset square drop shadows, `steps()` transitions and
+`-webkit-font-smoothing: none`. All of that was *correct* for the habitat it sat on. Against soft 3D it
+reads as two products stapled together, which is the same "half-converted" complaint that started this
+work, arriving in the one place nobody had looked.
+
+- A system typeface at 11 px, translucent dark pills with a backdrop blur, rounded controls, soft
+  shadows and eased transitions. The hunger ring keeps its four label colours and gains round caps.
+- **Nothing structural moved.** Same elements, same class names, same measured rects. `hud.ts` reads
+  `offsetHeight` rather than assuming a size, so the hit regions Rust receives followed the CSS. The
+  pill's 20 px height is the ceiling: it is positioned at `WINDOW_PAD - PILL_GAP - height` and any
+  taller would overlap the habitat.
+- **The tray chip stays pixel art** and keeps `image-rendering: pixelated`. It is an 18 pt menu-bar
+  icon, where crisp genuinely beats smooth, and it is now the one place in the app where big square
+  pixels are still the right answer.
+- This is a judgement call rather than something that was asked for, and it is one commit to revert.
+  It is recorded here as a deviation from the Blueprint's pixel-art UI, not smuggled in.

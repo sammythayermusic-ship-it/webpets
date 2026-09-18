@@ -2,14 +2,26 @@
    Rules (docs/ARCHITECTURE.md "Pointer, hover and click-through rules"):
    - html/body/#app transparent; #ui absolute inset 0 with pointer-events none.
    - pointer-events: auto only on interactive children (pill, caption, dev panel, dialogs).
-   - Pixel font: Press Start 2P, no smoothing, 8 px / 16 px, line-height 1, integer offsets. */
 
-@font-face {
-  font-family: 'Press Start 2P';
-  src: url('/fonts/PressStart2P-Regular.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: block;
+   The chrome used to be pixel art to match the habitat: Press Start 2P at 8 px, hard 1 px black borders,
+   offset square drop shadows, and `steps()` transitions. All of it was correct for that art and reads as
+   unfinished against the soft 3D that replaced it, so this is the matching pass — a system typeface,
+   rounded translucent surfaces and soft shadows. Nothing structural changed: same elements, same class
+   names, same measured rects, so the hit regions Rust receives are unaffected.
+
+   The tray chip stays pixel art and keeps `image-rendering: pixelated`. It is an 18 pt menu-bar icon
+   where crisp beats smooth, and it is the one place big square pixels are still the right answer. */
+
+:root {
+  --wp-ink: #0f1115;
+  --wp-ink-dim: #6b7280;
+  --wp-on-dark: #f2f4f8;
+  --wp-on-dark-dim: #9aa3b2;
+  --wp-surface: rgba(255, 255, 255, 0.95);
+  --wp-scrim: rgba(20, 22, 28, 0.76);
+  --wp-radius: 10px;
+  --wp-shadow: 0 2px 12px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.22);
+  --wp-hairline: 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
 }
 
 html,
@@ -44,12 +56,12 @@ body {
   inset: 0;
   pointer-events: none;
   overflow: hidden;
-  font-family: 'Press Start 2P', monospace;
-  font-size: 8px;
-  line-height: 1;
-  color: #000;
-  -webkit-font-smoothing: none;
-  text-rendering: optimizeSpeed;
+  font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--wp-ink);
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
 }
 
 #ui [hidden] {
@@ -66,44 +78,46 @@ body {
 #ui select,
 #ui textarea {
   font-family: inherit;
-  font-size: 8px;
+  font-size: 11px;
   line-height: 1;
-  -webkit-font-smoothing: none;
-  text-rendering: optimizeSpeed;
-  border-radius: 0;
+  -webkit-font-smoothing: antialiased;
   outline: none;
   margin: 0;
 }
 
 #ui button {
-  height: 12px;
-  padding: 0 3px;
-  border: 1px solid #000;
-  background: #fff;
-  color: #000;
+  height: 20px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(15, 17, 21, 0.9);
+  color: #fff;
   cursor: pointer;
-  box-shadow: 1px 1px 0 #000;
-  text-transform: uppercase;
+  font-weight: 590;
+  letter-spacing: 0.02em;
   white-space: nowrap;
+  transition: background 120ms ease, transform 80ms ease;
+}
+#ui button:hover:not(:disabled) {
+  background: rgba(15, 17, 21, 1);
 }
 #ui button:active:not(:disabled) {
-  transform: translate(1px, 1px);
-  box-shadow: none;
+  transform: scale(0.96);
 }
 #ui button:disabled {
-  color: #888;
-  border-color: #888;
-  box-shadow: 1px 1px 0 #888;
+  background: rgba(15, 17, 21, 0.28);
+  color: rgba(255, 255, 255, 0.65);
   cursor: default;
 }
 
 #ui input,
 #ui select {
-  height: 12px;
-  padding: 0 2px;
-  border: 1px solid #000;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid rgba(15, 17, 21, 0.22);
+  border-radius: 6px;
   background: #fff;
-  color: #000;
+  color: var(--wp-ink);
   box-sizing: border-box;
 }
 #ui input[type='number'] {
@@ -121,64 +135,73 @@ body {
   position: absolute;
   left: 0;
   top: 0;
-  height: 16px;
+  /* 20 px is the ceiling: the pill is placed at WINDOW_PAD - PILL_GAP - height and must not overlap
+     the habitat. hud.ts measures offsetHeight, so this is the single place the size is decided. */
+  height: 20px;
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 4px;
-  border: 1px solid #000;
-  background: #fff;
-  box-shadow: 2px 2px 0 #000;
+  gap: 6px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 999px;
+  background: var(--wp-scrim);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
+  box-shadow: var(--wp-shadow), var(--wp-hairline);
+  color: var(--wp-on-dark);
   white-space: nowrap;
   pointer-events: auto;
   visibility: hidden;
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(6px);
   transition:
-    transform 120ms steps(4, end),
-    opacity 120ms steps(4, end),
-    visibility 0s linear 120ms;
+    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 160ms ease,
+    visibility 0s linear 160ms;
 }
 .hud-pill.show {
   visibility: visible;
   opacity: 1;
   transform: translateY(0);
   transition:
-    transform 120ms steps(4, end),
-    opacity 120ms steps(4, end),
+    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 160ms ease,
     visibility 0s linear 0s;
 }
 .hud-pill .ring {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 12px;
-  shape-rendering: crispEdges;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
 }
 .hud-pill .ring-bg {
   fill: none;
-  stroke: #ccc;
-  stroke-width: 3;
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 2.6;
 }
 .hud-pill .ring-fg {
   fill: none;
-  stroke-width: 3;
+  stroke-width: 2.6;
+  stroke-linecap: round;
   transform: rotate(-90deg);
   transform-origin: 6px 6px;
+  transition: stroke-dasharray 260ms ease, stroke 260ms ease;
 }
 .hud-pill .pct {
-  min-width: 32px;
+  min-width: 30px;
   text-align: right;
+  font-weight: 590;
 }
 .hud-pill .name {
-  margin-left: 2px;
-  margin-right: 2px;
+  margin-left: 1px;
+  margin-right: 1px;
+  font-weight: 590;
 }
 .hud-pill .id {
-  color: #666;
+  color: var(--wp-on-dark-dim);
 }
 .hud-pill .dead .name {
-  color: #666;
+  color: var(--wp-on-dark-dim);
 }
 .ring-full { stroke: #3ddc84; }
 .ring-peckish { stroke: #ffd23f; }
@@ -189,29 +212,36 @@ body {
   position: absolute;
   left: 0;
   top: 0;
-  height: 12px;
+  height: 18px;
   box-sizing: border-box;
-  padding: 2px 3px;
-  background: #fff;
-  border: 1px solid #000;
-  box-shadow: 1px 1px 0 #000;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 10px;
+  border: none;
+  border-radius: 999px;
+  background: var(--wp-scrim);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
+  box-shadow: var(--wp-shadow), var(--wp-hairline);
+  color: var(--wp-on-dark-dim);
   white-space: nowrap;
   pointer-events: auto;
   visibility: hidden;
   opacity: 0;
   transition:
-    opacity 120ms steps(4, end),
-    visibility 0s linear 120ms;
+    opacity 160ms ease,
+    visibility 0s linear 160ms;
 }
 .hud-caption.show {
   visibility: visible;
   opacity: 1;
   transition:
-    opacity 120ms steps(4, end),
+    opacity 160ms ease,
     visibility 0s linear 0s;
 }
 .hud-caption.low {
-  color: #b00;
+  color: #ff8f8f;
 }
 
 /* ---------- Speech bubble ---------- */
@@ -222,30 +252,32 @@ body {
   top: 0;
   box-sizing: border-box;
   max-width: 200px;
-  padding: 4px 5px;
-  background: #fff;
-  color: #000;
-  border: 1px solid #000;
-  box-shadow: 3px 3px 0 #000;
-  font-size: 8px;
-  line-height: 10px;
+  padding: 6px 10px;
+  background: var(--wp-surface);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  color: var(--wp-ink);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--wp-shadow);
+  font-size: 11px;
+  line-height: 1.35;
   white-space: normal;
   word-wrap: break-word;
   pointer-events: none;
   z-index: 5;
 }
 .speech-bubble::after {
-  /* little tail toward the pet, drawn as a solid pixel square */
+  /* Tail toward the pet: a rotated rounded square, so it reads as part of one soft shape. */
   content: '';
   position: absolute;
   left: 50%;
-  bottom: -5px;
-  width: 4px;
-  height: 4px;
-  margin-left: -2px;
-  background: #fff;
-  border-right: 1px solid #000;
-  border-bottom: 1px solid #000;
+  bottom: -3px;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  background: var(--wp-surface);
+  border-radius: 2px;
   transform: rotate(45deg);
 }
 
@@ -258,53 +290,58 @@ body {
   right: 4px;
   bottom: 4px;
   box-sizing: border-box;
-  padding: 6px;
+  padding: 10px;
   overflow: auto;
-  background: rgba(16, 16, 24, 0.94);
-  color: #e8e8e8;
-  border: 1px solid #000;
-  box-shadow: 2px 2px 0 #000;
+  background: rgba(16, 17, 22, 0.95);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  color: var(--wp-on-dark);
+  border: none;
+  border-radius: var(--wp-radius);
+  box-shadow: var(--wp-shadow), var(--wp-hairline);
   pointer-events: auto;
   z-index: 20;
-  font-size: 8px;
-  line-height: 12px;
+  font-size: 11px;
+  line-height: 1.4;
 }
 .dev-panel h2 {
-  margin: 0 0 4px 0;
-  font-size: 8px;
-  line-height: 12px;
+  margin: 0 0 8px 0;
+  font-size: 10px;
+  line-height: 1.2;
   color: #ffd23f;
   text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 .dev-panel .row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  margin: 0 0 4px 0;
+  gap: 6px;
+  margin: 0 0 6px 0;
 }
 .dev-panel .row label {
-  min-width: 48px;
-  color: #aaa;
+  min-width: 58px;
+  color: var(--wp-on-dark-dim);
 }
 .dev-panel .status {
   color: #9ee;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   white-space: pre-wrap;
 }
 .dev-panel .note {
   color: #ffd23f;
 }
 .dev-panel pre {
-  margin: 4px 0 0 0;
-  padding: 4px;
+  margin: 6px 0 0 0;
+  padding: 7px;
   max-height: 120px;
   overflow: auto;
-  background: #000;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 7px;
   color: #9f9;
-  font-family: inherit;
-  font-size: 8px;
-  line-height: 10px;
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.4;
   white-space: pre;
 }
 .dev-panel .fps {
@@ -318,48 +355,53 @@ body {
   left: 0;
   top: 0;
   box-sizing: border-box;
-  padding: 6px;
-  background: #fff;
-  color: #000;
-  border: 1px solid #000;
-  box-shadow: 3px 3px 0 #000;
+  padding: 12px 14px;
+  background: var(--wp-surface);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  color: var(--wp-ink);
+  border: none;
+  border-radius: var(--wp-radius);
+  box-shadow: var(--wp-shadow);
   pointer-events: auto;
   z-index: 10;
-  font-size: 8px;
-  line-height: 12px;
+  font-size: 11px;
+  line-height: 1.4;
 }
 .modal h2 {
-  margin: 0 0 4px 0;
-  font-size: 8px;
-  line-height: 12px;
+  margin: 0 0 8px 0;
+  font-size: 10px;
+  line-height: 1.2;
   text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--wp-ink-dim);
 }
 .modal .line {
-  margin: 0 0 2px 0;
-  /* Press Start 2P advances 8 px per glyph; a 34-char line is 272 px, wider than the widest card (240 px).
-     Wrap instead of overflowing the border and drop shadow. */
+  margin: 0 0 3px 0;
+  /* Proportional text still has to wrap rather than overflow the card: names and event lines are
+     user-supplied and unbounded. */
   white-space: normal;
   overflow-wrap: anywhere;
-  line-height: 10px;
 }
 .modal .row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 10px;
 }
 .modal .muted {
-  color: #666;
+  color: var(--wp-ink-dim);
 }
 .modal .big {
-  font-size: 16px;
-  line-height: 18px;
-  margin-bottom: 4px;
+  font-size: 19px;
+  line-height: 1.2;
+  font-weight: 600;
+  margin-bottom: 6px;
 }
 
 .memorial-card .rip {
-  color: #b00;
+  color: #c0392b;
 }
 
 .montage {
@@ -367,7 +409,9 @@ body {
   left: 0;
   top: 0;
   box-sizing: border-box;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
   pointer-events: auto;
   z-index: 15;
 }
@@ -376,19 +420,19 @@ body {
 }
 .montage ol {
   margin: 0;
-  padding: 0 0 0 4px;
+  padding: 0;
   list-style: none;
-  max-height: 96px;
+  max-height: 110px;
   overflow: auto;
 }
 .montage li {
-  margin: 0 0 2px 0;
+  margin: 0 0 4px 0;
   white-space: normal;
-  line-height: 10px;
 }
 .montage li .when {
-  color: #666;
-  margin-right: 4px;
+  color: var(--wp-ink-dim);
+  margin-right: 6px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Reduced motion ---------- */

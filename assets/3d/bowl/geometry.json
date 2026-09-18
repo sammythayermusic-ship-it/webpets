@@ -1,0 +1,42 @@
+{
+ "resolution": [
+  1280,
+  960
+ ],
+ "camera": "CAM_bowl",
+ "projection": "orthographic",
+ "mmPerPx": 0.33594,
+ "waterlineY": 267.2,
+ "waterlineY_nearEdge": 311.5,
+ "waterlineY_farEdge": 223.0,
+ "floorY": 556.5,
+ "innerEllipse": {
+  "cx": 640.0,
+  "cy": 403.7,
+  "rx": 330.2,
+  "ry": 326.2
+ },
+ "_world": {
+  "waterline_z": 0.15786,
+  "gravel_top_centre_z": 0.05947,
+  "inner_radius_m": 0.11094,
+  "inner_radius_at_z": 0.11147,
+  "bowl_bottom_z": 0.00436
+ },
+ "opaqueRect": [
+  297,
+  90,
+  982,
+  896
+ ],
+ "opaqueRectAlphaThreshold": 0.5,
+ "opaqueRect_note": "alpha bounding box of bg.png at alpha > 0.50; the soft contact shadow falls below this threshold, so this rect is the bowl and stand, not the shadow",
+ "_pixelMeasured": [
+  "opaqueRect"
+ ],
+ "_projected": [
+  "waterlineY",
+  "floorY",
+  "innerEllipse"
+ ]
+}
