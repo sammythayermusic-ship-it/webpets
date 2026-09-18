@@ -2,10 +2,11 @@
 // "Pointer, hover and click-through rules"). This file is the ONLY caller of platform.window.setHitRegions.
 
 import { createAppStore, startScheduler, toSceneView } from './app';
-import type { AppState } from './app';
+import type { AppState, AppStore } from './app';
 import { createPlatform } from './platform';
 import type { Platform, PointerState } from './platform';
 import { createScene, loadManifest } from './render';
+import type { HabitatScene } from './render';
 import {
   computeHitRegions,
   initAudio,
@@ -32,6 +33,49 @@ function prefersReducedMotion(): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Records what the app actually managed to render, for builds that cannot be inspected any other way.
+ *
+ * Deliberately written on BOTH the success and the failure path, and deliberately tolerant of a
+ * half-built app: the first version only ran after a clean boot, which is backwards for a diagnostic —
+ * when boot failed it wrote nothing at all and the packaged app stayed exactly as opaque as before.
+ */
+async function writeBootReport(
+  platform: Platform,
+  store: AppStore | null,
+  scene: HabitatScene | null,
+  error?: unknown,
+): Promise<void> {
+  const canvas = document.querySelector('canvas');
+  const s = store?.getState();
+  const report: Record<string, unknown> = {
+    at: new Date().toISOString(),
+    ok: error === undefined,
+    platform: platform.kind,
+    canvas: canvas ? { w: canvas.width, h: canvas.height, cssW: canvas.clientWidth, cssH: canvas.clientHeight } : null,
+  };
+  if (error !== undefined) {
+    report['error'] = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    report['stack'] = error instanceof Error ? (error.stack ?? null) : null;
+  }
+  try {
+    if (scene) {
+      // fps tells whether the ticker is running at all. A packaged window that macOS considers
+      // occluded has requestAnimationFrame throttled to nothing, which freezes every animation.
+      report['scene'] = { ...scene.debugState(), fps: Math.round(scene.fps()) };
+    }
+  } catch (e) {
+    report['scene'] = `debugState threw: ${String(e)}`;
+  }
+  if (s) {
+    report['scale'] = s.settings.scale;
+    report['pet'] = { id: s.pet.id, name: s.pet.name, alive: s.pet.alive, hunger: Math.round(s.hunger) };
+  }
+  const file = 'boot-report.json';
+  await platform.store.set(file, report);
+  await platform.store.save(file);
 }
 
 function logRejected(what: string): (err: unknown) => void {
@@ -62,7 +106,7 @@ function sceneInputsChanged(s: AppState, prev: AppState): boolean {
   return s.pet !== prev.pet || s.hunger !== prev.hunger || s.night !== prev.night || s.latches !== prev.latches;
 }
 
-async function boot(platform: Platform): Promise<void> {
+async function boot(platform: Platform): Promise<{ store: AppStore; scene: HabitatScene }> {
   // 1. Store.
   const store = createAppStore(platform);
   await store.getState().actions.boot();
@@ -171,6 +215,7 @@ async function boot(platform: Platform): Promise<void> {
   startScheduler(store, platform);
   setInterval(() => store.getState().actions.tick(), NIGHT_REFRESH_MS);
 
+
   // Dev-only diagnostics bridge (tools/vite-diag-plugin.ts); tree-shaken out of production builds.
   if (import.meta.env.DEV) {
     const devPanelHandle = devPanel;
@@ -191,16 +236,27 @@ async function boot(platform: Platform): Promise<void> {
     await montage.play(recentEvents, pet.name);
     speech.sayFrom('wake');
   }
+
+  return { store, scene };
 }
 
 async function main(): Promise<void> {
   const platform = createPlatform();
   try {
-    await boot(platform);
+    const booted = await boot(platform);
+    // Deliberately delayed. Written immediately it captures the scene before the ticker's first step,
+    // which leaves the pet reported as not-yet-placed and makes a healthy app look broken. A second is
+    // long past the 8 fps first step and still early enough to be there when anyone looks.
+    setTimeout(() => {
+      void writeBootReport(platform, booted.store, booted.scene).catch(logRejected('bootReport'));
+    }, 1000);
   } catch (err) {
     // 6. Never leave a hidden, broken window: paint the error and show it anyway.
     console.error('[main] boot failed', err);
     renderError(err);
+    // The report matters most here: a packaged app has no devtools, so this file is the only way to
+    // learn WHY it failed.
+    await writeBootReport(platform, null, null, err).catch(logRejected('bootReport'));
     try {
       await platform.window.show();
     } catch (showErr) {

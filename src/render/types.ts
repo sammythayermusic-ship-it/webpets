@@ -124,6 +124,10 @@ export interface HabitatScene {
     petAnim: string;
     petPos: { x: number; y: number };
     petFrame: { w: number; h: number };
+    /** Behaviour steps run since mount, and steps skipped for want of a view: 0/0 means a frozen scene. */
+    steps: number;
+    stepSkips: number;
+    hasView: boolean;
     layerAlpha: Record<string, number>;
   };
   /** PNG data URL of the whole canvas (habitat + shadow) rendered right now; for tests and dev diagnostics. */
