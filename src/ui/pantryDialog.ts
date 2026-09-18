@@ -18,10 +18,18 @@ const DEFAULT_AMOUNT = 100;
 /** Card width: min(CARD_MAX_WIDTH, habitat hit width - 8), never below CARD_MIN_WIDTH; box-sizing border-box. */
 export const CARD_MIN_WIDTH = 120;
 export const CARD_MAX_WIDTH = 240;
-/** Widest possible text row: CARD_MAX_WIDTH minus 6 px padding and 1 px border on each side. */
-export const CARD_MAX_INNER_WIDTH = CARD_MAX_WIDTH - 2 * 6 - 2 * 1;
-/** Press Start 2P advances exactly 1 em (8 px at the modal's 8 px font-size) per glyph. */
-export const MODAL_GLYPH_PX = 8;
+/** Widest possible text row: CARD_MAX_WIDTH minus the 14 px horizontal padding of `.modal`, no border. */
+export const CARD_MAX_INNER_WIDTH = CARD_MAX_WIDTH - 2 * 14;
+/**
+ * Generous UPPER BOUND on one glyph's advance in the modal's 11 px system face — not an exact figure.
+ *
+ * It used to be exact: Press Start 2P is a bitmap face that advances exactly 1 em per glyph, so a line's
+ * width was its character count times the font size. The chrome now uses a proportional typeface, where
+ * no such arithmetic exists, so this is a bound chosen to sit well above the widest mixed-case glyph
+ * rather than a measurement. It only supports the "fits on one line" check below; nothing lays out
+ * against it, and `.modal .line` wraps regardless, so being wrong here is cosmetic rather than broken.
+ */
+export const MODAL_GLYPH_MAX_PX = 7;
 
 /** Kept short enough to fit CARD_MAX_INNER_WIDTH on one line at M/L; wraps to two lines at S (`.modal .line`). */
 export const PANTRY_HINT = 'Auto-feeds 25 at hunger 30';

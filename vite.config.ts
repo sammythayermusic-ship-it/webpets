@@ -24,10 +24,14 @@ export default defineConfig({
   plugins: [
     webpetsDiag(),
     {
-      // The 1024 px reference renders are for humans only; never ship them.
-      name: 'webpets-strip-reference-art',
+      // Source and superseded art is for humans only; never ship it. `habitats-160x120` and the two
+      // sprite reference folders are the retired pixel-art rounds, and the bitmap font went with the
+      // chrome restyle; together they were about 4 MB of a 14 MB bundle that nothing loads.
+      name: 'webpets-strip-unshipped-art',
       closeBundle() {
-        rmSync(resolve(__dirname, 'dist/reference'), { recursive: true, force: true });
+        for (const dir of ['reference', 'habitats-160x120', 'sprites/pets-80', 'sprites/strips-80', 'fonts']) {
+          rmSync(resolve(__dirname, 'dist', dir), { recursive: true, force: true });
+        }
       },
     },
   ],

@@ -398,3 +398,15 @@ work, arriving in the one place nobody had looked.
   was re-rendered, which is a test reporting that the art changed rather than that the maths broke. It
   derives from `BOWL_WATER_SHAPE` and `FISH_BODY` now.
 - `tools/gen_bg.py`, `gen_fish.py` and `gen_placeholders.py` are retired with the art they produced.
+
+### shipping only what is used
+The bundle was 15 MB, of which about half was art nothing loads: the retired 160x120 concept round, two
+folders of earlier-round reference sprites, the bitmap font the chrome no longer uses, and a stale copy
+of the raw Blender output. The build plugin that already dropped `dist/reference` now drops all of them;
+the files stay in the repo as source and reference. 15 MB -> 7.6 MB.
+
+**One real bug the chrome restyle introduced, found while doing it.** `pantryDialog.ts` sized its text by
+character count times font size, which is exact for Press Start 2P (a bitmap face advancing 1 em per
+glyph) and meaningless for the proportional face that replaced it. The constant is now documented as a
+generous upper bound rather than a measurement, and the guarantee that nothing overflows rests where it
+always really did: `.modal .line` wraps.
