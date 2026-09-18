@@ -7,7 +7,10 @@ A Tauri 2 + Vite + TypeScript + PixiJS desktop pet. A pixel-art habitat (fish bo
 
 ## Rules of the road
 - TypeScript strict, no `any`. `src/sim` is pure and has zero imports from render/ui. Write its tests first.
-- Pixel-perfect: 160×120 habitat grid, integer scales (2×/3×/4×), nearest-neighbor, pet motion stepped at 8 fps.
+- The 320×240 habitat grid is LOGICAL coordinates, not pixels: it defines behaviour, water bounds and hit regions
+  at any art resolution. Art is pre-rendered 3D at an integer multiple of it, filtered linearly with mipmaps, and
+  the multiple is derived from the texture. Integer window scales (1×/2×/3×). The simulation ticks at 8 fps; the
+  animation runs at the art's own rate and the drawn position is interpolated between ticks.
 - Never add blockchain dependencies in Phase 0.
 - Never handle seed phrases, ever.
 - When art is missing, generate labeled placeholder PNGs at the correct size and keep going. Do not ask for art.

@@ -38,7 +38,9 @@ Tests: Vitest picks up `src/**/*.test.ts` and `tests/unit/**`; Playwright uses `
 Vite `publicDir` is the repo `assets/` folder (configured), so `assets/habitats/fish/bowl/bg.png` is served at
 `/habitats/fish/bowl/bg.png` in dev and in the Tauri bundle (`tauri://localhost/...`). A build plugin deletes
 `dist/reference` so the 1024 px references never ship (the rest of `assets/` does ship; acceptable).
-Never name an asset with an `@2x`/`@Nx` suffix: Pixi's resolver would halve its logical size.
+Never name an asset with an `@2x`/`@Nx` suffix: Pixi's resolver would halve its logical size. Art may be any
+integer multiple of the logical grid; the multiple is derived from the texture and never declared, so art and
+manifest cannot drift. Textures load with `linear` filtering and generated mipmaps.
 
 ```
 assets/
@@ -155,17 +157,20 @@ only ordering entries that share a slot. `memorial` is a `bg` variant shown inst
   (`window::scale_fits_work_area`); the rung currently in use always stays selectable.
 - Habitat origin inside the window = `(24, 24)`. HUD pill is centered horizontally above the habitat inside the top pad
   (its bottom edge 4 px above the habitat, sliding up 8 px on appear). Caption sits in the bottom pad.
-- **Pixel grid guarantee (structural, not roundPixels):** every layer except `shadow` is drawn into a 320×240
-  `RenderTexture` (nearest, resolution 1) in grid units; the scene draws that one texture at `(24, 24)` with
-  `scale = s`. FX may use float positions inside the RenderTexture and automatically become big pixels. The shadow is
-  drawn under the habitat sprite in CSS px (a stepped 2-tone offset rect, no blur).
+- **Grid = logical coordinates, not pixels.** 320×240 defines behaviour, water bounds, hit regions and every
+  manifest number; it says nothing about resolution. The layer stack draws straight to the stage: `layers.root` at
+  `(24, 24)` with `scale = s`, each file-backed layer at `1/artScale` where `artScale = texture.width / 320` is
+  derived per texture. There is **no RenderTexture and no drop shadow** — both were the pixel-grid guarantee, and
+  the habitat art now carries its own baked contact shadow.
 - Pixi init is exactly: `app.init({ width: 320s+48, height: 240s+48, resolution: devicePixelRatio, autoDensity: true,
-  roundPixels: true, backgroundAlpha: 0, antialias: false, preference: 'webgl' })`. No `resizeTo`.
+  roundPixels: false, backgroundAlpha: 0, antialias: false, preference: 'webgl' })`. No `resizeTo`.
   `scene.setScale(s)` calls `renderer.resize(320s+48, 240s+48)`; `scene.setResolution(dpr)` calls
-  `renderer.resize(w, h, dpr)`. `TextureStyle.defaultOptions.scaleMode = 'nearest'` is set before any load and every
-  `Assets.load` passes `{ src, data: { scaleMode: 'nearest' } }`. Phase 0 uses no filters at all; the starving water tint
-  is `medium.tint`; the night layer uses `blendMode = 'multiply'` (native). Any future filter is created with
-  `{ resolution: 'inherit', antialias: 'off' }`.
+  `renderer.resize(w, h, dpr)`. `roundPixels` is off because it snaps to the RENDER TARGET's grid, which is now the
+  canvas in device px rather than a grid-unit texture. `TextureStyle.defaultOptions.scaleMode = 'linear'` is set
+  before any load and `loadTexture` builds every `ImageSource` with `scaleMode: 'linear'` and
+  `autoGenerateMipmaps: true` (art is minified several times over at the smallest window; bilinear-only
+  minification crawls). Phase 0 uses no filters at all; the starving water tint is `medium.tint`; the night layer
+  uses `blendMode = 'multiply'` (native). Any future filter is created with `{ resolution: 'inherit', antialias: 'off' }`.
 - Hit regions (window-local CSS px) sent to Rust by `main.ts` only (`refreshHitRegions()`): the habitat opaque rect
   `(24 + opaqueRect.x·s, 24 + opaqueRect.y·s, opaqueRect.w·s, opaqueRect.h·s)` always; `hud.getRects()` while visible
   (pill rect extended down to the habitat top so the 4 px gap is not click-through, plus the caption rect);
@@ -356,23 +361,39 @@ The scheduler calls `platform.notify` for each toast unless `settings.notificati
 `paintTrayChip(view: SceneView, size: TrayChipSize): Uint8Array` (RGBA, mini fish + hunger ring colored by label;
 no Pixi dependency; works with a manual pixel buffer so it runs in tests).
 
-Scene rules: layer slots as above inside the 160×120 RenderTexture; pet motion and the sprite player step at
-`PET_FPS = 8` via a `deltaMS` accumulator on the ticker; FX (bubbles) at ticker rate. `phase === 'dead'`: pet plays
+Scene rules: the layer stack is drawn **straight to the stage**, no RenderTexture. `layers.root` sits at
+(`WINDOW_PAD`, `WINDOW_PAD`) and carries the window scale; every file-backed layer carries `1/artScale`, where
+`artScale = texture.width / grid.w` is **derived from the texture** (`layerArtScale`, which throws by name if the
+axes disagree or the ratio is not a whole number). Everything between those two — parallax, flakes, bubbles, the
+fog, the pet's centre — is in plain grid px.
+
+**Three clocks.** The behaviour steps at `PET_FPS = 8` on a `deltaMS` accumulator and returns clamped integer grid
+positions. The pet's animation advances at the ART's rate (`ManifestSprite.fps`, default `PET_FPS`) on the sprite
+player's own accumulator. The drawn position is interpolated across the current tick on **every rendered frame**,
+using `acc / STEP_MS` from that same accumulator so the two cannot drift. Raising `PET_FPS` instead would rescale
+every per-tick constant in the behaviour. FX (bubbles) at ticker rate. `phase === 'dead'`: pet plays
 `dead` at `surfaceY + 6`, bubbles stop, a programmatic white fog (alpha 0.5; the `waterShape` ellipse masked to
 `surfaceY..floorY`, i.e. `makeWaterBounds(waterShape).rect`) is added to the `glass` slot.
 `phase === 'memorial'`: pet hidden, `memorial` drawn instead of `bg`, fog off. Starving: `medium.tint` shifted 10 %
 toward green. `asleep`: fish still near the floor, `sleep` anim. Reduced motion: no idle bob, no parallax; state
 changes still animate. Glass sheen follows the pointer on the `glass` slot; `glass` and `decor_front` get a +2 px
-parallax offset toward the pointer (integer, 0 when reduced motion).
+parallax offset toward the pointer (fractional, 0 when reduced motion).
 
-Sprite player: strip → per-frame `Texture({ source, frame })`; sequences, loop, play-once-then-`returnTo`, mirror via
-`scale.x = facing` with anchor 0.5; when `turning` the current frame is drawn with `scale.x = 0.5 * previousFacing`
-(nearest, integer edges); integer per-frame offsets; a transform fallback (bob/squash) for states without a strip.
+Sprite player: a state's frames come from `ManifestSpriteState.source` — `strip` (one PNG, one row; cell width is
+`texture.width / frames`, **not** the manifest `frame`) or `sequence` (one PNG per frame). Sequences are what
+rendered art uses, and are the only form that can be mipmapped, since strip neighbours bleed at low mip levels.
+`frame` is the LOGICAL footprint in grid px; the sprite is scaled by `frame.w / textureCellWidth` so art resolution
+never changes the drawn size. Mirror via `scale.x` with anchor 0.5; a facing change tweens `scale.x` through zero as
+`turnFrom * cos(pi * t)` over `turnMs` (the scene passes its tick length), which is what a half-turn about the
+fish's vertical axis projects to under an ortho camera. The behaviour's one-tick `turning` flag is accepted and
+ignored — several rendered frames share one tick, so the tween is keyed off the facing CHANGE. Positions are
+fractional. A transform fallback (bob/squash) covers states with no art.
 
 `src/species/fish/behavior.ts`: `createFishBehavior(): FishBehavior` (see `FishInput`/`FishOutput`): slow
 figure-eight wander inside `bounds`; 2-tick turn; darts to the nearest flake and reports `biteFlakeIndex` within 6 px;
 `hungry`: half speed, top third; `starving`: near the floor, barely moving; `asleep`: still near the floor;
-dead: `anim 'dead'`, `y = surfaceY + 6`. Positions are integers.
+dead: `anim 'dead'`, clamped as close to `surfaceY` as the body box fits. Positions are integers — the smoothing
+lives in the renderer, which is why every behaviour test still reasons in whole grid px.
 
 `src/species/fish/lines.ts`: `export const FISH_LINES: Record<Personality, Record<'idle' | 'fed' | 'hungry' |
 'starving' | 'wake', readonly string[]>>`, at least 8 lines per pool. `mountSpeech` picks from `fed` on `bite`, from
