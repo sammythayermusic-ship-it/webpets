@@ -1,5 +1,5 @@
 // In-memory Platform for unit tests (src/app/*.test.ts). Not shipped.
-import type { Platform, PointerState, TrayAction, TrayMenuState, WindowGeometry } from '../platform/types';
+import type { Layering, Platform, PointerState, TrayAction, TrayMenuState, WindowGeometry } from '../platform/types';
 import { DEFAULT_SCALE, windowSizeForScale, type Scale, type TrayChipSize } from '../sim/constants';
 
 export interface FakePlatform extends Platform {
@@ -11,6 +11,7 @@ export interface FakePlatform extends Platform {
   saveCount: number;
   notifications: Array<{ title: string; body: string }>;
   scaleCalls: Scale[];
+  layeringCalls: Layering[];
   visible: boolean;
   quitCalled: boolean;
   autostartEnabled: boolean;
@@ -38,6 +39,7 @@ export function createFakePlatform(seedFiles: Record<string, unknown> = {}): Fak
     saveCount: 0,
     notifications: [],
     scaleCalls: [],
+    layeringCalls: [],
     visible: false,
     quitCalled: false,
     autostartEnabled: false,
@@ -78,6 +80,9 @@ export function createFakePlatform(seedFiles: Record<string, unknown> = {}): Fak
       isVisible: async () => p.visible,
       popupMenu: async () => undefined,
       onMoved: () => () => undefined,
+      setLayering: async (opts) => {
+        p.layeringCalls.push({ ...opts });
+      },
     },
     tray: {
       setChip: async (_rgba: Uint8Array, _size: TrayChipSize) => undefined,

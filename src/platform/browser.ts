@@ -34,6 +34,9 @@ const MENU_ITEMS: ReadonlyArray<{ action: TrayAction; label: string }> = [
   { action: 'daynight-auto', label: 'Day/Night: Auto' },
   { action: 'daynight-day', label: 'Day/Night: Day' },
   { action: 'daynight-night', label: 'Day/Night: Night' },
+  { action: 'always-on-top', label: 'Visible on: Float above windows' },
+  { action: 'all-desktops', label: 'Visible on: Every desktop' },
+  { action: 'over-fullscreen', label: 'Visible on: Over fullscreen apps' },
   { action: 'launch-at-login', label: 'Launch at login' },
   { action: 'dev-panel', label: 'Dev panel' },
   { action: 'new-pet', label: 'New pet' },
@@ -239,6 +242,12 @@ export function createBrowserPlatform(): Platform {
         return s.dayNight === 'night';
       case 'launch-at-login':
         return s.launchAtLogin;
+      case 'always-on-top':
+        return s.alwaysOnTop;
+      case 'all-desktops':
+        return s.allDesktops;
+      case 'over-fullscreen':
+        return s.overFullscreen;
       default:
         return false;
     }
@@ -356,6 +365,8 @@ export function createBrowserPlatform(): Platform {
         return Promise.resolve();
       },
       onMoved: (cb) => movedSignal.on(cb),
+      // Nothing to do outside a real window manager, where there is one window and no desktops.
+      setLayering: async () => undefined,
     },
     tray: {
       setChip: (rgba: Uint8Array, size: TrayChipSize): Promise<void> => {

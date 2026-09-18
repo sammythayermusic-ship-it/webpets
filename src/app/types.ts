@@ -4,6 +4,7 @@
 import type { StoreApi } from 'zustand/vanilla';
 import type { FeedResult, GraveRecord, Habitat, PetState, SimEvent, Species } from '../sim/types';
 import type { Scale } from '../sim/constants';
+import type { Layering } from '../platform/types';
 
 export type DayNightMode = 'auto' | 'day' | 'night';
 
@@ -37,6 +38,18 @@ export interface SettingsDoc {
   notificationsMuted: boolean;
   dayNight: DayNightMode;
   launchAtLogin: boolean;
+  /**
+   * Where the window sits relative to everything else. All three default to on, which is what the app
+   * did unconditionally before they were settings.
+   *
+   * Added to a version-2 document without bumping the version, deliberately: `normalizeSettings` fills
+   * a missing field from the defaults but returns defaults wholesale for a version it does not know,
+   * so bumping would discard every existing user's mute, day/night and launch-at-login preferences to
+   * add three booleans.
+   */
+  alwaysOnTop: boolean;
+  allDesktops: boolean;
+  overFullscreen: boolean;
   /** Added to Date.now() by app.now(). Persisted so a faked clock survives relaunch. */
   devClockOffsetMs: number;
   /** Armed by dev.skipOnNextLaunch: consumed at boot (added to devClockOffsetMs before the first reconcile). */
@@ -95,6 +108,8 @@ export interface AppActions {
   setNotificationsMuted(b: boolean): void;
   setDayNight(m: DayNightMode): void;
   setLaunchAtLogin(b: boolean): Promise<void>;
+  /** Change any of the window layering flags; the rest keep their current values. */
+  setLayering(patch: Partial<Layering>): Promise<void>;
   /** Minimize to tray chip (true) or restore (false). Runtime only, not persisted. */
   setHidden(b: boolean): Promise<void>;
   /** Flushes pending saves, then platform.quit(). */

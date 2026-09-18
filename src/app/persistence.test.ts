@@ -114,7 +114,11 @@ describe('persistence', () => {
     });
 
     it('carries every other field forward unchanged', () => {
+      // Spread over the defaults rather than written out in full, so a field ADDED to SettingsDoc
+      // shows up here as "takes its default" instead of as a failure. A v1 document cannot carry a
+      // field that did not exist when it was written, which is the whole point of the merge.
       expect(normalizeSettings(v1(4))).toEqual({
+        ...defaultSettings(),
         version: 2,
         scale: SCALE_M,
         muted: true,
@@ -135,7 +139,7 @@ describe('persistence', () => {
 
     it('passes a v2 document through as-is', () => {
       const v2 = { ...v1(0), version: 2, scale: SCALE_L };
-      expect(normalizeSettings(v2)).toEqual({ ...v2, dayNight: 'night' });
+      expect(normalizeSettings(v2)).toEqual({ ...defaultSettings(), ...v2, dayNight: 'night' });
     });
 
     it('still yields defaults for a corrupt or unknown-version document', () => {

@@ -39,6 +39,9 @@ export type TrayAction =
   | 'daynight-day'
   | 'daynight-night'
   | 'launch-at-login'
+  | 'always-on-top'
+  | 'all-desktops'
+  | 'over-fullscreen'
   | 'dev-panel'
   | 'new-pet'
   | 'toggle-visibility'
@@ -50,6 +53,9 @@ export interface TrayMenuState {
   notificationsMuted: boolean;
   dayNight: 'auto' | 'day' | 'night';
   launchAtLogin: boolean;
+  alwaysOnTop: boolean;
+  allDesktops: boolean;
+  overFullscreen: boolean;
   alive: boolean; // feed/pantry items disabled when false
   hidden: boolean; // menu item reads "Show" when true, "Minimize" when false
 }
@@ -94,6 +100,26 @@ export interface WindowApi {
   popupMenu(): Promise<void>;
   /** Fires after Rust has snapped, clamped and persisted the position following a move (150 ms settle). */
   onMoved(cb: (g: WindowGeometry) => void): () => void;
+  /**
+   * Where the window sits relative to everything else on screen. Applied as a set rather than one
+   * switch at a time, because on macOS these are facets of the same two window properties — the level
+   * and the collection behaviour — and reading-modifying-writing them independently races.
+   */
+  setLayering(opts: Layering): Promise<void>;
+}
+
+/** How the habitat window relates to other windows, desktops and fullscreen apps. */
+export interface Layering {
+  /** Float above other windows instead of being ordered with them. */
+  alwaysOnTop: boolean;
+  /** Appear on every desktop/Space rather than only the one it was launched on. */
+  allDesktops: boolean;
+  /**
+   * Stay visible when another app goes fullscreen. macOS gates this separately from the window level,
+   * and neither Tauri nor the windowing layer under it exposes the flag, so this is the one place the
+   * app reaches into AppKit directly.
+   */
+  overFullscreen: boolean;
 }
 
 export interface TrayApi {

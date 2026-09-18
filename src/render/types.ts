@@ -177,8 +177,24 @@ export interface HabitatScene {
   debugState(): {
     petVisible: boolean;
     petAnim: string;
+    /** Where the simulation says the pet is. */
     petPos: { x: number; y: number };
+    /** Where it is actually drawn: interpolated across the tick and offset by the state's registration. */
+    drawnPos: { x: number; y: number };
     petFrame: { w: number; h: number };
+    /**
+     * How many times the scene advanced since mount, and the last frame time it was given.
+     *
+     * Sampled across an interval this is the only honest measure of whether anything is running:
+     * Pixi's own `fps` is seeded to 60 and corrected only by a tick, so on the exact failure worth
+     * catching -- a throttled window whose ticker never fires -- it cheerfully reports 60.
+     */
+    advances: number;
+    lastDtMs: number;
+    /** Which clock is driving when the ticker is throttled: an unclamped worker, or a clamped timer. */
+    pacer: 'worker' | 'timer';
+    /** Rolling mean cost of one rendered frame, ms. A high value means slow, not throttled. */
+    renderMs: number;
     /** Behaviour steps run since mount, and steps skipped for want of a view: 0/0 means a frozen scene. */
     steps: number;
     stepSkips: number;

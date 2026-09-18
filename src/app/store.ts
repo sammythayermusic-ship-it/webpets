@@ -1,7 +1,7 @@
 // Zustand vanilla store: the single owner of pet/balance/settings state. Every mutation goes through the pure
 // sim, then routes the returned events to notifications and to lastFeedEvent, then persists.
 import { createStore } from 'zustand/vanilla';
-import type { Platform } from '../platform/types';
+import type { Layering, Platform } from '../platform/types';
 import type { GraveRecord, PetState, ReconcileResult, Rng, SimEvent } from '../sim/index';
 import {
   DAY_MS,
@@ -80,6 +80,12 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
     };
     const savePet = (): void => persist.savePet(petDoc());
     const saveSettings = (): void => persist.saveSettings(get().settings);
+    /** The layering flags on their own, so the platform is handed a complete set rather than a patch. */
+    const layeringOf = (st: SettingsDoc): Layering => ({
+      alwaysOnTop: st.alwaysOnTop,
+      allDesktops: st.allDesktops,
+      overFullscreen: st.overFullscreen,
+    });
     const saveGraveyard = (): void => persist.saveGraveyard(graveyard);
 
     const notify = (title: string, body: string): void => {
@@ -370,7 +376,16 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
         saveSettings();
       },
 
-      async setLaunchAtLogin(b) {
+      async setLayering(patch) {
+      const next = { ...layeringOf(get().settings), ...patch };
+      // Platform first, then commit: if the window manager refuses, the setting must not claim it
+      // happened -- the same order setScale and setLaunchAtLogin use.
+      await platform.window.setLayering(next);
+      set({ settings: { ...get().settings, ...next } });
+      saveSettings();
+    },
+
+    async setLaunchAtLogin(b) {
         await platform.autostart.setEnabled(b);
         set({ settings: { ...get().settings, launchAtLogin: b } });
         saveSettings();

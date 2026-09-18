@@ -33,6 +33,9 @@ const TRAY_ACTIONS: ReadonlySet<string> = new Set<TrayAction>([
   'daynight-day',
   'daynight-night',
   'launch-at-login',
+  'always-on-top',
+  'all-desktops',
+  'over-fullscreen',
   'dev-panel',
   'new-pet',
   'toggle-visibility',
@@ -114,6 +117,12 @@ export function createTauriPlatform(): Platform {
       isVisible: () => getCurrentWindow().isVisible(),
       popupMenu: () => invoke<void>('popup_menu'),
       onMoved: (cb) => subscribe<WindowGeometry>('window-moved', cb),
+      setLayering: (opts) =>
+        invoke<void>('set_layering', {
+          alwaysOnTop: opts.alwaysOnTop,
+          allDesktops: opts.allDesktops,
+          overFullscreen: opts.overFullscreen,
+        }),
     },
     tray: {
       setChip: (rgba: Uint8Array, size: TrayChipSize) =>

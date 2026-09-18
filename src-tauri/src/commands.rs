@@ -28,6 +28,16 @@ pub fn set_hit_regions(state: State<'_, ShellState>, regions: Vec<HitRect>) -> R
 }
 
 #[tauri::command]
+pub fn set_layering(
+    app: AppHandle,
+    always_on_top: bool,
+    all_desktops: bool,
+    over_fullscreen: bool,
+) -> Result<(), String> {
+    window::set_layering(&app, always_on_top, all_desktops, over_fullscreen)
+}
+
+#[tauri::command]
 pub fn get_geometry(app: AppHandle) -> Result<WindowGeometry, String> {
     window::current_geometry(&app)
 }
@@ -66,6 +76,9 @@ pub fn tray_set_menu_state(
     notifications_muted: bool,
     day_night: String,
     launch_at_login: bool,
+    always_on_top: bool,
+    all_desktops: bool,
+    over_fullscreen: bool,
     alive: bool,
     hidden: bool,
 ) -> Result<(), String> {
@@ -77,6 +90,9 @@ pub fn tray_set_menu_state(
             notifications_muted,
             day_night,
             launch_at_login,
+        always_on_top,
+        all_desktops,
+        over_fullscreen,
             alive,
             hidden,
         },

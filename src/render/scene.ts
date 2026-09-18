@@ -27,6 +27,7 @@ import { stateFiles } from './manifest';
 import { makeWaterBounds } from './water';
 import { decayAttention, moodAnim, moodOf, type Mood } from '../sim/mood';
 import { createExpressionGate } from './expression';
+import { createPacer, type Pacer } from './pacer';
 import type { FishBehavior, HabitatScene, Manifest, ManifestHabitat, ManifestSprite, SceneEvent, SceneView, WaterBounds } from './types';
 
 const STEP_MS = 1000 / PET_FPS;
@@ -35,7 +36,14 @@ const MAX_ACC_MS = 1000;
 /** Treat requestAnimationFrame as dead once it has been quiet this long (see the watchdog in mount). */
 const WATCHDOG_STALL_MS = 250;
 /** How often the watchdog checks, and therefore the frame rate it drives when rAF is dead. */
-const WATCHDOG_INTERVAL_MS = 33;
+/**
+ * Pacer interval when requestAnimationFrame is dead. Aims at 60 Hz and lands nearer 15-18 in the
+ * packaged app, because WebKit delivers a hidden document's worker messages in bursts rather than on
+ * the interval. Measured: 33 ms yields ~12/s and 8 ms yields ~18/s, so the interval does matter and
+ * this is not a hard clamp — but it is diminishing returns against a wakeup every 16 ms forever, which
+ * a pet idling in the corner of someone's screen should not be spending battery on.
+ */
+const WATCHDOG_INTERVAL_MS = 16;
 /** Ticks a new expressive mood must hold before the pet changes pose. One second at the sim's 8 Hz. */
 const MOOD_HOLD_TICKS = 8;
 /** How fast the pointer's pull on the pet rises and falls, per tick. Roughly half a second either way. */
@@ -61,7 +69,7 @@ interface Mounted {
   /** Advance every clock by `dtMs` and redraw. The single funnel: ticker, watchdog and snapshot all use it. */
   advance: (dtMs: number) => void;
   tick: (t: Ticker) => void;
-  watchdog: ReturnType<typeof setInterval>;
+  watchdog: Pacer;
 }
 
 export function createScene(manifest: Manifest, rng: Rng = Math.random): HabitatScene {
@@ -194,6 +202,8 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
   /** How many times anything advanced, and by how much. The only way to tell which clock is driving. */
   let advances = 0;
   let lastDtMs = 0;
+  /** Rolling mean cost of one advance, in ms. Distinguishes "throttled" from "too slow to keep up". */
+  let costMs = 0;
   const stepOnce = (): void => {
     if (!m || !view) {
       stepSkips += 1;
@@ -364,7 +374,9 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
         m.flakes.interpolate(t, dtMs);
         m.bubbles.update(dtMs, rng);
         m.layers.update(dtMs);
+        const t0 = performance.now();
         m.app.render();
+        costMs = costMs === 0 ? performance.now() - t0 : costMs * 0.9 + (performance.now() - t0) * 0.1;
       };
 
       const tick = (t: Ticker): void => {
@@ -391,12 +403,17 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       // landed on zero every time and the interpolation between ticks contributed nothing whatsoever.
       // For a window that is hidden at launch, unfocused and click-through — which is what WebKit
       // throttles — that was very likely the normal path, not the exception.
-      const watchdog = setInterval(() => {
+      // Paced from a Worker, not a plain interval. The packaged app's document reports itself hidden
+      // while the window is on screen — it is never activated, because a desktop pet must not steal
+      // focus — and WebKit clamps a hidden document's timers to ONE PER SECOND. Measured in a real
+      // build: one advance per second, each replaying a whole second of simulation. A worker has no
+      // visibility state and is not clamped. See pacer.ts.
+      const watchdog = createPacer(WATCHDOG_INTERVAL_MS, () => {
         if (!m) return;
         const now = Date.now();
         if (now - lastRafAt < WATCHDOG_STALL_MS) return; // rAF is healthy; stand down
         advance(Math.min(MAX_ACC_MS, now - lastAdvanceAt));
-      }, WATCHDOG_INTERVAL_MS);
+      });
 
       m = { app, layers, player, behavior: createFishBehavior(), bounds, flakes, bubbles, sheen, advance, tick, watchdog };
       layoutHabitat();
@@ -475,6 +492,8 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
           drawnPos: { x: 0, y: 0 },
           advances,
           lastDtMs: 0,
+          pacer: 'timer' as const,
+          renderMs: 0,
           petFrame: { w: 0, h: 0 },
           steps,
           stepSkips,
@@ -500,6 +519,8 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
         drawnPos: { x: Math.round(sprite.x * 100) / 100, y: Math.round(sprite.y * 100) / 100 },
         advances,
         lastDtMs: Math.round(lastDtMs * 10) / 10,
+        pacer: m.watchdog.kind(),
+        renderMs: Math.round(costMs * 10) / 10,
         steps,
         stepSkips,
         hasView: view !== null,
@@ -533,7 +554,7 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       const cur = m;
       m = null;
       cur.app.ticker.remove(cur.tick);
-      clearInterval(cur.watchdog);
+      cur.watchdog.stop();
       cur.flakes.destroy();
       cur.bubbles.destroy();
       cur.sheen.destroy();

@@ -26,6 +26,9 @@ pub const ACTION_DAYNIGHT_AUTO: &str = "daynight-auto";
 pub const ACTION_DAYNIGHT_DAY: &str = "daynight-day";
 pub const ACTION_DAYNIGHT_NIGHT: &str = "daynight-night";
 pub const ACTION_LAUNCH_AT_LOGIN: &str = "launch-at-login";
+pub const ACTION_ALWAYS_ON_TOP: &str = "always-on-top";
+pub const ACTION_ALL_DESKTOPS: &str = "all-desktops";
+pub const ACTION_OVER_FULLSCREEN: &str = "over-fullscreen";
 pub const ACTION_DEV_PANEL: &str = "dev-panel";
 pub const ACTION_NEW_PET: &str = "new-pet";
 pub const ACTION_TOGGLE_VISIBILITY: &str = "toggle-visibility";
@@ -39,6 +42,9 @@ pub struct TrayMenuState {
     pub notifications_muted: bool,
     pub day_night: String,
     pub launch_at_login: bool,
+    pub always_on_top: bool,
+    pub all_desktops: bool,
+    pub over_fullscreen: bool,
     pub alive: bool,
     pub hidden: bool,
 }
@@ -57,6 +63,9 @@ pub struct TrayMenu {
     pub daynight_day: CheckMenuItem<Wry>,
     pub daynight_night: CheckMenuItem<Wry>,
     pub launch_at_login: CheckMenuItem<Wry>,
+    pub always_on_top: CheckMenuItem<Wry>,
+    pub all_desktops: CheckMenuItem<Wry>,
+    pub over_fullscreen: CheckMenuItem<Wry>,
     pub visibility: MenuItem<Wry>,
 }
 
@@ -93,6 +102,16 @@ fn build_menu(app: &AppHandle) -> tauri::Result<TrayMenu> {
         &[&daynight_auto, &daynight_day, &daynight_night],
     )?;
     let launch_at_login = check(app, ACTION_LAUNCH_AT_LOGIN, "Launch at login", false)?;
+    let always_on_top = check(app, ACTION_ALWAYS_ON_TOP, "Float above windows", true)?;
+    let all_desktops = check(app, ACTION_ALL_DESKTOPS, "Show on every desktop", true)?;
+    let over_fullscreen = check(app, ACTION_OVER_FULLSCREEN, "Show over fullscreen apps", true)?;
+    let visible_on = Submenu::with_id_and_items(
+        app,
+        "visible-on",
+        "Visible on",
+        true,
+        &[&always_on_top, &all_desktops, &over_fullscreen],
+    )?;
     let dev_panel = item(app, ACTION_DEV_PANEL, "Dev panel")?;
     let new_pet = item(app, ACTION_NEW_PET, "New pet")?;
     let visibility = item(app, ACTION_TOGGLE_VISIBILITY, "Minimize")?;
@@ -109,6 +128,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<TrayMenu> {
             &mute,
             &notifications,
             &daynight,
+            &visible_on,
             &launch_at_login,
             &PredefinedMenuItem::separator(app)?,
             &dev_panel,
@@ -132,6 +152,9 @@ fn build_menu(app: &AppHandle) -> tauri::Result<TrayMenu> {
         daynight_day,
         daynight_night,
         launch_at_login,
+        always_on_top,
+        all_desktops,
+        over_fullscreen,
         visibility,
     })
 }
@@ -229,6 +252,9 @@ pub fn set_menu_state(app: &AppHandle, s: &TrayMenuState) -> Result<(), String> 
     e(m.daynight_day.set_checked(s.day_night == "day"))?;
     e(m.daynight_night.set_checked(s.day_night == "night"))?;
     e(m.launch_at_login.set_checked(s.launch_at_login))?;
+    e(m.always_on_top.set_checked(s.always_on_top))?;
+    e(m.all_desktops.set_checked(s.all_desktops))?;
+    e(m.over_fullscreen.set_checked(s.over_fullscreen))?;
     e(m.feed.set_enabled(s.alive))?;
     e(m.pantry.set_enabled(s.alive))?;
     e(m.visibility.set_text(if s.hidden { "Show" } else { "Minimize" }))?;

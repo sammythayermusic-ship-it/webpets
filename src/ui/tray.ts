@@ -70,6 +70,15 @@ export function wireTray(deps: TrayDeps): () => void {
       case 'daynight-night':
         a.setDayNight('night');
         return;
+      case 'always-on-top':
+        a.setLayering({ alwaysOnTop: !s.settings.alwaysOnTop }).catch(logRejected('setLayering'));
+        return;
+      case 'all-desktops':
+        a.setLayering({ allDesktops: !s.settings.allDesktops }).catch(logRejected('setLayering'));
+        return;
+      case 'over-fullscreen':
+        a.setLayering({ overFullscreen: !s.settings.overFullscreen }).catch(logRejected('setLayering'));
+        return;
       case 'launch-at-login':
         a.setLaunchAtLogin(!s.settings.launchAtLogin).catch(logRejected('setLaunchAtLogin'));
         return;
@@ -124,6 +133,9 @@ export function wireTray(deps: TrayDeps): () => void {
       notificationsMuted: s.settings.notificationsMuted,
       dayNight: s.settings.dayNight,
       launchAtLogin: s.settings.launchAtLogin,
+    alwaysOnTop: s.settings.alwaysOnTop,
+    allDesktops: s.settings.allDesktops,
+    overFullscreen: s.settings.overFullscreen,
       alive: s.pet.alive,
       hidden: s.hidden,
     };

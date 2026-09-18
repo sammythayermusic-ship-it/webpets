@@ -468,6 +468,51 @@ fn settle_position(app: &AppHandle) -> Result<(), String> {
     app.emit("window-moved", geometry).map_err(err)
 }
 
+/// Applies all three layering flags together.
+///
+/// Together rather than one at a time because on macOS they are facets of two window properties — the
+/// level and the collection behavior — and the collection behavior is a bitmask that has to be read,
+/// modified and written. Applying them as a set keeps that read-modify-write in one place.
+pub fn set_layering(
+    app: &AppHandle,
+    always_on_top: bool,
+    all_desktops: bool,
+    over_fullscreen: bool,
+) -> Result<(), String> {
+    let window = main_window(app)?;
+    window.set_always_on_top(always_on_top).map_err(err)?;
+    // Sets/clears NSWindowCollectionBehaviorCanJoinAllSpaces under the hood.
+    window.set_visible_on_all_workspaces(all_desktops).map_err(err)?;
+    set_over_fullscreen(&window, over_fullscreen)?;
+    Ok(())
+}
+
+/// Sets `NSWindowCollectionBehaviorFullScreenAuxiliary`, which is what lets a floating window appear
+/// over an app that has gone fullscreen. A high window level alone is not enough: macOS moves a
+/// fullscreen app to its own Space, and a window that has not asked for this flag simply is not there.
+#[cfg(target_os = "macos")]
+fn set_over_fullscreen(window: &WebviewWindow<Wry>, on: bool) -> Result<(), String> {
+    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+    let ptr = window.ns_window().map_err(err)?;
+    if ptr.is_null() {
+        return Err("window has no NSWindow yet".to_string());
+    }
+    // SAFETY: `ns_window` hands back this window's live NSWindow, borrowed only for this call. Tauri
+    // guarantees the window outlives the handle we fetched it from, and nothing here retains it.
+    unsafe {
+        let ns: &NSWindow = &*ptr.cast::<NSWindow>();
+        let mut behavior = ns.collectionBehavior();
+        behavior.set(NSWindowCollectionBehavior::FullScreenAuxiliary, on);
+        ns.setCollectionBehavior(behavior);
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn set_over_fullscreen(_window: &WebviewWindow<Wry>, _on: bool) -> Result<(), String> {
+    Ok(())
+}
+
 /// Shows the window without focusing it. Never calls `set_focus`: with the Accessory activation
 /// policy `show()` orders the window front without activating the app.
 pub fn show(app: &AppHandle) -> Result<(), String> {

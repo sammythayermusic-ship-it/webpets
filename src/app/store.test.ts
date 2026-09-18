@@ -301,6 +301,13 @@ describe('app store', () => {
     await a.setHidden(false);
     expect(platform.visible).toBe(true);
     expect(store.getState().hidden).toBe(false);
+    await a.setLayering({ alwaysOnTop: false });
+    // The platform is handed a COMPLETE set, not the patch: on macOS these are facets of two window
+    // properties and applying them piecemeal would race.
+    expect(platform.layeringCalls).toEqual([{ alwaysOnTop: false, allDesktops: true, overFullscreen: true }]);
+    expect(store.getState().settings.alwaysOnTop).toBe(false);
+    expect(store.getState().settings.allDesktops, 'untouched flags keep their values').toBe(true);
+
     await a.setLaunchAtLogin(true);
     expect(platform.autostartEnabled).toBe(true);
     expect(store.getState().settings.launchAtLogin).toBe(true);

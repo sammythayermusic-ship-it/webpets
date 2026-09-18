@@ -474,3 +474,54 @@ distinct causes; these are the ones that mattered, and two of them were bad enou
   bubbles blinked in and out at full alpha; the starving tint snapped in one frame and the night fade
   banded in eight discrete steps. All were the last stepped things in a renderer that had gone
   continuous everywhere else.
+
+### the packaged app was running at ONE frame per second, and the timer fix alone did not find it
+Fixing the fallback timer's gate took the throttled path from 2 fps to 30 in a browser. In the real
+`.app` it changed almost nothing, and only measuring the built app revealed why.
+
+**`document.visibilityState` is `hidden` in the packaged app while the window is plainly on screen.**
+The window is never activated — a desktop pet must not steal focus, so the app uses the Accessory
+activation policy and never calls `set_focus` — and WebKit treats an unactivated window as not visible.
+For a hidden document it stops `requestAnimationFrame` entirely **and clamps `setTimeout`/`setInterval`
+to once per second**. So the watchdog, whose whole job was to cover for a dead rAF, was itself clamped
+to 1 Hz, each firing replaying a full second of simulation in one lurch.
+
+- **A Worker has no visibility state, so its timers are not clamped.** `src/render/pacer.ts` runs a
+  worker whose entire program is an interval that posts an empty message; all the work stays on the
+  main thread, which the 1 Hz timer already proved was still processing tasks. Measured in the built
+  app: **1 advance/s to 15**, and the simulation from 4.7 steps/s to 8.4 against a target of 8.
+- It falls back to a plain interval if the worker cannot be created or never reports, and runs both
+  until the worker proves itself. That is not superstition: this codebase has been bitten by a worker
+  before — Pixi's texture loader ran in a blob worker whose `fetch` could not reach `tauri://` and
+  every texture failed silently. This worker fetches nothing, so that failure does not apply, but a
+  fallback costing three lines is cheap against being wrong about that twice.
+- **15 fps, not 60, and the rest is a platform behaviour rather than a cost.** Render time is 1.2 ms per
+  frame, so nothing is slow; WebKit simply delivers a hidden document's worker messages in bursts. A
+  33 ms interval yields ~12/s and 8 ms yields ~18/s, so the interval matters and it is not a hard
+  clamp, but chasing the last few frames means a wakeup every 8 ms forever for a pet idling in a corner.
+- **The general lesson, which is the second time this exact thing has happened here:** Pixi's `fps` is
+  seeded to 60 and only corrected by a tick, so on precisely the failure worth catching it reports 60
+  while nothing runs. The boot report now samples the scene's own advance counter across a known
+  interval and records `document.visibilityState`, which is what turned "it feels glitchy" into a
+  number.
+
+### window layering: float, desktops, and fullscreen
+`alwaysOnTop` was a static line in the window config and `set_visible_on_all_workspaces(true)` was
+fired once, unconditionally, at startup. Neither could be turned off. Both are settings now, plus a
+third the app never asked for.
+
+- **Applied as a set, not one switch at a time.** On macOS these are facets of two window properties —
+  the level and the collection behaviour — and the collection behaviour is a bitmask that has to be
+  read, modified and written. One command applying all three keeps that read-modify-write in one place.
+- **"Show over fullscreen apps" is the project's first native code.** macOS gates it behind
+  `NSWindowCollectionBehaviorFullScreenAuxiliary`, which neither Tauri nor the windowing layer under it
+  exposes, and a high window level alone is not enough: a fullscreen app gets its own Space and a window
+  that has not asked for this flag simply is not there. `objc2-app-kit` was already in the lock file as
+  a transitive dependency, so this adds no new graph.
+- **No settings version bump.** `normalizeSettings` fills a missing field from the defaults but returns
+  defaults *wholesale* for a version it does not recognise, so bumping to add three booleans would have
+  discarded every existing user's mute, day/night and launch-at-login preferences. Two persistence
+  tests that pinned exact settings literals now spread over `defaultSettings()`, so the next field
+  added shows up as "takes its default" rather than as a failure.
+- Switching all-desktops off has a side effect worth knowing: on macOS that same collection behaviour
+  is what stops Stage Manager shrinking and re-arranging the window like an app window.

@@ -24,6 +24,8 @@ import { hungerLabel } from './sim';
 
 /** HUD stays visible this long after the pointer leaves the hit regions (contract rule 3). */
 const HUD_GRACE_MS = 400;
+/** Window the boot report measures the scene's frame rate over. */
+const RATE_SAMPLE_MS = 1500;
 /** Day/night is re-evaluated (via a store tick) this often. */
 const NIGHT_REFRESH_MS = 60_000;
 
@@ -54,6 +56,11 @@ async function writeBootReport(
     at: new Date().toISOString(),
     ok: error === undefined,
     platform: platform.kind,
+    // Why the clocks might be slow. WebKit clamps setTimeout/setInterval to 1 Hz and stops
+    // requestAnimationFrame entirely for a document it considers hidden, and a window that is
+    // never activated can be considered hidden while being plainly visible on screen.
+    visibility: typeof document === 'undefined' ? 'no-document' : document.visibilityState,
+    hasFocus: typeof document === 'undefined' ? false : document.hasFocus(),
     canvas: canvas ? { w: canvas.width, h: canvas.height, cssW: canvas.clientWidth, cssH: canvas.clientHeight } : null,
   };
   if (error !== undefined) {
@@ -62,9 +69,22 @@ async function writeBootReport(
   }
   try {
     if (scene) {
-      // fps tells whether the ticker is running at all. A packaged window that macOS considers
-      // occluded has requestAnimationFrame throttled to nothing, which freezes every animation.
-      report['scene'] = { ...scene.debugState(), fps: Math.round(scene.fps()) };
+      // Pixi's own `fps` is seeded to 60 and only corrected by a tick that never comes, so on the exact
+      // failure worth catching it reports 60 while nothing is running. Sampling the scene's advance
+      // counter across a known interval is the honest measure: it says which clock is actually driving
+      // and how fast. A packaged window that the compositor considers occluded has both
+      // requestAnimationFrame AND setInterval throttled, and that shows up here as a rate near zero.
+      const before = scene.debugState();
+      const t0 = Date.now();
+      await new Promise((r) => setTimeout(r, RATE_SAMPLE_MS));
+      const after = scene.debugState();
+      const elapsed = Math.max(1, Date.now() - t0);
+      report['scene'] = {
+        ...after,
+        fps: Math.round(scene.fps()),
+        advancesPerSec: Math.round(((after.advances - before.advances) / elapsed) * 1000),
+        stepsPerSec: Math.round(((after.steps - before.steps) / elapsed) * 1000 * 10) / 10,
+      };
     }
   } catch (e) {
     report['scene'] = `debugState threw: ${String(e)}`;
@@ -210,6 +230,15 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
 
   // 4. Window geometry (first call restores the saved position), hit regions, show, scheduler, night refresh.
   await platform.window.setScale(initial.settings.scale);
+  // Layering before the window is shown, so it never appears in the wrong place and then jumps. These
+  // were hard-coded on in the window config and in Rust's setup; they are the user's choice now.
+  await platform.window
+    .setLayering({
+      alwaysOnTop: initial.settings.alwaysOnTop,
+      allDesktops: initial.settings.allDesktops,
+      overFullscreen: initial.settings.overFullscreen,
+    })
+    .catch(logRejected('setLayering'));
   refreshHitRegions();
   if (!store.getState().hidden) await platform.window.show();
   startScheduler(store, platform);

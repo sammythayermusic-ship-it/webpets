@@ -23,6 +23,9 @@ export function defaultSettings(): SettingsDoc {
     notificationsMuted: false,
     dayNight: 'auto',
     launchAtLogin: false,
+    alwaysOnTop: true,
+    allDesktops: true,
+    overFullscreen: true,
     devClockOffsetMs: 0,
     pendingSkipMs: 0,
   };
@@ -109,6 +112,12 @@ export function normalizeSettings(v: unknown): SettingsDoc {
     notificationsMuted: isBool(v['notificationsMuted']) ? v['notificationsMuted'] : d.notificationsMuted,
     dayNight: dn === 'auto' || dn === 'day' || dn === 'night' ? dn : d.dayNight,
     launchAtLogin: isBool(v['launchAtLogin']) ? v['launchAtLogin'] : d.launchAtLogin,
+    // No version bump for these. A missing field already falls back to its default, whereas an
+    // unrecognised VERSION returns defaults wholesale -- so bumping to add three booleans would throw
+    // away every existing user's mute, day/night and launch-at-login preferences.
+    alwaysOnTop: isBool(v['alwaysOnTop']) ? v['alwaysOnTop'] : d.alwaysOnTop,
+    allDesktops: isBool(v['allDesktops']) ? v['allDesktops'] : d.allDesktops,
+    overFullscreen: isBool(v['overFullscreen']) ? v['overFullscreen'] : d.overFullscreen,
     devClockOffsetMs: isNum(v['devClockOffsetMs']) ? v['devClockOffsetMs'] : 0,
     pendingSkipMs: isNum(v['pendingSkipMs']) ? v['pendingSkipMs'] : 0,
   };
