@@ -58,8 +58,32 @@ function row(label: string, ...children: (HTMLElement | string)[]): HTMLDivEleme
 }
 
 export function mountDevPanel(root: HTMLElement, deps: UiDeps): DevPanelHandleExt {
-  const { store, scene } = deps;
+  const { store, scene, platform } = deps;
   const dev = () => store.getState().actions.dev;
+
+  /**
+   * Which build is on screen.
+   *
+   * Refreshed every time the panel opens rather than once at mount, because the interesting part --
+   * `staleLaunch`, another copy of the app whose launch this process swallowed -- happens later, and
+   * usually seconds after a build, which is exactly when someone opens this panel to check.
+   */
+  let buildLine = 'build …';
+  function refreshBuild(): void {
+    void platform
+      .buildIdentity()
+      .then((b) => {
+        const linked = b.builtAtMs === null ? 'unknown' : formatClock(b.builtAtMs);
+        const stale = b.staleLaunch === null ? '' : `\n!! a different copy was opened and did NOT start: ${b.staleLaunch}`;
+        buildLine = `build v${b.version} · linked ${linked} · ${b.bundle}${stale}`;
+      })
+      .catch((e: unknown) => {
+        buildLine = `build unavailable: ${String(e)}`;
+      })
+      .finally(() => {
+        if (open) refreshStatus(store.getState());
+      });
+  }
 
   const panel = el('div', 'dev-panel');
   panel.hidden = true;
@@ -226,6 +250,7 @@ export function mountDevPanel(root: HTMLElement, deps: UiDeps): DevPanelHandleEx
     const pet = s.pet;
     const hunger = pet.alive ? s.hunger : 0;
     const parts = [
+      buildLine,
       `now ${formatClock(now)} (offset ${formatOffset(s.settings.devClockOffsetMs)})`,
       `${pet.name} ${pet.id} · ${pet.alive ? 'alive' : 'dead'} · ${pet.personality} · ${pet.rarity}`,
       `hunger ${hunger.toFixed(1)}% ${labelFor(hunger)} · pantry ${pet.pantry} · balance ${s.balance} · meals ${pet.meals}`,
@@ -255,6 +280,7 @@ export function mountDevPanel(root: HTMLElement, deps: UiDeps): DevPanelHandleEx
   function openPanel(): void {
     if (open) return;
     open = true;
+    refreshBuild();
     const s = store.getState();
     seedInputs(s);
     refreshStatus(s);

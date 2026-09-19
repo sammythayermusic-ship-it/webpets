@@ -222,6 +222,8 @@ Commands (invoke names; args/returns are camelCase JSON matching `src/platform/t
 | `set_scale_live` | `{ scale, live }` | `WindowGeometry` | as above; `live` skips edge snapping and the position write, for a drag in flight |
 | `set_interaction_lock` | `{ ms }` | — | hands the pointer to the webview for `ms` (renewable, 0 releases); the cursor poller stands down |
 | `set_layering` | `{ alwaysOnTop, allDesktops, overFullscreen }` | — | window level and collection behaviour, applied as a set |
+| `get_layering` | – | `{ level, behavior }` | level and collection-behaviour bits read off the LIVE window, for the boot report |
+| `build_identity` | – | `BuildIdentity` | `{ bundle, exe, version, builtAtMs, staleLaunch }` — which binary is running |
 | `set_hit_regions` | `{ regions: Rect[] }` | – | regions in window-local CSS px |
 | `get_geometry` | – | `WindowGeometry` | |
 | `show_window` / `hide_window` | – | – | show never focuses |
@@ -249,6 +251,13 @@ Moved, then snaps, clamps, calls `set_position` only if it differs from `outer_p
 
 Plugin order in `lib.rs`: single-instance first (callback shows the main window, no focus), then store,
 notification, autostart, global-shortcut, positioner.
+
+The single-instance callback also compares `argv[0]`'s `.app` bundle against `std::env::current_exe()`'s
+(`identity.rs`) and notifies when they differ. Every build shares the bundle id, so macOS routes a launch
+of a NEWLY built copy to whichever copy is already running: without the comparison, opening a new build
+while an old one runs silently surfaces the old one and discards the launch. Install with
+`npm run install:app`, which quits the running copy (matched on the executable name — a bundle-path match
+misses Finder's "WebPets 2.app") and replaces one canonical `/Applications/WebPets.app`.
 
 Notifications from `tauri dev` are posted under the Terminal identity (allow notifications for Terminal); only the
 bundled `.app` uses `com.sammythayer.webpets`. Document this in the README.

@@ -6,6 +6,7 @@ use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_notification::NotificationExt;
 
 use crate::clock::{self, ClockReading};
+use crate::identity::{self, BuildIdentity};
 use crate::state::{HitRect, ShellState};
 use crate::tray::{self, TrayMenuState};
 use crate::window::{self, WindowGeometry};
@@ -69,6 +70,17 @@ pub fn get_layering(app: AppHandle) -> Result<LayeringReadback, String> {
 pub struct LayeringReadback {
     pub level: i64,
     pub behavior: u64,
+}
+
+/// Which binary is running, for the boot report and the dev panel.
+///
+/// The boot report already records what the window actually has; it recorded nothing about what wrote
+/// it, and that gap is how an unopened build spent an hour being blamed for a bug it fixed. See
+/// `identity.rs`.
+#[tauri::command]
+pub fn build_identity(app: AppHandle, state: State<'_, ShellState>) -> BuildIdentity {
+    let stale = state.stale_launch.lock().ok().and_then(|s| s.clone());
+    identity::current(&app.package_info().version.to_string(), stale)
 }
 
 #[tauri::command]

@@ -152,8 +152,29 @@ export interface TrayApi {
   onAction(cb: (action: TrayAction) => void): () => void;
 }
 
+/**
+ * Which binary is running.
+ *
+ * Exists because "am I running the build I think I am?" was, for one evening, unanswerable. Three
+ * copies of the app shared a bundle id, macOS routed every launch to whichever was already running,
+ * and the boot report described the window in detail while saying nothing about what wrote it -- so a
+ * fix that was already on disk looked exactly like a fix that did not work.
+ */
+export interface BuildIdentity {
+  /** The `.app` bundle the process runs out of; under `tauri dev`, the bare executable. */
+  bundle: string;
+  exe: string;
+  version: string;
+  /** The executable's own mtime: when this binary was linked. Null if it could not be read. */
+  builtAtMs: number | null;
+  /** Bundle path of a different copy whose launch this instance swallowed. See `lib.rs`. */
+  staleLaunch: string | null;
+}
+
 export interface Platform {
   readonly kind: 'tauri' | 'browser';
+  /** See {@link BuildIdentity}. Recorded in the boot report and shown in the dev panel. */
+  buildIdentity(): Promise<BuildIdentity>;
   clock(): Promise<ClockReading>;
   store: PersistApi;
   window: WindowApi;

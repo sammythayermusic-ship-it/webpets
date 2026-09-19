@@ -34,6 +34,14 @@ export function createFakePlatform(seedFiles: Record<string, unknown> = {}): Fak
   });
   const p: FakePlatform = {
     kind: 'browser',
+    buildIdentity: () =>
+      Promise.resolve({
+        bundle: '(test)',
+        exe: '(test)',
+        version: '0.0.0-test',
+        builtAtMs: null,
+        staleLaunch: null,
+      }),
     files,
     cache,
     setCount: 0,

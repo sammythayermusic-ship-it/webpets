@@ -60,6 +60,22 @@ function prefersReducedMotion(): boolean {
  * half-built app: the first version only ran after a clean boot, which is backwards for a diagnostic —
  * when boot failed it wrote nothing at all and the packaged app stayed exactly as opaque as before.
  */
+/**
+ * The running build, formatted for someone reading the JSON, and guaranteed not to throw.
+ *
+ * Never throwing matters more here than anywhere else in the report: this is the field that says
+ * whether the other fields describe the build you think they do, so losing it to an exception would
+ * take the rest of the report down with it in credibility.
+ */
+async function buildIdentity(platform: Platform): Promise<unknown> {
+  try {
+    const { builtAtMs, ...rest } = await platform.buildIdentity();
+    return { ...rest, builtAt: builtAtMs === null ? null : new Date(builtAtMs).toISOString() };
+  } catch (e) {
+    return `unavailable: ${String(e)}`;
+  }
+}
+
 async function writeBootReport(
   platform: Platform,
   store: AppStore | null,
@@ -72,6 +88,13 @@ async function writeBootReport(
     at: new Date().toISOString(),
     ok: error === undefined,
     platform: platform.kind,
+    // WHICH BINARY WROTE THIS. First field after the timestamp because it is the first question, and
+    // because for one evening it had no answer: three copies of the app shared a bundle id, macOS
+    // handed every launch to whichever was already running, and this report described the window in
+    // forensic detail while staying silent about its own author. A fix sat unopened on the Desktop
+    // looking exactly like a fix that did not work. Read `build.bundle` before believing anything else
+    // in this file.
+    build: await buildIdentity(platform),
     // Why the clocks might be slow. WebKit clamps setTimeout/setInterval to 1 Hz and stops
     // requestAnimationFrame entirely for a document it considers hidden, and a window that is
     // never activated can be considered hidden while being plainly visible on screen.

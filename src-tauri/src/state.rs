@@ -56,4 +56,10 @@ pub struct ShellState {
     pub suppress_moved_until: Mutex<Option<Instant>>,
     /// Handles to the tray menu items so `tray_set_menu_state` can update them.
     pub tray: Mutex<Option<TrayMenu>>,
+    /// Bundle path of a DIFFERENT copy of the app whose launch this instance swallowed.
+    ///
+    /// Set by the single-instance handler in `lib.rs`; read back through `build_identity` so the dev
+    /// panel can say it out loud. The user is told at the moment it happens, by notification -- this
+    /// is the record that survives the notification being missed.
+    pub stale_launch: Mutex<Option<String>>,
 }

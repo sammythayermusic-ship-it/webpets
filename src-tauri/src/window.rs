@@ -92,12 +92,12 @@ fn err<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
 
-/// Whether `set_scale` accepts this scale, i.e. whether it is in the TS `SCALES` list.
+/// Whether `set_scale` accepts this scale (contract: `MIN_SCALE`/`MAX_SCALE` in `src/sim/constants.ts`).
 pub fn scale_supported(scale: u8) -> bool {
     (MIN_SCALE..=MAX_SCALE).contains(&scale)
 }
 
-/// Window size for an integer scale: `(320s + 48) x (240s + 48)` — S 368x288, M 688x528, L 1008x768.
+/// Window size for a scale in eighths: `(40n + 48) x (30n + 48)` — S 288x228, M 688x528, L 1008x768.
 /// Mirrors `windowSizeForScale` in
 /// `src/sim/constants.ts`; `contract_sync` below fails the build if the two drift apart.
 pub fn window_size_for_scale(scale: u8) -> (f64, f64) {
@@ -896,29 +896,6 @@ mod contract_sync {
                  a smarter parser)."
             )
         })
-    }
-
-    fn ts_scales() -> Vec<u8> {
-        let raw = ts_initializer("SCALES");
-        let inner = raw
-            .strip_prefix('[')
-            .and_then(|r| r.strip_suffix(']'))
-            .unwrap_or_else(|| {
-                panic!(
-                    "{TS_PATH}: `SCALES` is `{raw}`, not an array literal like `[2, 3, 4]`. \
-                     {RS_PATH} pins its accepted scale range to that list."
-                )
-            });
-        inner
-            .split(',')
-            .map(str::trim)
-            .filter(|t| !t.is_empty()) // tolerate a trailing comma
-            .map(|t| {
-                t.parse::<u8>().unwrap_or_else(|_| {
-                    panic!("{TS_PATH}: `SCALES` entry `{t}` is not an integer literal.")
-                })
-            })
-            .collect()
     }
 
     /// `width`/`height` of the `main` window entry in tauri.conf.json.

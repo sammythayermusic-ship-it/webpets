@@ -8,6 +8,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { load, type Store } from '@tauri-apps/plugin-store';
 import type { Scale, TrayChipSize } from '../sim/constants';
 import type {
+  BuildIdentity,
   ClockReading,
   PersistApi,
   Platform,
@@ -127,6 +128,7 @@ export function createTauriPlatform(): Platform {
           overFullscreen: opts.overFullscreen,
         }),
     },
+    buildIdentity: () => invoke<BuildIdentity>('build_identity'),
     tray: {
       setChip: (rgba: Uint8Array, size: TrayChipSize) =>
         invoke<void>('tray_set_chip', { rgba: Array.from(rgba), size }),

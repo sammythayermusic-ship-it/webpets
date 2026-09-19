@@ -609,3 +609,35 @@ earlier while turning the behaviour into a setting.
 to 0.5× so the default is not pinned at the bottom of its own range — a default at the edge of its
 range is a sign the range is wrong. "Small" in the tray moved from 1× to 0.75× so a fresh install lands
 ON a named rung rather than between two; Medium and Large are unchanged, so no existing window resizes.
+
+## build identity: the app says which build it is
+
+The layering work above was correct when it shipped and looked broken for an hour afterwards, because
+the build carrying it was never the build on screen. Three copies sat on a Desktop — Finder appends
+" 2", " 3" rather than replacing — and all of them share the bundle id `com.sammythayer.webpets`. That
+id is what macOS routes a launch by, so double-clicking the NEW copy while an old one ran was
+indistinguishable from double-clicking the old one: the single-instance callback fired, the old window
+came forward, and the copy that was actually opened never started. Silently, with no window of its own
+and no error.
+
+Everything downstream then agreed the app was fine, because it was. It was the wrong app.
+
+- **`argv[0]` is no longer discarded.** The single-instance callback receives the second instance's
+  argv; its first element is the executable that was launched. Comparing that path's `.app` bundle
+  against `std::env::current_exe()`'s is the only thing that distinguishes two builds with the same
+  bundle id and the same executable name. On a mismatch the user gets a notification naming both paths.
+- **It deliberately does not hand over to the new copy.** By the time the callback runs the second
+  process has already exited, so "newest wins" means relaunching that bundle from inside the process
+  that is quitting — a race against the single-instance lock whose losing outcome is no habitat running
+  at all. Naming both paths and letting the user choose is the honest trade.
+- **The comparison is on the bundle, not the executable.** Every copy's executable is called `webpets`;
+  only the folder around it differs. For the same reason `install:app` quits the running copy with
+  `pkill -x webpets` rather than matching the bundle path — a `pkill -f "WebPets.app/Contents/..."`
+  matched nothing against a folder named "WebPets 3.app" and left the stale build running.
+- **The boot report's first field after the timestamp is now `build`**: bundle, executable, version and
+  the binary's own mtime. The report described the window in forensic detail while saying nothing about
+  its own author, which is precisely the gap that cost the evening. Read `build.bundle` before
+  believing anything else in the file. The dev panel shows the same line, refreshed on every open so a
+  swallowed launch appears there too.
+- **One canonical install path.** `npm run install:app` builds, quits whatever is running, and replaces
+  `/Applications/WebPets.app`. Copies cannot accumulate if there is only ever one place to put them.

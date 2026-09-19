@@ -326,6 +326,16 @@ export function createBrowserPlatform(): Platform {
 
   const platform: Platform = {
     kind: 'browser',
+    // There is no bundle and no executable in a browser, and saying so is more useful than a plausible
+    // fake: the whole point of this field is to be trusted when it names a path.
+    buildIdentity: () =>
+      Promise.resolve({
+        bundle: '(browser)',
+        exe: location.href,
+        version: 'dev',
+        builtAtMs: null,
+        staleLaunch: null,
+      }),
     clock: (): Promise<ClockReading> => {
       const now = Date.now();
       return Promise.resolve({ wallMs: now, monoMs: now });

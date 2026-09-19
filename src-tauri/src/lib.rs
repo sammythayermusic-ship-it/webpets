@@ -5,20 +5,70 @@
 mod clock;
 mod commands;
 mod hittest;
+mod identity;
 mod state;
 mod tray;
 mod window;
 
+use std::path::Path;
 use std::sync::atomic::Ordering;
 
 use tauri::{Emitter, Manager, WindowEvent};
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_global_shortcut::ShortcutState;
+use tauri_plugin_notification::NotificationExt;
 
 use state::ShellState;
 
 /// Global shortcut that toggles the habitat (fires on key press only).
 const TOGGLE_SHORTCUT: &str = "Cmd+Shift+P";
+
+/// Handles a second launch: surface the running habitat, and say so if it is not the copy that was
+/// opened.
+///
+/// The plain version of this threw `argv` away, and that turned out to be the expensive half. Every
+/// build shares the bundle id, so macOS routes a double-click of a freshly built `.app` to whichever
+/// copy is already running; this callback fired, the old window came forward, and the copy the user
+/// actually opened never started. Silently. A layering fix sat unopened on a Desktop for an hour
+/// while the build from half an hour earlier sat on screen failing in exactly the way the fix
+/// addressed, and every diagnostic agreed the app was fine -- because it was; it was the wrong app.
+///
+/// `argv[0]` is the executable path of the copy that was opened, which is the one fact that
+/// distinguishes the two.
+///
+/// Note what this deliberately does NOT do: hand over to the new copy. By the time this runs the
+/// second process has already exited, so "newest wins" would mean relaunching that bundle from inside
+/// the process that is quitting -- a race against the single-instance lock whose losing outcome is no
+/// habitat running at all. Naming both paths and letting the user choose is the honest trade.
+fn on_second_launch(app: &tauri::AppHandle, argv: &[String]) {
+    let running = identity::current_bundle();
+    let launched = argv
+        .first()
+        .map(|arg| identity::bundle_of(&identity::normalize(Path::new(arg))));
+
+    if let Some(launched) = launched.filter(|l| *l != running) {
+        let (launched, running) = (launched.display().to_string(), running.display().to_string());
+        eprintln!("[webpets] a different copy was launched: {launched} (running: {running})");
+        if let Ok(mut slot) = app.state::<ShellState>().stale_launch.lock() {
+            *slot = Some(launched.clone());
+        }
+        if let Err(e) = app
+            .notification()
+            .builder()
+            .title("WebPets is already running")
+            .body(format!(
+                "The copy you opened did not start:\n{launched}\n\nStill running:\n{running}\n\nQuit WebPets from the menu bar first."
+            ))
+            .show()
+        {
+            eprintln!("[webpets] could not notify about the stale launch: {e}");
+        }
+    }
+
+    if let Err(e) = window::show(app) {
+        eprintln!("[webpets] single-instance show failed: {e}");
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -37,11 +87,10 @@ pub fn run() {
     tauri::Builder::default()
         // Plugin order per the contract: single-instance first, then store, notification,
         // autostart, global-shortcut, positioner.
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            // A second launch just surfaces the running habitat; never focus.
-            if let Err(e) = window::show(app) {
-                eprintln!("[webpets] single-instance show failed: {e}");
-            }
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // A second launch just surfaces the running habitat; never focus. See `on_second_launch`
+            // for why `argv` is no longer discarded.
+            on_second_launch(app, &argv);
         }))
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
@@ -57,6 +106,7 @@ pub fn run() {
             commands::set_scale,
             commands::set_layering,
             commands::get_layering,
+            commands::build_identity,
             commands::set_scale_live,
             commands::set_interaction_lock,
             commands::set_hit_regions,
