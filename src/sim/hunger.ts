@@ -1,5 +1,5 @@
 import type { HungerLabel, PetState, SimConstants } from './types';
-import { DEFAULT_CONSTANTS, HOUR_MS } from './constants';
+import { DEFAULT_CONSTANTS, FULL_ABOVE, HOUR_MS } from './constants';
 import { deathFromZero, hungerFrom, zeroFrom } from './math';
 import { reconcile } from './reconcile';
 
@@ -9,10 +9,16 @@ export function hungerAt(state: PetState, now: number, c: SimConstants = DEFAULT
   return hungerFrom(state.hungerAtLastFed, state.lastFedAt, now, c);
 }
 
-/** full if h > 60; peckish if 30 < h <= 60; hungry if 0 < h <= 30; starving if h === 0. */
+/**
+ * full above FULL_ABOVE; peckish down to PANTRY_TRIGGER; hungry down to 0; starving at 0.
+ *
+ * `src/ui/model.ts` carries a second copy of this on purpose, so the ui module never imports the sim.
+ * Both now read the same two named boundaries, and `labelSync.test.ts` walks the whole range asserting
+ * they agree -- deliberate duplication is only safe while something holds the copies together.
+ */
 export function hungerLabel(h: number): HungerLabel {
-  if (h > 60) return 'full';
-  if (h > 30) return 'peckish';
+  if (h > FULL_ABOVE) return 'full';
+  if (h > DEFAULT_CONSTANTS.PANTRY_TRIGGER) return 'peckish';
   if (h > 0) return 'hungry';
   return 'starving';
 }

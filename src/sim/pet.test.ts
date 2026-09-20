@@ -66,19 +66,19 @@ describe('pet', () => {
     expect(formatAge(-5)).toBe('0d 0h');
     const p = newPet(B, mulberry32(1));
     expect(ageMs(p, B + 10 * H)).toBe(10 * H);
-    const dead = reconcile(p, B + 84 * H).state;
-    expect(ageMs(dead, B + 500 * H)).toBe(84 * H);
-    expect(formatAge(ageMs(dead, B + 500 * H))).toBe('3d 12h');
+    const dead = reconcile(p, B + 36 * H).state;
+    expect(ageMs(dead, B + 500 * H)).toBe(36 * H);
+    expect(formatAge(ageMs(dead, B + 500 * H))).toBe('1d 12h');
   });
 
   it('33. toGraveRecord', () => {
     const p = newPet(B, mulberry32(1));
-    const dead = reconcile(p, B + 84 * H).state;
+    const dead = reconcile(p, B + 36 * H).state;
     const g = toGraveRecord(dead, B + 100 * H);
     expect(g.pet).toEqual(dead);
     expect(g.pet).not.toBe(dead);
-    expect(g.diedAt).toBe(B + 84 * H);
-    expect(g.ageMs).toBe(84 * H);
+    expect(g.diedAt).toBe(B + 36 * H);
+    expect(g.ageMs).toBe(36 * H);
     expect(g.buriedAt).toBe(B + 100 * H);
   });
 });

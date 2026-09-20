@@ -2,13 +2,35 @@ import type { SimConstants } from './types';
 
 /** Single source of truth for the rules. The dev panel may pass an override object into sim functions. */
 export const DEFAULT_CONSTANTS: Readonly<SimConstants> = Object.freeze({
-  DECAY_PER_HOUR: 100 / 60,
+  // The pet is fed TWICE A DAY. Everything below is that one sentence, expressed in numbers.
+  //
+  // A meal is worth exactly half the bar, and the bar empties in exactly a day, so a meal buys exactly
+  // twelve hours: feed at 100, read 50 at lunch, feed again. The auto-feed cycle lands on the same
+  // twelve hours for free, because 30 -> 80 is also fifty points. Keeping the meal an exact half is
+  // what makes the rhythm legible on the HUD ring rather than something you have to be told.
+  //
+  // It used to be a 45-point meal against a 60-hour bar -- a 27-hour cycle, so a bit less than once a
+  // day, and a fresh pet survived three and a half days of silence. See docs/DECISIONS.md.
+  DECAY_PER_HOUR: 100 / 24,
   FEED_COST: 25,
-  FEED_GAIN: 45,
+  FEED_GAIN: 50,
   MAX_HUNGER: 100,
   PANTRY_TRIGGER: 30, // inclusive: auto-feed fires when hunger <= 30 (Blueprint says "drops below"; identical instant with continuous decay)
-  DEATH_AFTER_ZERO_HOURS: 24,
+  // Starving by morning if you skip the evening meal, gone by that evening if you skip the day.
+  DEATH_AFTER_ZERO_HOURS: 12,
 });
+
+/**
+ * Hunger at or below which the pet reads 'peckish' rather than 'full'.
+ *
+ * Named because it was a bare `60` in BOTH `hungerLabel` (src/sim/hunger.ts) and `labelFor`
+ * (src/ui/model.ts). That duplication is deliberate -- src/ui must not import the sim -- but a literal
+ * repeated across a module boundary is not duplication, it is a drift waiting to happen, and retuning
+ * the clock is exactly the moment it would have drifted. `PANTRY_TRIGGER` is the lower boundary and was
+ * already shared; this is its missing other half. `labelSync.test.ts` pins the two implementations
+ * together across the whole range.
+ */
+export const FULL_ABOVE = 60;
 
 export const MINUTE_MS = 60_000;
 export const HOUR_MS = 3_600_000;

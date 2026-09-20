@@ -16,7 +16,8 @@ export interface NotificationLatches {
 }
 
 export interface PetDoc {
-  version: 1;
+  /** 1 predates the twice-a-day hunger clock; see `migratePetDoc`. Always written as 2. */
+  version: 1 | 2;
   pet: PetState;
   balance: number;
   latches: NotificationLatches;

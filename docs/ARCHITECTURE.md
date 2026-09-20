@@ -341,9 +341,16 @@ the next crossing into the future). `hungry` (crossing 30 with no auto-feed ther
 deep-equal state and `[]` for every `t`, including event times. Timestamps for the default constants are integer ms;
 round emitted timestamps with overridden constants.
 
-Reference numbers: fresh pet at 100 with 500 in the pantry, 10 days away → auto-feeds at 42 h then every 27 h
-(75 → 30): 8 feeds, pantry 300, hunger 60 at 240 h, alive. Full to empty is 60 h; death at 84 h with an empty pantry.
-The Blueprint's "~250 or less" is only reached when the pet is starving at deposit time (10 feeds → 250).
+Reference numbers (the pet eats twice a day): fresh pet at 100 with 1000 in the pantry, 10 days away →
+auto-feeds at 16.8 h then every 12 h (80 → 30): 19 feeds, pantry 525, hunger 50 at 240 h, alive. Full to empty
+is 24 h; death at 36 h with an empty pantry. A meal is exactly half the bar, which is why the manual and
+auto-feed cycles are both 12 h.
+
+The rate is versioned. Hunger is derived from an anchor and never stored, so changing `DECAY_PER_HOUR` or
+`FEED_GAIN` re-simulates every saved pet at the new speed — a fish showing 65 % can reappear dead. Any such
+change needs a `PetDoc` version bump plus a `migratePetDoc` case that re-anchors the pet at its currently
+displayed hunger and sets `lastReconciledAt = now` (which is what suppresses the retroactive event burst).
+Version 2 is the twice-a-day clock; version 1 was a 45-point meal on a 60-hour bar.
 
 The sim builder implements the test list in `docs/SIM-TESTS.md` first.
 
@@ -460,7 +467,9 @@ except fish/bowl), FPS meter (`scene.fps()`), "Simulate 10-day absence with 500 
 
 ## Acceptance script notes (Blueprint §11)
 
-- "Skip 3 days → hungry, starving, dead": from a fresh pet, hungry at 42 h, starving at 60 h, dead at 84 h, so the
-  script presses +3d then +12h (or +1h ×… as needed) and asserts each state.
-- "Load 500, skip 10 days": assert pantry 300 and 8 `auto-fed` events (the Blueprint's "~250" is an estimate).
+- "Skip until dead": from a fresh pet, hungry at 16.8 h, starving at 24 h, dead at 36 h. The dev panel only
+  offers +1H / +12H / +3D, so the walk into the hungry band is +12H then +1H ×5 (17 h); then +12H (29 h,
+  starving); then +3D (dead).
+- "Load 1000, skip 10 days": assert pantry 525 and 19 `auto-fed` events. 500 also survives the ten days but
+  ends on its last 25, which makes the assertion about arithmetic rather than behaviour.
 - "Quit, fake the clock, relaunch → montage": use "Skip 3d on next launch", quit, relaunch (browser: reload).

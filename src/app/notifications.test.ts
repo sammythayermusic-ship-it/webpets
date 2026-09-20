@@ -10,11 +10,14 @@ const latches0 = (): NotificationLatches => ({ pantryLowFiredForPantry: null, de
 describe('notifications.decide', () => {
   it('maps hunger events to the contract copy in order', () => {
     const s = fresh();
-    const r = reconcile(s, B + 84 * H);
-    const d = decide(s, r.state, r.events, B + 84 * H, latches0());
+    const r = reconcile(s, B + 36 * H);
+    const d = decide(s, r.state, r.events, B + 36 * H, latches0());
+    // The deadlines are read out of the constants they describe, not typed in. Before that they were
+    // literals and this test was the only thing asserting them -- which meant it agreed with the copy
+    // and both were wrong together.
     expect(d.toasts.map((t) => t.body)).toEqual([
       `${s.name} is hungry.`,
-      `${s.name} is starving. 24h to live.`,
+      `${s.name} is starving. 12h to live.`,
       `${s.name} has 6 hours.`,
       `${s.name} has died.`,
     ]);
@@ -23,7 +26,9 @@ describe('notifications.decide', () => {
   });
 
   it('auto-fed events produce no toast', () => {
-    const s: PetState = { ...fresh(), pantry: 500 };
+    // 1000 rather than 500: ten days is nineteen meals now, and 500 would end the run with 25 left,
+    // which trips the pantry-low toast and stops this being a test about auto-feeds being silent.
+    const s: PetState = { ...fresh(), pantry: 1000 };
     const r = reconcile(s, B + 240 * H);
     const d = decide(s, r.state, r.events, B + 240 * H, latches0());
     expect(d.toasts).toEqual([]);
@@ -31,7 +36,7 @@ describe('notifications.decide', () => {
 
   it('pantry-low fires once per pantry value while hunger < 60 and resets when runway >= 2 days', () => {
     const base = fresh();
-    const now = B + 30 * H; // hunger 50
+    const now = B + 12 * H; // hunger 50
     const low: PetState = { ...base, pantry: 40 };
     const d1 = decide(base, low, [], now, latches0());
     expect(d1.toasts).toEqual([{ title: base.name, body: 'Pantry is almost empty.' }]);
@@ -60,11 +65,11 @@ describe('notifications.decide', () => {
   it('pantry-low needs pantry > 0, hunger < 60 and a living pet', () => {
     const base = fresh();
     const empty: PetState = { ...base, pantry: 0 };
-    expect(decide(base, empty, [], B + 30 * H, latches0()).toasts).toEqual([]);
+    expect(decide(base, empty, [], B + 12 * H, latches0()).toasts).toEqual([]);
     const full: PetState = { ...base, pantry: 40 };
-    expect(decide(base, full, [], B + 10 * H, latches0()).toasts).toEqual([]); // hunger ~83
-    const dead: PetState = { ...reconcile(base, B + 84 * H).state, pantry: 20 };
-    expect(decide(base, dead, [], B + 90 * H, latches0()).toasts).toEqual([]);
+    expect(decide(base, full, [], B + 6 * H, latches0()).toasts).toEqual([]); // hunger 75, above the gate
+    const dead: PetState = { ...reconcile(base, B + 36 * H).state, pantry: 20 };
+    expect(decide(base, dead, [], B + 40 * H, latches0()).toasts).toEqual([]);
   });
 
   it('preserves deathAcknowledgedFor', () => {

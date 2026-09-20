@@ -5,14 +5,17 @@
 import type { AppState } from '../app/types';
 import type { HungerLabel, PetState } from '../sim/types';
 import type { SceneView, ScenePhase } from '../render/types';
-import { DEFAULT_CONSTANTS, PANTRY_LOW_DAYS, PANTRY_VISUAL_MAX } from '../sim/constants';
+import { DEFAULT_CONSTANTS, FULL_ABOVE, PANTRY_LOW_DAYS, PANTRY_VISUAL_MAX } from '../sim/constants';
 import { formatAge } from './format';
 
-/** full if h > 60; peckish if 30 < h <= 60; hungry if 0 < h <= 30; starving if h === 0 (or below). */
+/**
+ * The ui-side copy of `hungerLabel` (src/sim/hunger.ts), kept local so this module never imports the
+ * sim. Both read the same named boundaries; `labelSync.test.ts` asserts they never disagree.
+ */
 export function labelFor(h: number): HungerLabel {
   if (!(h > 0)) return 'starving';
   if (h <= DEFAULT_CONSTANTS.PANTRY_TRIGGER) return 'hungry';
-  if (h <= 60) return 'peckish';
+  if (h <= FULL_ABOVE) return 'peckish';
   return 'full';
 }
 

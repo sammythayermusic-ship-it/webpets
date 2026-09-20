@@ -4,7 +4,7 @@
 // later. flush() drains everything pending. All store calls for a file are sequenced through one promise chain.
 import type { PersistApi } from '../platform/types';
 import type { GraveyardDoc, PetDoc, SettingsDoc } from './types';
-import { clampScale, DEFAULT_SCALE, MAX_SCALE, MIN_SCALE, SCALE_L, SCALE_M, SCALE_S, type Scale } from '../sim/constants';
+import { clampScale, DEFAULT_SCALE, HOUR_MS, MAX_SCALE, MIN_SCALE, SCALE_L, SCALE_M, SCALE_S, type Scale } from '../sim/constants';
 import type { PetState } from '../sim/types';
 
 export const PET_FILE = 'pet.json';
@@ -14,6 +14,17 @@ export const SAVE_THROTTLE_MS = 500;
 
 /** Current `SettingsDoc.version`. Bumped to 2 when the scale ladder moved from 2/3/4 to 1/2/3. */
 export const SETTINGS_VERSION = 2;
+
+/** Current `PetDoc.version`. Bumped to 2 when a meal went from 27 hours to 12. See `migratePetDoc`. */
+export const PET_VERSION = 2;
+
+/**
+ * The hunger rate a version-1 document was written under: a 45-point meal against a 60-hour bar.
+ *
+ * This is the ONLY place the old numbers survive, and they must never be imported from
+ * `DEFAULT_CONSTANTS` -- the whole point is to read a v1 anchor with v1 rules.
+ */
+const LEGACY_V1_DECAY_PER_HOUR = 100 / 60;
 
 export function defaultSettings(): SettingsDoc {
   return {
@@ -67,7 +78,7 @@ export function isPetState(v: unknown): v is PetState {
 }
 
 export function isPetDoc(v: unknown): v is PetDoc {
-  if (!isRecord(v) || v['version'] !== 1) return false;
+  if (!isRecord(v) || (v['version'] !== 1 && v['version'] !== PET_VERSION)) return false;
   if (!isPetState(v['pet'])) return false;
   if (!isNum(v['balance']) || !Number.isInteger(v['balance']) || v['balance'] < 0) return false;
   const l = v['latches'];
@@ -155,6 +166,36 @@ export function normalizeGraveyard(v: unknown): GraveyardDoc {
   return { version: 1, records };
 }
 
+/**
+ * Carries a pet across the twice-a-day retune without changing the hunger it is showing.
+ *
+ * Hunger is never stored. It is derived from the anchor `(hungerAtLastFed, lastFedAt)` every time it is
+ * read, so making the clock 2.5x faster silently re-simulates every existing pet at the new speed: an
+ * anchor that read 65% under the old rules reads near zero under the new ones, and `reconcile` would
+ * then replay the whole hungry -> starving -> dying-soon -> died chain as four real desktop
+ * notifications on the first tick. The pet would appear to have starved because a constant changed.
+ *
+ * So: read the hunger with the OLD rate, re-anchor it at `now`, and let the new clock start from there.
+ * The number on screen is identical either side of the upgrade; only its future slope changes.
+ * `lastReconciledAt = now` is what suppresses the retroactive event burst.
+ *
+ * Deliberately one-way and deliberately generous. A pet that has been left long enough to be dead under
+ * the OLD rules is re-anchored at zero and given the new death window rather than being killed on load:
+ * an upgrade should never be the thing that ends a pet. A pet that is ALREADY dead is untouched.
+ */
+export function migratePetDoc(doc: PetDoc, now: number): PetDoc {
+  if (doc.version === PET_VERSION) return doc;
+  const pet = doc.pet;
+  if (!pet.alive) return { ...doc, version: PET_VERSION };
+  const hours = Math.max(0, now - pet.lastFedAt) / HOUR_MS;
+  const legacyHunger = Math.max(0, Math.min(100, pet.hungerAtLastFed - LEGACY_V1_DECAY_PER_HOUR * hours));
+  return {
+    ...doc,
+    version: PET_VERSION,
+    pet: { ...pet, hungerAtLastFed: legacyHunger, lastFedAt: now, lastReconciledAt: now },
+  };
+}
+
 export interface Persistence {
   loadPet(): Promise<PetDoc | null>;
   loadSettings(): Promise<SettingsDoc>;
@@ -226,7 +267,7 @@ export function createPersistence(store: PersistApi, throttleMs: number = SAVE_T
       }
       if (raw === null || raw === undefined) return null;
       if (!isPetDoc(raw)) {
-        console.warn('[persistence] pet.json is not a version-1 PetDoc; starting fresh');
+        console.warn('[persistence] pet.json is not a recognised PetDoc; starting fresh');
         return null;
       }
       return raw;

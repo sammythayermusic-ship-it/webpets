@@ -40,14 +40,14 @@ describe('view + daynight', () => {
     expect(h.hungerPct).toBe(100);
     expect(h.canFeed).toBe(true);
     expect(h.pantry).toBe(40);
-    expect(h.pantryDays).toBeCloseTo(1.8, 9);
+    expect(h.pantryDays).toBeCloseTo(0.8, 9);
     expect(h.age).toBe('0d 0h');
-    // 40 in the pantry buys one auto-feed at 42 h (hunger 75), so zero is at 87 h and death at 111 h.
-    a.dev.skip(111 * H);
+    // 40 in the pantry buys one auto-feed at 16.8 h (hunger 80), so zero is at 36 h and death at 48 h.
+    a.dev.skip(48 * H);
     h = toHudModel(store.getState());
     expect(h.alive).toBe(false);
     expect(h.canFeed).toBe(false);
-    expect(h.age).toBe('4d 15h');
+    expect(h.age).toBe('2d 0h');
     expect(h.pantry).toBe(15);
     v = toSceneView(store.getState(), false);
     expect(v.phase).toBe('dead');

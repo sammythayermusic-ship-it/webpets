@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAppStore } from './store';
-import { GRAVEYARD_FILE, PET_FILE, SETTINGS_FILE, defaultSettings } from './persistence';
+import { GRAVEYARD_FILE, PET_FILE, PET_VERSION, SETTINGS_FILE, defaultSettings } from './persistence';
 import { createFakePlatform, type FakePlatform } from './test-platform';
 import { B, H, fresh, mulberry32 } from '../sim/test-helpers';
 import { SCALE_L, SCALE_S } from '../sim/constants';
@@ -9,7 +9,7 @@ import type { GraveyardDoc, PetDoc, SettingsDoc } from './types';
 import type { AppStore } from './types';
 
 const petDoc = (over: Partial<PetDoc> = {}): PetDoc => ({
-  version: 1,
+  version: PET_VERSION,
   pet: fresh(),
   balance: 1000,
   latches: { pantryLowFiredForPantry: null, deathAcknowledgedFor: null },
@@ -48,28 +48,30 @@ describe('app store', () => {
     expect(s.actions.now()).toBe(B);
     await store.getState().actions.quit();
     const saved = platform.files.get(PET_FILE) as PetDoc;
-    expect(saved.version).toBe(1);
+    expect(saved.version).toBe(PET_VERSION);
     expect(saved.pet.id).toBe(s.pet.id);
     expect(saved.balance).toBe(1000);
   });
 
   it('boot with pendingSkipMs consumes the skip and produces recentEvents + notifications', async () => {
-    const settings: SettingsDoc = { ...defaultSettings(), pendingSkipMs: 3 * DAY_MS };
+    // One day, not three: the bar empties in a day now and death is twelve hours after that, so three
+    // days would land on a corpse and this test is about the catch-up montage, not the memorial.
+    const settings: SettingsDoc = { ...defaultSettings(), pendingSkipMs: DAY_MS };
     const { store, platform } = await bootStore({ [PET_FILE]: petDoc(), [SETTINGS_FILE]: settings });
     const s = store.getState();
-    expect(s.settings.devClockOffsetMs).toBe(3 * DAY_MS);
+    expect(s.settings.devClockOffsetMs).toBe(DAY_MS);
     expect(s.settings.pendingSkipMs).toBe(0);
-    expect(s.actions.now()).toBe(B + 3 * DAY_MS);
+    expect(s.actions.now()).toBe(B + DAY_MS);
     expect(s.recentEvents.map((e) => e.type)).toEqual(['hungry', 'starving']);
     expect(s.hunger).toBe(0);
     expect(s.pet.alive).toBe(true);
     expect(platform.notifications.map((n) => n.body)).toEqual([
       `${s.pet.name} is hungry.`,
-      `${s.pet.name} is starving. 24h to live.`,
+      `${s.pet.name} is starving. 12h to live.`,
     ]);
     await store.getState().actions.quit();
     expect((platform.files.get(SETTINGS_FILE) as SettingsDoc).pendingSkipMs).toBe(0);
-    expect((platform.files.get(SETTINGS_FILE) as SettingsDoc).devClockOffsetMs).toBe(3 * DAY_MS);
+    expect((platform.files.get(SETTINGS_FILE) as SettingsDoc).devClockOffsetMs).toBe(DAY_MS);
   });
 
   it('boot with a short gap does not set recentEvents', async () => {
@@ -127,58 +129,58 @@ describe('app store', () => {
   it('a deposit that auto-feeds at now sets an auto lastFeedEvent', async () => {
     const { store } = await bootStore();
     const a = store.getState().actions;
-    a.dev.skip(50 * H);
+    a.dev.skip(20 * H);
     expect(store.getState().hunger).toBeCloseTo(16.667, 2);
     a.depositPantry(100);
     const s = store.getState();
-    expect(s.lastFeedEvent).toEqual({ at: B + 50 * H, kind: 'auto', seq: 1 });
+    expect(s.lastFeedEvent).toEqual({ at: B + 20 * H, kind: 'auto', seq: 1 });
     expect(s.pet.pantry).toBe(75);
     expect(s.balance).toBe(900);
-    expect(s.hunger).toBeCloseTo(61.667, 2);
+    expect(s.hunger).toBeCloseTo(66.667, 2);
   });
 
   it('dev.skip ticks and routes notifications; muted notifications are dropped', async () => {
     const { store, platform } = await bootStore();
     const a = store.getState().actions;
-    a.dev.skip(42 * H);
+    a.dev.skip(16.8 * H);
     expect(store.getState().hunger).toBeCloseTo(30, 6);
     expect(platform.notifications.map((n) => n.body)).toEqual([`${store.getState().pet.name} is hungry.`]);
     expect(store.getState().recentEvents.map((e) => e.type)).toEqual(['hungry']);
     a.setNotificationsMuted(true);
-    a.dev.skip(18 * H);
+    a.dev.skip(10 * H);
     expect(store.getState().hunger).toBe(0);
     expect(platform.notifications).toHaveLength(1);
   });
 
-  it('a 10-day skip with 500 in the pantry leaves 300 and 8 auto-feeds', async () => {
+  it('a 10-day skip with 1000 in the pantry leaves 525 and 19 auto-feeds', async () => {
     const { store } = await bootStore();
     const a = store.getState().actions;
-    a.depositPantry(500);
+    a.depositPantry(1000);
     a.dev.skip(10 * DAY_MS);
     const s = store.getState();
     expect(s.pet.alive).toBe(true);
-    expect(s.pet.pantry).toBe(300);
-    expect(s.recentEvents.filter((e) => e.type === 'auto-fed')).toHaveLength(8);
-    // The last auto-feed (231 h) is older than 60 s, so it is not animated live.
+    expect(s.pet.pantry).toBe(525);
+    expect(s.recentEvents.filter((e) => e.type === 'auto-fed')).toHaveLength(19);
+    // The last auto-feed (232.8 h) is older than 60 s, so it is not animated live.
     expect(s.lastFeedEvent).toBeNull();
-    expect(s.hunger).toBeCloseTo(60, 6);
+    expect(s.hunger).toBeCloseTo(50, 6);
   });
 
   it('newPet buries the dead pet, returns the pantry and clears latches', async () => {
     const { store, platform } = await bootStore();
     const a = store.getState().actions;
     a.depositPantry(24);
-    a.dev.skip(84 * H);
+    a.dev.skip(36 * H);
     const dead = store.getState().pet;
     expect(dead.alive).toBe(false);
-    expect(dead.diedAt).toBe(B + 84 * H);
+    expect(dead.diedAt).toBe(B + 36 * H);
     a.acknowledgeDeath();
     expect(store.getState().latches.deathAcknowledgedFor).toBe(dead.id);
     a.newPet();
     const s = store.getState();
     expect(s.pet.id !== dead.id || s.pet.bornAt !== dead.bornAt).toBe(true);
     expect(s.pet.alive).toBe(true);
-    expect(s.pet.bornAt).toBe(B + 84 * H);
+    expect(s.pet.bornAt).toBe(B + 36 * H);
     expect(s.balance).toBe(1000);
     expect(s.pet.pantry).toBe(0);
     expect(s.latches).toEqual({ pantryLowFiredForPantry: null, deathAcknowledgedFor: null });
@@ -187,8 +189,8 @@ describe('app store', () => {
     const g = platform.files.get(GRAVEYARD_FILE) as GraveyardDoc;
     expect(g.records).toHaveLength(1);
     expect(g.records[0]?.pet.id).toBe(dead.id);
-    expect(g.records[0]?.diedAt).toBe(B + 84 * H);
-    expect(g.records[0]?.ageMs).toBe(84 * H);
+    expect(g.records[0]?.diedAt).toBe(B + 36 * H);
+    expect(g.records[0]?.ageMs).toBe(36 * H);
   });
 
   it('dev.setHunger anchors at now with lastReconciledAt = now - 1', async () => {
@@ -211,7 +213,7 @@ describe('app store', () => {
     a.dev.setPantry(50);
     const s = store.getState();
     expect(s.pet.pantry).toBe(25);
-    expect(s.hunger).toBe(70);
+    expect(s.hunger).toBe(75);
     expect(s.balance).toBe(1000);
     expect(s.lastFeedEvent?.kind).toBe('auto');
   });
@@ -248,8 +250,8 @@ describe('app store', () => {
   it('dev.simulateAbsence is a dry run', async () => {
     const { store, platform } = await bootStore();
     const before = store.getState();
-    const events = before.actions.dev.simulateAbsence(10, 500);
-    expect(events.filter((e) => e.type === 'auto-fed')).toHaveLength(8);
+    const events = before.actions.dev.simulateAbsence(10, 1000);
+    expect(events.filter((e) => e.type === 'auto-fed')).toHaveLength(19);
     const after = store.getState();
     expect(after.pet).toEqual(before.pet);
     expect(after.balance).toBe(before.balance);
@@ -267,7 +269,7 @@ describe('app store', () => {
   it('resetClock zeroes the offset without moving the pet backwards', async () => {
     const { store } = await bootStore();
     const a = store.getState().actions;
-    a.dev.skip(42 * H);
+    a.dev.skip(16.8 * H);
     const reconciledAt = store.getState().pet.lastReconciledAt;
     a.dev.resetClock();
     expect(store.getState().settings.devClockOffsetMs).toBe(0);
@@ -278,15 +280,15 @@ describe('app store', () => {
   it('feed after resetClock raises the shown hunger from where the pet already is', async () => {
     const { store } = await bootStore();
     const a = store.getState().actions;
-    a.dev.skip(42 * H); // hunger 30
-    a.dev.resetClock(); // now() is back at B, pet stays at B + 42 h
+    a.dev.skip(16.8 * H); // hunger 30
+    a.dev.resetClock(); // now() is back at B, pet stays at B + 16.8 h
     expect(a.feed().ok).toBe(true);
     const s = store.getState();
     expect(s.balance).toBe(975);
     expect(s.pet.meals).toBe(1);
-    expect(s.pet.lastFedAt).toBe(B + 42 * H);
-    expect(s.pet.lastReconciledAt).toBe(B + 42 * H);
-    expect(s.hunger).toBeCloseTo(75, 6);
+    expect(s.pet.lastFedAt).toBe(B + 16.8 * H);
+    expect(s.pet.lastReconciledAt).toBe(B + 16.8 * H);
+    expect(s.hunger).toBeCloseTo(80, 6);
     expect(s.lastFeedEvent?.kind).toBe('manual');
   });
 
@@ -334,15 +336,45 @@ describe('app store', () => {
     expect((settings as unknown as { scaleSteps: number }).scaleSteps).toBe(SCALE_S);
   });
 
+  it('carries a version-1 pet across the twice-a-day retune without harming it', async () => {
+    // The whole point, end to end. This pet was last fed 30 hours ago with a full bar, which on the old
+    // clock reads exactly 50%. Loaded naively under the new clock that same anchor reads zero, is nine
+    // hours past death, and `reconcile` replays hungry -> starving -> dying-soon -> died as four real
+    // desktop notifications. The user would open the app to a corpse and four toasts, having done
+    // nothing wrong. What they get instead is the fish at 50%, silent.
+    const stale: PetDoc = {
+      version: 1,
+      pet: { ...fresh(), lastFedAt: B - 30 * H, lastReconciledAt: B - 30 * H },
+      balance: 675,
+      latches: { pantryLowFiredForPantry: null, deathAcknowledgedFor: null },
+    };
+    const { store, platform } = await bootStore({ [PET_FILE]: stale });
+    const s = store.getState();
+    expect(s.pet.alive).toBe(true);
+    expect(s.hunger).toBeCloseTo(50, 9);
+    expect(platform.notifications).toEqual([]);
+    expect(s.recentEvents).toEqual([]);
+    expect(s.balance).toBe(675);
+
+    // ...and the upgraded document is written back, so the next launch is an ordinary one.
+    await store.getState().actions.quit();
+    const saved = platform.files.get(PET_FILE) as PetDoc;
+    expect(saved.version).toBe(PET_VERSION);
+    expect(saved.pet.lastFedAt).toBe(B);
+
+    // From here it is simply the new clock: half a bar is half a day.
+    expect(store.getState().actions.now()).toBe(B);
+  });
+
   it('tick after a wake covering hours emits catch-up events', async () => {
     const { store, platform } = await bootStore();
-    vi.setSystemTime(B + 45 * H);
+    vi.setSystemTime(B + 20 * H);
     store.getState().actions.tick();
     expect(store.getState().recentEvents.map((e) => e.type)).toEqual(['hungry']);
     expect(platform.notifications).toHaveLength(1);
-    vi.setSystemTime(B + 45 * H + 30_000);
+    vi.setSystemTime(B + 20 * H + 30_000);
     store.getState().actions.tick();
     expect(store.getState().recentEvents.map((e) => e.type)).toEqual(['hungry']);
-    expect(store.getState().pet.lastReconciledAt).toBe(B + 45 * H + 30_000);
+    expect(store.getState().pet.lastReconciledAt).toBe(B + 20 * H + 30_000);
   });
 });

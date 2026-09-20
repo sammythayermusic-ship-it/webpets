@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createPersistence, defaultSettings, isPetDoc, normalizeSettings, PET_FILE, SETTINGS_FILE } from './persistence';
-import { SCALE_L, SCALE_M, SCALE_S } from '../sim/constants';
+import {
+  createPersistence,
+  defaultSettings,
+  isPetDoc,
+  migratePetDoc,
+  normalizeSettings,
+  PET_FILE,
+  PET_VERSION,
+  SETTINGS_FILE,
+} from './persistence';
+import { HOUR_MS, SCALE_L, SCALE_M, SCALE_S } from '../sim/constants';
+import { hungerAt } from '../sim/hunger';
+import { reconcile } from '../sim/reconcile';
 import { createFakePlatform } from './test-platform';
 import { B, fresh } from '../sim/test-helpers';
 import type { PetDoc } from './types';
@@ -150,6 +161,95 @@ describe('persistence', () => {
       expect(normalizeSettings('nope')).toEqual(defaultSettings());
       expect(normalizeSettings({ version: 3, scale: SCALE_L, muted: true })).toEqual(defaultSettings());
       expect(normalizeSettings({ scale: SCALE_L, muted: true })).toEqual(defaultSettings());
+    });
+  });
+
+  // The hunger clock went from a 45-point meal on a 60-hour bar to a 50-point meal on a 24-hour one.
+  // Hunger is derived, never stored, so without this migration every saved pet would be re-simulated at
+  // the new speed on first launch -- a fish showing 65% would reappear starving or dead, having done
+  // nothing but survive an upgrade. What the migration owes the user is the NUMBER ON SCREEN.
+  describe('migratePetDoc', () => {
+    const v1 = (over: Partial<PetDoc['pet']> = {}): PetDoc => ({
+      version: 1,
+      pet: { ...fresh(), ...over },
+      balance: 675,
+      latches: { pantryLowFiredForPantry: null, deathAcknowledgedFor: null },
+    });
+    /** What a v1 anchor read on the old clock: 100 minus 45/27 h of decay. */
+    const legacyHunger = (anchor: number, hours: number): number =>
+      Math.max(0, Math.min(100, anchor - (100 / 60) * hours));
+
+    it('preserves the hunger the pet was showing, to the last decimal', () => {
+      // 30 h into a v1 life the fish reads 50. Under the new clock that same anchor would read zero and
+      // the pet would be hours from death; after migrating it still reads 50 and simply gets hungry
+      // faster from here.
+      const now = B + 30 * HOUR_MS;
+      const m = migratePetDoc(v1(), now);
+      expect(hungerAt(m.pet, now)).toBeCloseTo(legacyHunger(100, 30), 9);
+      expect(hungerAt(m.pet, now)).toBeCloseTo(50, 9);
+    });
+
+    it('re-anchors at now so no history is replayed', () => {
+      // The anchor moving to `now` is what stops `reconcile` walking the old interval under the new
+      // rate and firing hungry/starving/dying-soon/died as four real desktop notifications at once.
+      const now = B + 30 * HOUR_MS;
+      const m = migratePetDoc(v1(), now);
+      expect(m.pet.lastFedAt).toBe(now);
+      expect(m.pet.lastReconciledAt).toBe(now);
+      expect(reconcile(m.pet, now).events).toEqual([]);
+    });
+
+    it('stamps the new version and changes nothing else about the document', () => {
+      const before = v1();
+      const m = migratePetDoc(before, B + 30 * HOUR_MS);
+      expect(m.version).toBe(PET_VERSION);
+      expect(m.balance).toBe(before.balance);
+      expect(m.latches).toEqual(before.latches);
+      const { hungerAtLastFed, lastFedAt, lastReconciledAt, ...restAfter } = m.pet;
+      const { hungerAtLastFed: _h, lastFedAt: _l, lastReconciledAt: _r, ...restBefore } = before.pet;
+      expect(restAfter).toEqual(restBefore);
+    });
+
+    it('is identity on a document that is already current', () => {
+      const current: PetDoc = { ...v1(), version: PET_VERSION };
+      // Same object, not merely an equal one: a no-op migration must not mark the file dirty, or every
+      // launch would rewrite pet.json for nothing.
+      expect(migratePetDoc(current, B + 500 * HOUR_MS)).toBe(current);
+    });
+
+    it('leaves a pet that is already dead exactly as it was', () => {
+      const dead = reconcile(fresh(), B + 84 * HOUR_MS).state;
+      const doc: PetDoc = { ...v1(), pet: { ...dead, alive: false, diedAt: B + 84 * HOUR_MS } };
+      const m = migratePetDoc(doc, B + 500 * HOUR_MS);
+      expect(m.version).toBe(PET_VERSION);
+      expect(m.pet).toEqual(doc.pet);
+    });
+
+    it('does not retroactively kill a pet that the OLD rules would already have starved', () => {
+      // Left closed for a week. Under v1 this pet died days ago, and the strictly correct thing would be
+      // to bury it on load. It is not what we do: an upgrade must never be the thing that ends a pet, so
+      // it comes back at zero with the full new death window ahead of it.
+      const now = B + 7 * 24 * HOUR_MS;
+      const m = migratePetDoc(v1(), now);
+      expect(m.pet.alive).toBe(true);
+      expect(hungerAt(m.pet, now)).toBe(0);
+      expect(reconcile(m.pet, now).state.alive).toBe(true);
+      expect(reconcile(m.pet, now + 11 * HOUR_MS).state.alive).toBe(true);
+      expect(reconcile(m.pet, now + 12 * HOUR_MS).state.alive).toBe(false);
+    });
+
+    it('cannot invent hunger for a pet fed moments ago, or for a clock that ran backwards', () => {
+      const m = migratePetDoc(v1(), B);
+      expect(hungerAt(m.pet, B)).toBe(100);
+      const back = migratePetDoc(v1(), B - 10 * HOUR_MS);
+      expect(hungerAt(back.pet, back.pet.lastFedAt)).toBe(100);
+    });
+
+    it('accepts both versions on load, and rejects anything else', () => {
+      expect(isPetDoc(v1())).toBe(true);
+      expect(isPetDoc({ ...v1(), version: PET_VERSION })).toBe(true);
+      expect(isPetDoc({ ...v1(), version: 3 })).toBe(false);
+      expect(isPetDoc({ ...v1(), version: 0 })).toBe(false);
     });
   });
 });

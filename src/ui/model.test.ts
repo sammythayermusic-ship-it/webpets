@@ -40,9 +40,9 @@ describe('labelFor', () => {
 });
 
 describe('pantryDays', () => {
-  it('uses (pantry / 25) * (45 / (100/60)) / 24', () => {
-    // 475 / 25 = 19 feeds; each feed buys 45 / (100/60) = 27 h; 19 * 27 / 24 = 21.375 days
-    expect(pantryDays(475)).toBeCloseTo(21.375, 6);
+  it('uses (pantry / 25) * (50 / (100/24)) / 24', () => {
+    // 475 / 25 = 19 feeds; each feed buys 50 / (100/24) = 12 h; 19 * 12 / 24 = 9.5 days
+    expect(pantryDays(475)).toBeCloseTo(9.5, 6);
     expect(pantryDays(0)).toBe(0);
     expect(pantryDays(-10)).toBe(0);
   });
@@ -70,8 +70,10 @@ describe('toHudModel', () => {
 
 describe('captionText / tooltipText', () => {
   it('formats the caption with floored days', () => {
-    expect(captionText({ pantry: 475, pantryDays: 21.375 })).toBe('PANTRY 475 $FEED · 21 DAYS');
-    expect(captionText({ pantry: 25, pantryDays: 1.125 })).toBe('PANTRY 25 $FEED · 1 DAY');
+    expect(captionText({ pantry: 475, pantryDays: 9.5 })).toBe('PANTRY 475 $FEED · 9 DAYS');
+    // Two meals a day at 25 apiece: 50 in the pantry is exactly one day, and the only place the
+    // singular is reachable.
+    expect(captionText({ pantry: 50, pantryDays: 1 })).toBe('PANTRY 50 $FEED · 1 DAY');
     expect(captionText({ pantry: 0, pantryDays: 0 })).toBe('PANTRY 0 $FEED · 0 DAYS');
   });
   it('formats the tooltip', () => {

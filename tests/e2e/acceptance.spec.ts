@@ -1,7 +1,9 @@
 // Phase 0 acceptance recording (Blueprint section 11) in browser mode. One test, one video (~60 s), driven
 // through the real UI (hover HUD, FEED, dev panel via Alt+Meta+D, keyboard scale) plus the mock's hooks for the
 // parts Rust owns under Tauri (toggle-visibility, notifications). Timings follow the contract's "Acceptance
-// script notes": from a fresh pet hunger hits 30 at 42 h, 0 at 60 h and death at 84 h.
+// script notes": the pet eats twice a day, so from a fresh pet hunger hits 30 at 16.8 h, 0 at 24 h and death
+// at 36 h. The dev panel only offers +1H / +12H / +3D, which is why the walk to "hungry" is 12 h plus five
+// single hours rather than one clean press.
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
@@ -115,9 +117,10 @@ test('Phase 0 acceptance walk-through', async ({ page }) => {
     await page.waitForTimeout(2 * BEAT_MS); // flakes dissolving / fish back to idle
   });
 
-  await test.step('skip time: hungry (48 h), starving (60 h), dead (>84 h) with the memorial card', async () => {
+  await test.step('skip time: hungry (17 h), starving (29 h), dead (>36 h) with the memorial card', async () => {
     await dev.open();
-    await dev.skip('+12H', 4);
+    await dev.skip('+12H');
+    await dev.skip('+1H', 5); // 17 h: inside the 16.8-24 h hungry band
     await expect(dev.status).toContainText(/hunger \d+\.\d% hungry/);
     await dev.close();
     await hoverBowl();
@@ -151,7 +154,7 @@ test('Phase 0 acceptance walk-through', async ({ page }) => {
     expect(bodies).toEqual(
       expect.arrayContaining([
         expect.stringMatching(/ is hungry\.$/),
-        expect.stringMatching(/ is starving\. 24h to live\.$/),
+        expect.stringMatching(/ is starving\. 12h to live\.$/),
         expect.stringMatching(/ has 6 hours\.$/),
         expect.stringMatching(/ has died\.$/),
       ]),
@@ -168,25 +171,26 @@ test('Phase 0 acceptance walk-through', async ({ page }) => {
     await page.waitForTimeout(BEAT_MS);
   });
 
-  await test.step('500 in the pantry, 10 days: alive, pantry 300, 8 auto-feeds', async () => {
+  await test.step('1000 in the pantry, 10 days: alive, pantry 525, 19 auto-feeds', async () => {
     await dev.open();
     // Dry run first: the event list for exactly this scenario.
     await dev.row('SIM').getByRole('button').click();
     const output = dev.panel.locator('pre');
-    await expect(output).toContainText('over 10d with 500 in the pantry');
+    await expect(output).toContainText('over 10d with 1000 in the pantry');
     const lines = ((await output.textContent()) ?? '').split('\n').filter((l) => l.includes('ate from the pantry'));
-    expect(lines).toHaveLength(8);
+    expect(lines).toHaveLength(19);
 
-    // Then for real.
-    await dev.setNumber('PANTRY', 500);
-    await expect(dev.status).toContainText('pantry 500');
+    // Then for real. Nineteen meals, not eight: the first lands on the hungry crossing at 16.8 h and
+    // every one after it is twelve hours later.
+    await dev.setNumber('PANTRY', 1000);
+    await expect(dev.status).toContainText('pantry 1000');
     await dev.skip('+3D', 3);
     await dev.skip('+12H', 2);
     await expect(dev.status).toContainText('· alive ·');
-    await expect(dev.status).toContainText('pantry 300');
+    await expect(dev.status).toContainText('pantry 525');
     await dev.close();
     await hoverBowl();
-    await expect(caption).toHaveText('PANTRY 300 $FEED · 13 DAYS');
+    await expect(caption).toHaveText('PANTRY 525 $FEED · 10 DAYS');
     await expect(pct).not.toHaveText('0%');
     await page.waitForTimeout(BEAT_MS);
   });
@@ -202,17 +206,18 @@ test('Phase 0 acceptance walk-through', async ({ page }) => {
     const montage = page.locator('.montage');
     await expect(montage).toBeVisible();
     await expect(montage).toContainText('While you were gone');
-    // Lines land one per 700 ms; three days on a 300 pantry is three pantry meals.
-    await expect(montage.locator('li').filter({ hasText: 'ate from the pantry' })).toHaveCount(3, { timeout: 8_000 });
+    // Lines land one per 700 ms; three days at two meals a day is six pantry meals.
+    await expect(montage.locator('li').filter({ hasText: 'ate from the pantry' })).toHaveCount(6, { timeout: 12_000 });
     await page.waitForTimeout(BEAT_MS);
     await montage.getByRole('button', { name: 'CONTINUE', exact: true }).click();
     await expect(montage).toBeHidden();
     await expect(page.locator('.speech-bubble')).toBeVisible(); // 'wake' line
 
     await dev.open();
-    // The dev clock offset is cumulative across the run: 5.5 d (death sequence) + 10 d + 3 d (this relaunch).
-    await expect(dev.status).toContainText('offset +18d 12h');
-    await expect(dev.status).toContainText('pantry 225');
+    // The dev clock offset is cumulative across the run: 101 h (death sequence) + 10 d + 3 d (this relaunch)
+    // = 413 h.
+    await expect(dev.status).toContainText('offset +17d 5h');
+    await expect(dev.status).toContainText('pantry 375');
     await dev.close();
     await hoverBowl();
     const shown = Number.parseInt((await pct.textContent()) ?? '', 10);

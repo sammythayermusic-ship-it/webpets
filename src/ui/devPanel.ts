@@ -191,11 +191,14 @@ export function mountDevPanel(root: HTMLElement, deps: UiDeps): DevPanelHandleEx
   // Simulate absence / skip on next launch / reset clock -----------------
   const output = el('pre');
   output.textContent = '(dry-run output appears here)';
-  const simulateBtn = button('SIMULATE 10-DAY ABSENCE WITH 500 IN PANTRY', () => {
+  // 1000, not 500: at two meals a day ten days costs 475, so 500 would finish the run on its last coin.
+  // The dry run is for seeing the shape of an absence, not for watching the pantry hit zero.
+  const SIM_PANTRY = 1000;
+  const simulateBtn = button(`SIMULATE 10-DAY ABSENCE WITH ${SIM_PANTRY} IN PANTRY`, () => {
     const s = store.getState();
     const now = s.actions.now();
-    const events = dev().simulateAbsence(10, 500);
-    const header = `${events.length} event${events.length === 1 ? '' : 's'} over 10d with 500 in the pantry (dry run)`;
+    const events = dev().simulateAbsence(10, SIM_PANTRY);
+    const header = `${events.length} event${events.length === 1 ? '' : 's'} over 10d with ${SIM_PANTRY} in the pantry (dry run)`;
     const lines = events.map((e) => `${formatOffset(e.at - now).padEnd(8)} ${eventLine(e, s.pet.name)}`);
     output.textContent = [header, ...lines].join('\n');
   });

@@ -76,7 +76,8 @@ webpets/
 - Launch at login, single-instance, global hotkey to show/hide.
 
 ### Phase 2 — Devnet chain (behind the same interfaces)
-- Replace `LocalLedger` with `ChainLedger` (Solana devnet): $FEED as an SPL test mint; pet as a **Metaplex Core** asset with the Attributes plugin; an Anchor **feeder program** with `feed` (burn 25 $FEED, stamp `last_fed`), `pantry_deposit`, `pantry_withdraw`, and a permissionless `crank` that auto-feeds from pantry and flips `alive=false` after 24h at zero.
+- Replace `LocalLedger` with `ChainLedger` (Solana devnet): the feed token as an SPL test mint; pet as a **Metaplex Core** asset with the Attributes plugin; an Anchor **feeder program** with `feed` (burn `FEED_COST`, stamp `last_fed`), `pantry_deposit`, `pantry_withdraw`, and a permissionless `crank` that auto-feeds from pantry and flips `alive=false` after `DEATH_AFTER_ZERO_HOURS` at zero. Read the timings from the constants rather than restating them here; they have moved once already.
+- **The token is `$PETS`, and feeding burns it.** The mechanic — pay tokens to survive longer unattended, and those tokens are destroyed — is already the shape of the Phase 0 pantry: deposit, it auto-feeds while you are away, `feedBurned` accumulates. So this phase is largely renaming the in-app `$FEED` and moving the burn on-chain, not designing a new system. Nothing about it belongs in Phase 0, which stays fully local with no blockchain dependency.
 - Wallet connect via Solana wallet-adapter in an embedded webview, or a deep-link to Phantom/Backpack. Signing only. No keys in the app.
 - App reads chain state on launch and every 60 s, reconciles with the local sim (chain wins), and animates the difference.
 - A tiny keeper service (Node) that runs the crank on a schedule, so death happens even if nobody opens the app.
@@ -129,19 +130,28 @@ interface PetState {
 interface Ledger { balance(): number; burn(n: number): void; } // Phase 0: local. Phase 2: chain.
 ```
 
-**Constants** (put them in one file; the dev panel can override them):
-- `DECAY_PER_HOUR = 100 / 60` (full → empty in 60 h)
-- `FEED_COST = 25`, `FEED_GAIN = 45`, `MAX_HUNGER = 100`
-- `PANTRY_TRIGGER = 30` (auto-feed when hunger drops below this)
-- `DEATH_AFTER_ZERO_HOURS = 24`
+**Constants** (put them in one file; the dev panel can override them). **The pet is fed twice a day** —
+everything here is that sentence expressed as numbers, and a meal is deliberately *exactly* half the bar:
+- `DECAY_PER_HOUR = 100 / 24` (full → empty in 24 h)
+- `FEED_COST = 25`, `FEED_GAIN = 50` (half the bar, so one meal buys 12 h), `MAX_HUNGER = 100`
+- `PANTRY_TRIGGER = 30` (auto-feed when hunger drops below this; 30 → 80 is also half a bar, so the
+  auto-feed cycle is the same 12 h)
+- `DEATH_AFTER_ZERO_HOURS = 12` — starving by morning if you skip the evening meal, gone by that evening
+  if you skip the day
 - Hunger labels: `>60 full`, `31–60 peckish`, `1–30 hungry`, `0 starving`
+- Landmarks from a full pet: peckish 9.6 h, hungry 16.8 h, starving 24 h, dead 36 h
+
+Changing these retroactively re-simulates every saved pet, because hunger is derived from an anchor and
+never stored. A change to the rate therefore needs a `PetDoc` version bump and a migration that re-anchors
+the pet at its *currently displayed* hunger — see `migratePetDoc`. This was originally `100 / 60` with a
+45-point meal (a 27 h cycle, death at 84 h).
 
 **Derived hunger at time `t`:**
 `hunger(t) = clamp(hungerAtLastFed − DECAY_PER_HOUR × hoursSince(lastFedAt), 0, 100)`
 
 **Catch-up algorithm** (`reconcile(state, now)`), run on launch, on wake-from-sleep, and every 30 s:
 1. Walk forward from `lastFedAt` to `now`. Each time hunger would cross below `PANTRY_TRIGGER` and `pantry >= FEED_COST`, apply an auto-feed at that exact timestamp (subtract cost from pantry, add gain, update `lastFedAt`/`hungerAtLastFed`, `meals++`). Repeat until no more auto-feeds fit.
-2. If hunger reached 0 and has stayed at 0 for `DEATH_AFTER_ZERO_HOURS`, set `alive=false`, `diedAt = timeZeroReached + 24h`.
+2. If hunger reached 0 and has stayed at 0 for `DEATH_AFTER_ZERO_HOURS`, set `alive=false`, `diedAt = timeZeroReached + DEATH_AFTER_ZERO_HOURS`.
 3. Return the list of events that happened while away (auto-fed ×N, got hungry, died) so the UI can replay them as a short montage on launch ("While you were gone…").
 
 **Manual feed:** if alive and `ledger.balance() >= FEED_COST`: burn, `hunger = min(100, hunger + FEED_GAIN)`, update timestamps, `meals++`, `feedBurned += FEED_COST`. Overfeeding is allowed but wasteful (cap at 100).
@@ -240,8 +250,9 @@ A DOM overlay, off by default: skip +1h / +12h / +3d; set hunger; set pantry; se
 ## 11. Acceptance for Phase 0
 - App launches into a transparent corner window with the bowl, fish swimming, HUD on hover.
 - Feed → 25 deducted, flakes fall, fish eats, ring goes up, speech line.
-- Skip 3 days → hungry, then starving, then dead with memorial; New pet works.
-- Load 500 into pantry, skip 10 days → fish alive, pantry ~250 or less, event list shows the auto-feeds.
+- Skip ~1.5 days → hungry, then starving, then dead with memorial; New pet works.
+- Load 1000 into pantry, skip 10 days → fish alive, pantry 525, event list shows 19 auto-feeds. (500 also
+  survives ten days, but finishes on its last 25, which tests the arithmetic rather than the behaviour.)
 - Quit the app, wait (or fake the clock), relaunch → hunger reflects elapsed real time and a "while you were gone" montage plays.
 - Drag, S/M/L, minimize to tray chip and back, position remembered after relaunch.
 - Notifications fire.

@@ -29,7 +29,7 @@ import type {
   PetDoc,
   SettingsDoc,
 } from './types';
-import { createPersistence, defaultGraveyard, defaultSettings, type Persistence } from './persistence';
+import { createPersistence, defaultGraveyard, defaultSettings, migratePetDoc, PET_VERSION, type Persistence } from './persistence';
 import { decide } from './notifications';
 import { resolveNight } from './daynight';
 
@@ -76,7 +76,7 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
 
     const petDoc = (): PetDoc => {
       const s = get();
-      return { version: 1, pet: s.pet, balance: s.balance, latches: s.latches };
+      return { version: PET_VERSION, pet: s.pet, balance: s.balance, latches: s.latches };
     };
     const savePet = (): void => persist.savePet(petDoc());
     const saveSettings = (): void => persist.saveSettings(get().settings);
@@ -270,10 +270,18 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
         let pet: PetState;
         let balance: number;
         let latches: NotificationLatches;
+        /** A fresh pet, or one the migration rewrote: either way the file on disk is now behind. */
+        let petNeedsSave = false;
         if (loadedPet !== null) {
-          pet = loadedPet.pet;
-          balance = loadedPet.balance;
-          latches = loadedPet.latches;
+          // Migrated HERE rather than inside `loadPet` because it needs `at`, and `at` is only correct
+          // once the settings (and therefore the dev clock offset, including any pending skip) have been
+          // folded in. Migrating against the raw wall clock would re-anchor a time-travelled pet to the
+          // wrong instant, which is precisely the bug the dev panel exists to find.
+          const migrated = migratePetDoc(loadedPet, at);
+          pet = migrated.pet;
+          balance = migrated.balance;
+          latches = migrated.latches;
+          petNeedsSave = migrated !== loadedPet;
         } else {
           pet = mintPet(at, rng);
           balance = STARTING_BALANCE;
@@ -290,7 +298,7 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
           hunger: derivedHunger(pet, at),
           night: resolveNight(settings.dayNight, get().nightOverride, at),
         });
-        if (loadedPet === null) savePet();
+        if (loadedPet === null || petNeedsSave) savePet();
         if (loadedSettings.pendingSkipMs !== 0) saveSettings();
 
         commit(pet, reconcile(pet, at), at);

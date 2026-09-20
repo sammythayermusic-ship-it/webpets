@@ -558,9 +558,22 @@ fn apply_layering(window: &WebviewWindow<Wry>, layering: Layering) -> Result<(),
     // window handle is fetched INSIDE the closure rather than captured: a raw pointer is not `Send`,
     // and a window handle fetched on another thread is not something to smuggle across one anyway.
     let handle = window.clone();
+    // The result is carried back rather than assumed. `run_on_main_thread` queues the closure and
+    // returns as soon as it is queued, so the old version reported success the instant the work was
+    // SCHEDULED -- and if fetching the window handle then failed inside the closure it returned
+    // silently, leaving the frontend to persist the setting as applied. A layering toggle that says
+    // it is on while the window has none of the flags is the exact failure this whole area already
+    // cost an evening to. `layering_readback` below has always waited on a channel; so does this now.
+    let (tx, rx) = std::sync::mpsc::channel::<Result<(), String>>();
     window
         .run_on_main_thread(move || {
-            let Ok(ptr) = handle.ns_window() else { return };
+            let ptr = match handle.ns_window() {
+                Ok(ptr) => ptr,
+                Err(e) => {
+                    let _ = tx.send(Err(format!("no native window handle: {e}")));
+                    return;
+                }
+            };
             // SAFETY: `ns_window` hands back this window's live NSWindow, on the thread that owns it.
             // Tauri guarantees the window outlives the handle it came from, this borrows it only for
             // the call, and nothing retains it.
@@ -589,8 +602,13 @@ fn apply_layering(window: &WebviewWindow<Wry>, layering: Layering) -> Result<(),
                 }
                 ns.setCollectionBehavior(behavior);
             }
+            let _ = tx.send(Ok(()));
         })
-        .map_err(err)
+        .map_err(err)?;
+    // A timeout rather than a bare `recv`: this is called during setup and from a command, and a
+    // main thread that never drains its queue must surface as an error instead of wedging the caller.
+    rx.recv_timeout(std::time::Duration::from_millis(500))
+        .map_err(|e| format!("applying layering timed out: {e}"))?
 }
 
 #[cfg(not(target_os = "macos"))]

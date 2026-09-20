@@ -1,6 +1,6 @@
 // Pure notification decisions. The store calls platform.notify for each toast unless settings.notificationsMuted.
 import type { PetState, SimConstants, SimEvent } from '../sim/types';
-import { DEFAULT_CONSTANTS, PANTRY_LOW_DAYS, PANTRY_LOW_HUNGER_MAX } from '../sim/constants';
+import { DEFAULT_CONSTANTS, DYING_SOON_HOURS, PANTRY_LOW_DAYS, PANTRY_LOW_HUNGER_MAX } from '../sim/constants';
 import { hungerAt, pantryDays } from '../sim/hunger';
 import type { NotificationLatches } from './types';
 
@@ -30,10 +30,13 @@ export function decide(
         toasts.push({ title: name, body: `${name} is hungry.` });
         break;
       case 'starving':
-        toasts.push({ title: name, body: `${name} is starving. 24h to live.` });
+        // Both numbers come from the constants they describe. They were literals ("24h to live", "has
+        // 6 hours") and went stale the moment the hunger clock was retuned -- a notification that
+        // confidently states the wrong deadline is worse than one that states none.
+        toasts.push({ title: name, body: `${name} is starving. ${c.DEATH_AFTER_ZERO_HOURS}h to live.` });
         break;
       case 'dying-soon':
-        toasts.push({ title: name, body: `${name} has 6 hours.` });
+        toasts.push({ title: name, body: `${name} has ${DYING_SOON_HOURS} hours.` });
         break;
       case 'died':
         toasts.push({ title: name, body: `${name} has died.` });
