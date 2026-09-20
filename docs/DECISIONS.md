@@ -822,3 +822,75 @@ click-through region 16 logical px below the cage — which would have made the 
 bare desk. The generator validates both properties BEFORE writing, because on each of those failures
 the bad PNG was already on disk when the check fired, and the next test run measured art the generator
 had itself rejected.
+
+## feeding the hamster, and what a test agreeing with itself looks like
+
+The hamster shipped with feeding broken, and the tests said it was fine. That combination is worth
+writing down, because it is the failure this project keeps trying to design out.
+
+`food.ts` took a `WaterShape` directly and had **no tests at all**. Given a cage it: spawned seed at
+`surfaceY + 2`, which on a floor (`surfaceY === floorY === standY`) is 2 px BELOW the bedding line;
+clamped it to `floorY - 4` on the first step, so it visibly jumped 6 px UPWARD and settled hovering
+above the animal's feet; froze its x forever, because the lateral-drift guard asks `bounds.inside`
+and a floor domain only admits one exact row; and scattered all six seeds within 12 px of grid
+centre, because the spawn column came from `halfWidthAt` on the cage's degenerate `ry: 1` ellipse.
+Measured in a probe rather than reasoned about: spread 18 px in a 204 px cage, resting row 181
+against a standing line of 185.
+
+It looked like it worked because the hamster measures bite range **horizontally** and ignores y.
+
+And **both hamster tests placed flakes at `CAGE_STAND_Y`**, which is not where `food.ts` puts them.
+They passed because the bite test ignores y too. A suite and an implementation agreeing about a place
+neither of them uses is worse than having no test: it is an active claim that something works. They
+now import the rest row from `food.ts` rather than naming a number.
+
+`createFlakes` takes the **domain**, not a water shape. Water is unchanged — the fish's own behaviour
+test hardcodes `floorY - 4` as the row it must be able to reach, so that is a contract between two
+files. A floor drops food from above the standing line, falls it straight down with no lateral drift,
+and rests it *below* the line: the line is the pet's CENTRE, not its feet, so resting food on it would
+leave a seed at the animal's waist, and it also keeps the seed clear of the pet sprite, since the
+`food` layer draws above `pet`.
+
+The four floor behaviours are each mutation-verified against the test that should catch them. Two of
+my first attempts did not: one asserted "falls downward" which a spawn at the feet still satisfies,
+and one flipped a sideways velocity while leaving the guard on the x *assignment* in place, so no
+drift actually occurred and the test was right to pass.
+
+### errands
+
+The wheel was three branches and four pieces of state, and `asleep` (walk to the bed) and `hungry`
+(walk to the hopper) were already the same shape. They are one table now — site, duration, urge,
+animation, and an `available` predicate — so the two §8 behaviours that were missing are data:
+
+- **drink from the bottle**, always available;
+- **stuff cheeks at the hopper**, available only when the hopper has something in it.
+
+Both are **cosmetic**. The hopper IS the pantry, which is the $FEED store with a conservation
+invariant (`balance + pantry + feedBurned` constant, pinned by a test), so a hamster that actually
+consumed seed while miming would break the economy.
+
+Both reuse `eat`. `PetAnim` is a closed five-member union and there is no drink or stuff art, so
+inventing states would mean new union members, new manifest entries, new fallback sequences and
+nothing behind any of them. `eat` is the one-shot the bite path already uses, and re-issuing it each
+tick loops it.
+
+`available` is re-checked **every tick**, not only when the errand is chosen: a hopper can empty while
+the hamster is walking to it, and arriving to mime at nothing is worse than never setting off. The
+first test of that emptied the hopper when the hamster came within 40 px — which it reaches by
+ordinary wandering long before ever choosing the errand, so the pantry was empty from the start and
+the test proved nothing. It flips the pantry at random every tick now, so any errand that survives an
+empty tick is caught.
+
+`PetInput` gained `pantryFraction`: the pet can see its own food store. The fish ignores it — a
+clip-on feeder is not somewhere a fish goes.
+
+The wheel's own `available` gate is redundant with the branch order (the `hungry` branch outranks
+errands, and `hungry` is exactly the band where `wheelRate` is zero), so no test can distinguish it.
+Kept anyway and labelled as such, because the two come apart the moment the label and the number are
+allowed to disagree — which the dev panel can already do.
+
+### the bottle
+
+The cage layout test caught the first placement immediately: a bottle whose centre sat at x=249 is 9 px
+past where the hamster can stand with its body box on, so it would have walked toward it forever and
+never arrived — a hang that looks like an animation bug rather than a layout one. Moved to 235.

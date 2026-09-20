@@ -2,22 +2,17 @@
 // implementations — only the shared contract types.
 
 import type { Habitat, Personality, Rect, Species } from '../sim/types';
-import type { MoveBounds, PetBehavior, WaterShape } from '../render/types';
+import type { Domain, MoveBounds, PetBehavior } from '../render/types';
 
 /** The speech pools every species owes, keyed by the moment that triggers them. */
 export type LinePool = 'idle' | 'fed' | 'hungry' | 'starving' | 'wake';
 
 /**
- * How a habitat's pets move through it.
- *
- * A discriminated union rather than an optional field, because the two arms carry genuinely different
- * geometry and the renderer has to pick different *physics* for each — food that sinks versus food
- * that lands, bubbles versus no bubbles, a death fog volume versus none. An optional `waterShape`
- * would have let a cage silently inherit all of it.
+ * How a habitat's pets move through it. Declared in `render/types.ts` because the renderer picks
+ * different *physics* from it — food that sinks versus food that lands, bubbles versus none, a death
+ * fog volume versus none — and re-exported here so a species module reads one import.
  */
-export type Domain =
-  | { kind: 'water'; shape: WaterShape }
-  | { kind: 'floor'; rect: Rect; standY: number };
+export type { Domain };
 
 /**
  * Where the pet's furniture is, in grid px.

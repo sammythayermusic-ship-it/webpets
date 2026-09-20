@@ -9,11 +9,24 @@
 import { Container, Sprite, type Texture } from 'pixi.js';
 import { FX_SS, paintTexture, smoothstep } from './fx';
 import type { Rng } from '../sim/types';
-import type { WaterBounds, WaterShape } from './types';
+import type { Domain, MoveBounds } from './types';
 
 export const FLAKES_PER_FEED = 6;
 /** Flake spawn spread, as a fraction of the water's half-width at the spawn row. */
 const SPAWN_SPREAD = 0.45;
+/** How far above the standing line food is released in a floor habitat, so it visibly drops. */
+const FLOOR_DROP_HEIGHT = 28;
+/**
+ * How far BELOW the standing line food comes to rest on a floor.
+ *
+ * The standing line is the pet's CENTRE, not its feet, so resting food exactly on it would leave a
+ * seed floating at the animal's waist. This puts it under the drawn body — which also keeps it clear
+ * of the pet sprite, since the `food` layer draws above `pet` (right for a flake in front of a fish,
+ * wrong for a seed underfoot).
+ */
+export const FLOOR_REST_BELOW = 16;
+/** Inset from each end of the walkable span, so food never lands somewhere the pet cannot stand. */
+const FLOOR_SPAWN_INSET = 20;
 /** Settled flakes dissolve after this many 8 fps steps (30 s). */
 const DISSOLVE_STEPS = 240;
 /** Steps over which a settled flake fades out at the end of its life (2 s). */
@@ -68,16 +81,49 @@ function flakeTexture(): Texture {
   });
 }
 
-export function createFlakes(shape: WaterShape, bounds: WaterBounds): Flakes {
+/**
+ * Food entities for one habitat.
+ *
+ * Takes the DOMAIN rather than a water shape, because dropping food into a bowl and scattering it on
+ * bedding are different physics and not different numbers. This took the `WaterShape` directly and so
+ * only ever worked in water: given a cage it spawned seed 2 px BELOW the bedding line, clamped it 6 px
+ * upward on the first step, settled it hovering 4 px above the animal's feet, froze its x forever
+ * (the lateral-drift guard asks `bounds.inside`, which on a floor demands an exact row), and scattered
+ * all six within 12 px of grid centre because the cage's degenerate ellipse made the spread collapse.
+ * It looked like it worked only because the hamster measures bite range horizontally.
+ */
+export function createFlakes(domain: Domain, bounds: MoveBounds): Flakes {
   const container = new Container({ label: 'flakes' });
   const tex = flakeTexture();
   const flakes: Flake[] = [];
+  const water = domain.kind === 'water' ? domain.shape : null;
 
   const halfWidthAt = (y: number): number => {
-    const dy = (y - shape.cy) / shape.ry;
+    if (!water) return 0;
+    const dy = (y - water.cy) / water.ry;
     const t = 1 - dy * dy;
-    return t <= 0 ? 0 : shape.rx * Math.sqrt(t);
+    return t <= 0 ? 0 : water.rx * Math.sqrt(t);
   };
+
+  /** Where a new piece of food appears, and how fast it falls. */
+  const spawnAt = (rng: Rng): { x: number; y: number; vy: number; vx: number } => {
+    if (domain.kind === 'water') {
+      const y = bounds.surfaceY + 2;
+      // A fraction of the surface half-width, not a fixed inset. The old `- 12` was tuned when the
+      // spawn row was the narrow top of the glass; now that it is the real waterline, where the bowl
+      // is near its widest, subtracting a constant scattered the flakes almost wall to wall.
+      const hw = Math.max(12, halfWidthAt(y + 4) * SPAWN_SPREAD);
+      return { x: domain.shape.cx + (rng() * 2 - 1) * hw, y, vy: 1 + rng(), vx: (rng() - 0.5) * 0.8 };
+    }
+    // On a floor: released above the standing line and scattered across the walkable span, so the pet
+    // has somewhere to walk to. No lateral velocity -- seed does not blow about on bedding.
+    const lo = domain.rect.x + FLOOR_SPAWN_INSET;
+    const hi = domain.rect.x + domain.rect.w - FLOOR_SPAWN_INSET;
+    return { x: lo + rng() * Math.max(0, hi - lo), y: domain.standY - FLOOR_DROP_HEIGHT, vy: 1 + rng(), vx: 0 };
+  };
+
+  /** The row food comes to rest on. */
+  const restRow = domain.kind === 'water' ? bounds.floorY - 4 : domain.standY + FLOOR_REST_BELOW;
 
   const draw = (f: Flake, t = 1): void => {
     // Centre, not top-left corner: the sprites are anchored 0.5 so the physics position is the flake's
@@ -92,23 +138,17 @@ export function createFlakes(shape: WaterShape, bounds: WaterBounds): Flakes {
   return {
     container,
     feed(rng) {
-      const y = bounds.surfaceY + 2;
-      // A fraction of the surface half-width, not a fixed inset. The old `- 12` was tuned when the
-      // spawn row was the narrow top of the glass; now that it is the real waterline, where the bowl is
-      // near its widest, subtracting a constant scattered the flakes almost wall to wall. This keeps
-      // them a handful dropped into the middle at any bowl size.
-      const hw = Math.max(12, halfWidthAt(y + 4) * SPAWN_SPREAD);
       for (let i = 0; i < FLAKES_PER_FEED; i += 1) {
         const sprite = new Sprite({ texture: tex, anchor: 0.5 });
         sprite.scale.set(1 / FX_SS);
         container.addChild(sprite);
-        const x = shape.cx + (rng() * 2 - 1) * hw;
+        const { x, y, vy, vx } = spawnAt(rng);
         const f: Flake = {
           sprite,
           x,
           y,
-          vy: 1 + rng(),
-          vx: (rng() - 0.5) * 0.8,
+          vy,
+          vx,
           settled: false,
           age: 0,
           // Seeded to the spawn point so a new flake is drawn where it starts rather than sliding in
@@ -128,13 +168,14 @@ export function createFlakes(shape: WaterShape, bounds: WaterBounds): Flakes {
         f.px = f.x;
         f.py = f.y;
         if (!f.settled) {
-          if (rng() < 0.12) f.vx = (rng() - 0.5) * 0.8;
+          // Lateral drift is water. On a floor the guard below (`bounds.inside`) would reject every
+          // row but the standing one anyway, so a floor seed simply falls straight down.
+          if (water && rng() < 0.12) f.vx = (rng() - 0.5) * 0.8;
           const nx = f.x + f.vx;
           const ny = f.y + f.vy;
-          const floor = bounds.floorY - 4;
-          f.y = Math.min(ny, floor);
-          f.x = bounds.inside(nx, f.y) ? nx : f.x;
-          if (f.y >= floor) f.settled = true;
+          f.y = Math.min(ny, restRow);
+          if (water) f.x = bounds.inside(nx, f.y) ? nx : f.x;
+          if (f.y >= restRow) f.settled = true;
         } else {
           f.age += 1;
           if (f.age >= DISSOLVE_STEPS) {

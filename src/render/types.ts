@@ -40,6 +40,16 @@ export interface WaterShape {
   floorY: number;
 }
 
+/**
+ * How a habitat's pets move through it, and therefore what its physics are.
+ *
+ * Lives here rather than in `src/species` because the render layer needs it: food that sinks through a
+ * volume and food that falls onto a floor are different behaviour, not different numbers.
+ */
+export type Domain =
+  | { kind: 'water'; shape: WaterShape }
+  | { kind: 'floor'; rect: Rect; standY: number };
+
 export interface ManifestHabitat {
   /**
    * The LOGICAL habitat size. It defines behaviour, water bounds and hit regions, and it does NOT
@@ -258,6 +268,14 @@ export interface PetInput {
   flakes: Array<{ x: number; y: number }>;
   bounds: MoveBounds;
   body: { w: number; h: number };
+  /**
+   * How full the habitat's food store is, 0..1.
+   *
+   * The pet can SEE its own pantry: a hamster wanders over to stuff its cheeks at the hopper only when
+   * there is something in it, and standing at an empty hopper miming a mouthful is worse than not
+   * doing it at all. The fish ignores this — a clip-on feeder is not somewhere a fish goes.
+   */
+  pantryFraction: number;
   /**
    * Something the pet is interested in, in grid px, with 0..1 of how much it cares. Null when there is
    * nothing to look at or it is in no state to care. Food always outranks this: a hungry animal does

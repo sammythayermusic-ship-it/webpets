@@ -32,6 +32,8 @@ function input(over: Partial<FishInput> = {}, rng: Rng = seeded(1)): FishInput {
     flakes: [],
     bounds,
     body,
+    // A bowl's clip-on feeder is not somewhere a fish goes; it ignores this entirely.
+    pantryFraction: 0,
     attract: null,
     rng,
     ...over,

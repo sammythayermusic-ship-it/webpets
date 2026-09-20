@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createHamsterBehavior, wheelRate } from './behavior';
 import { CAGE_FLOOR_RECT, CAGE_SITES, CAGE_STAND_Y, HAMSTER_BODY, siteX } from './layout';
 import { makeFloorBounds } from '../../render/water';
+import { FLOOR_REST_BELOW } from '../../render/food';
 import type { PetInput, PetOutput } from '../../render/types';
 import type { HungerLabel, Rng } from '../../sim/types';
 
@@ -25,6 +26,7 @@ function input(over: Partial<PetInput> = {}, rng: Rng = seeded(1)): PetInput {
     flakes: [],
     bounds,
     body: HAMSTER_BODY,
+    pantryFraction: 0,
     attract: null,
     rng,
     ...over,
@@ -43,6 +45,16 @@ function run(ticks: number, make: (i: number) => PetInput): PetOutput[] {
   for (let i = 0; i < ticks; i += 1) outs.push(b.step(make(i)));
   return outs;
 }
+
+/**
+ * The row food actually comes to rest on, from `food.ts` rather than typed in here.
+ *
+ * These tests used to place flakes at `CAGE_STAND_Y`, which is not where the food system puts them —
+ * and they passed anyway, because the hamster measures bite range horizontally and ignores y. A suite
+ * and an implementation agreeing about a place neither of them uses is worse than no test: it is why
+ * feeding in the cage shipped broken.
+ */
+const SEED_ROW = CAGE_STAND_Y + FLOOR_REST_BELOW;
 
 const LABELS: HungerLabel[] = ['full', 'peckish', 'hungry', 'starving'];
 
@@ -67,7 +79,7 @@ describe('hamster behavior', () => {
       { label: 'hungry', hunger: 20 },
       { label: 'starving', hunger: 0 },
       { alive: false },
-      { flakes: [{ x: 250, y: CAGE_STAND_Y }] },
+      { flakes: [{ x: 250, y: SEED_ROW }] },
     ];
     for (const over of cases) {
       const rng = seeded(3);
@@ -116,6 +128,64 @@ describe('hamster behavior', () => {
     expect(kmAt(100)).toBeGreaterThan(kmAt(50));
   });
 
+  it('stuffs its cheeks at the hopper, but only when there is something in it', () => {
+    const hopper = siteX(CAGE_SITES['hopper']!);
+    const atSite = (outs: PetOutput[], x: number): boolean =>
+      outs.some((o) => Math.abs(o.x - x) <= 1 && o.anim === 'eat');
+
+    // Empty hopper: it never goes. Standing at an empty feeder miming a mouthful is worse than not.
+    const empty = seeded(21);
+    expect(atSite(run(4000, () => input({ pantryFraction: 0 }, empty)), hopper)).toBe(false);
+
+    // Stocked: it does, and reports the eat pose while it is there.
+    const full = seeded(21);
+    expect(atSite(run(4000, () => input({ pantryFraction: 0.5 }, full)), hopper)).toBe(true);
+  });
+
+  it('never consumes the pantry, because the hopper is the $FEED store', () => {
+    // Cheek-stuffing is cosmetic by design. The behaviour has no way to spend pantry -- the only
+    // channel out of a tick is speciesDelta -- so what this pins is that it never invents one.
+    const rng = seeded(22);
+    const outs = run(4000, () => input({ pantryFraction: 1 }, rng));
+    for (const o of outs) {
+      for (const k of Object.keys(o.speciesDelta ?? {})) {
+        expect(k, 'the behaviour emitted a counter that is not the wheel').toBe('wheelKm');
+      }
+    }
+  });
+
+  it('drinks from the bottle, which needs nothing to be available', () => {
+    const bottle = siteX(CAGE_SITES['bottle']!);
+    const rng = seeded(23);
+    // Starved of every other option: no pantry to stuff from, and hunger too low to run the wheel...
+    // except the wheel needs hunger > 30 and this is a content pet, so the bottle competes fairly.
+    const outs = run(6000, () => input({ pantryFraction: 0 }, rng));
+    expect(outs.some((o) => Math.abs(o.x - bottle) <= 1 && o.anim === 'eat')).toBe(true);
+  });
+
+  it('abandons an errand the moment it stops being available', () => {
+    // The hopper empties WHILE the hamster is on its way, or mid-mouthful. It must break off rather
+    // than finish miming at nothing, which is why availability is re-checked every tick and not only
+    // when the errand is chosen.
+    //
+    // The pantry flips at random rather than at one chosen moment. Emptying it once relies on an
+    // errand happening to straddle that tick; flipping it constantly means any errand that survives
+    // an empty tick is caught. The first version of this test emptied the hopper when the hamster got
+    // within 40 px of it, which it reached by ordinary wandering long before ever choosing the
+    // errand — so the pantry was empty from the start and the test passed having proved nothing.
+    const rng = seeded(24);
+    const flip = seeded(99);
+    const b = createHamsterBehavior();
+    const hopper = siteX(CAGE_SITES['hopper']!);
+    let mimedOnEmpty = false;
+    for (let i = 0; i < 6000; i += 1) {
+      const pantry = flip() < 0.5 ? 0 : 1;
+      const o = b.step(input({ pantryFraction: pantry }, rng));
+      if (pantry === 0 && Math.abs(o.x - hopper) <= 1 && o.anim === 'eat') mimedOnEmpty = true;
+    }
+    expect(mimedOnEmpty, 'mimed at an empty hopper').toBe(false);
+  });
+
   it('goes to the hopper when hungry and to the bedding pile to sleep', () => {
     const hopper = siteX(CAGE_SITES['hopper']!);
     const rngA = seeded(5);
@@ -132,7 +202,7 @@ describe('hamster behavior', () => {
   it('eats food on the bedding, and food outranks the wheel', () => {
     // Placed right next to the hamster's start so the bite lands inside the window.
     const rng = seeded(2);
-    const outs = run(200, () => input({ flakes: [{ x: 150, y: CAGE_STAND_Y }] }, rng));
+    const outs = run(200, () => input({ flakes: [{ x: 150, y: SEED_ROW }] }, rng));
     expect(outs.some((o) => o.biteFlakeIndex === 0)).toBe(true);
     expect(outs.some((o) => o.anim === 'eat')).toBe(true);
     // Nothing was banked: a hamster with food in front of it is not on the wheel.

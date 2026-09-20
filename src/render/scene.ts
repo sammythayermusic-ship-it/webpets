@@ -267,6 +267,7 @@ export function createScene(
       flakes: m.flakes.positions(),
       bounds: m.bounds,
       body: spriteDef.body,
+      pantryFraction: view.pantryFraction,
       attract,
       rng,
     });
@@ -386,7 +387,9 @@ export function createScene(
       // first time the view is applied.
       player.resetPose(habitat.petAnchor[0], habitat.petAnchor[1], 1);
       layers.slots.pet.addChild(player.sprite);
-      const flakes = createFlakes(habitat.waterShape, bounds);
+      // The DOMAIN, not the manifest's waterShape. Those two only coincide for the fish: the cage
+      // carries a degenerate ellipse purely to satisfy the schema, and feeding read it literally.
+      const flakes = createFlakes(domain, bounds);
       layers.slots.food.addChild(flakes.container);
       const bubbles = createBubbles(habitat.waterShape, bounds);
       if (aquatic) layers.slots.fx.addChild(bubbles.container);

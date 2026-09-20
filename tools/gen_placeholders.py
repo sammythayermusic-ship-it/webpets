@@ -168,6 +168,14 @@ def cage_bg(grid: tuple[int, int], opaque: dict, sites: dict, stand_y: int, memo
             [bedr["x"] * SCALE, bedr["y"] * SCALE, (bedr["x"] + bedr["w"]) * SCALE, (bedr["y"] + bedr["h"]) * SCALE],
             fill=(206, 184, 142, 255),
         )
+        bot = sites["bottle"]
+        bx0, by0 = bot["x"] * SCALE, bot["y"] * SCALE
+        bx1, by1 = (bot["x"] + bot["w"]) * SCALE, (bot["y"] + bot["h"]) * SCALE
+        d.rounded_rectangle([bx0, by0, bx1, by1], radius=4 * SCALE, fill=(176, 206, 220, 210),
+                            outline=(120, 150, 168, 255), width=SCALE)
+        # The spout, which is the part that makes it read as a water bottle rather than a window.
+        d.rectangle([(bx0 + bx1) // 2 - SCALE, by1, (bx0 + bx1) // 2 + SCALE, by1 + 6 * SCALE],
+                    fill=(150, 156, 164, 255))
 
     label = "PLACEHOLDER" if not memorial else "PLACEHOLDER MEMORIAL"
     stamp(d, label, x0 + 6 * SCALE, y0 + 6 * SCALE, SCALE, (250, 250, 250, 255))
@@ -244,6 +252,7 @@ def main() -> None:
         "wheel": {"x": 180, "y": 128, "w": 64, "h": 64},
         "hopper": {"x": 68, "y": 150, "w": 32, "h": 38},
         "bed": {"x": 116, "y": 172, "w": 48, "h": 20},
+        "bottle": {"x": 226, "y": 96, "w": 18, "h": 52},
     }
     pet_anchor = [140, stand_y]
     body = {"w": 44, "h": 30}

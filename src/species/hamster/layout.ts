@@ -37,6 +37,9 @@ export const CAGE_SITES: Sites = Object.freeze({
   wheel: Object.freeze({ x: 180, y: 128, w: 64, h: 64 }),
   hopper: Object.freeze({ x: 68, y: 150, w: 32, h: 38 }),
   bed: Object.freeze({ x: 116, y: 172, w: 48, h: 20 }),
+  // Clipped to the bars above the bedding. Like the wheel, the hamster stands on the floor beneath it
+  // and reaches up, so only the site's centre x matters to the behaviour.
+  bottle: Object.freeze({ x: 226, y: 96, w: 18, h: 52 }),
 });
 
 /** Centre x of a site, which is all the behaviour needs: everything happens on one row. */
