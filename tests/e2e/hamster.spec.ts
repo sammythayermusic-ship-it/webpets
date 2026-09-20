@@ -39,7 +39,7 @@ test('switches to the hamster and comes back up in the cage', async ({ page }) =
   expect(await speciesOf()).toBe('hamster');
 
   // And it is genuinely a different habitat: the cage's hit rect comes from its own opaqueRect
-  // (40,40,240,170) rather than the bowl's (74,22,172,203), and that rect drives click-through.
+  // (34,17,276,213) rather than the bowl's (74,22,172,203), and that rect drives click-through.
   const box = await page.locator('#app canvas').boundingBox();
   expect(box).not.toBeNull();
 

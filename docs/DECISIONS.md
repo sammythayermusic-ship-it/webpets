@@ -894,3 +894,63 @@ allowed to disagree — which the dev panel can already do.
 The cage layout test caught the first placement immediately: a bottle whose centre sat at x=249 is 9 px
 past where the hamster can stand with its body box on, so it would have walked toward it forever and
 never arrived — a hang that looks like an animation bug rather than a layout one. Moved to 235.
+
+## Rendering the cage, and three things the first render exposed
+
+### the sprite camera is a crop of the habitat camera, not a lens of its own
+
+`CAM_hamster` started with its own `ortho_scale` (0.148) and its own aim (a hand-picked z). Both were
+wrong in ways that only show up once the sprite is composited back into the habitat it came from:
+
+- 0.148 over an 80 grid-px frame is 0.00185 m per grid px, against `CAM_cage`'s 0.0013125. The hamster
+  rendered 29% smaller than the cage's own projection of the same model, so it looked like a different
+  animal's photograph pasted into the scene.
+- Aiming anywhere but the rig root means the body sits somewhere other than the frame centre, and the
+  anchor that positions the sprite can no longer just be the rig's projected position.
+
+It is now `CAM_cage` at a quarter of the width aimed at `RIG_ham_root` — a literal 80x80 crop of the
+cage view. That makes `petAnchor` the rig's own projection with no fudge factor, and makes the drawn
+size a fact about the model rather than a number to tune. The general rule: **a sprite camera should be
+the habitat camera restricted, so the sprite and the habitat are the same photograph.**
+
+The aim is captured *before* `animate_hamster` runs. Reading `rig.location.z` afterwards returns
+whatever the last keyframe assigned — the `dead` pose at `z0 - 0.0135`, which is 10 grid px — and aims
+the camera 10 px low, so every state renders 10 px high in its frame and the hamster floats above its
+own bedding. Same shape as trusting a stale `matrix_world` in background mode: the value is real, it
+just describes a different moment than the one you want.
+
+### a sine over a loop makes the first and middle frames identical
+
+`eat`, `hungry` and `sleep` rendered as frozen stills. Every oscillator was `sin(t * tau)` sampled over
+n frames, and that returns to zero at exactly `i = n/2` — so frame 0 and frame n/2 land on the same
+pose, which is the pair the art gate compares. `eat` was worse: `sin(t * tau * 2)` over 8 frames
+quantises the whole chew to three distinct poses.
+
+`idle` passed, and only by accident — its yaw carries a 0.9 rad phase offset, so its two sampled frames
+differ by 2.5 degrees of body rotation and nothing else in the state does.
+
+Every oscillator is now a cosine or a phase-offset sine, at most one cycle per loop. Amplitudes are
+sized in grid px rather than metres (about 0.0011 m buys one grid pixel here, so anything under
+~0.0015 m is invisible at delivery size however correct it looks in the viewport), and each state got a
+discrete secondary action — a blink, an ear flick, paws working — since that is what actually carried
+idle. Measured movement went from 0.000 to 0.42–0.47.
+
+### the front bars ship as `decor_front`
+
+The pet layer draws above `bg`, so the near-side bars were behind the hamster and it read as stuck to
+the outside of its cage. They are rendered as a separate pass and shipped under `decor_front` — the
+slot the bowl already uses for what is drawn in front of the fish — because `SLOT_OF` in `layers.ts` is
+a fixed map and an unrecognised layer name resolves to an undefined slot. No renderer change.
+
+The bars stay in `WP_Cage` as well as `WP_CageFront`, so `bg` still contains the whole cage and they
+are simply drawn twice. Cutting them out of `bg` would change its alpha bounding box, and that box is
+`opaqueRect` — the window's click-through contract.
+
+### a test that read the layout's geography instead of the code
+
+`reset returns it to the start` measured how far the walked and reset positions each sat from the cage
+centre and required the walked one to be farther. That is an assertion about where a 500-step
+pseudo-random walk happens to stop, not about `reset`. Moving the sites to match the render left the
+walk ending near the middle and the test failed while nothing was broken. It now states equality with a
+freshly built behaviour fed the same rng stream, which is what "not a continuation" means — and that
+form fails when `reset` is stubbed to a no-op, which the old one no longer did.
