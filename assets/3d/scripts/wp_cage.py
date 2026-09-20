@@ -628,7 +628,7 @@ def build_hamster(col, m):
     # flat mid-tone that does not match the body they are attached to.
     fur = wb.toy_material("WP_ham_fur", FUR_TOP, roughness=0.46, sheen=0.28, sss=0.14)
     wb.belly_gradient(fur, FUR_TOP, FUR_BELLY, -0.026, 0.026, space_object=rig)
-    wb.fur_surface(fur, scale=240.0, strength=0.24, sheen=0.55, space_object=rig)
+    wb.fur_surface(fur, scale=240.0, strength=0.50, distance=0.0018, sheen=0.55, space_object=rig)
     wb.assign(body, fur)
 
     # (0.92, 0.58, 0.55) is not pink here, it is WHITE. This rig drives roughly 1.5x, so a red

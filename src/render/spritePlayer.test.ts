@@ -113,6 +113,27 @@ describe('frame clock', () => {
  * it is. A time-driven cycle covers three different distances at those speeds, which is the sliding
  * this replaces. Everything below is about the frame clock ignoring the wall clock entirely.
  */
+describe('a state with no art at all', () => {
+  it('still animates, rather than locking on one still frame', () => {
+    // The hamster has no happy/excited/curious art, but `moodAnim()` asks for those states by name
+    // for EVERY species -- there is no capability check at the call site. With no art and no fallback
+    // sequence the sequencer's frame index never advances, so the player holds `idle_0001` and the
+    // animal stops breathing and blinking until something moves it. No crash, no warning.
+    //
+    // It is not hypothetical: a content, well-fed hamster standing still computes `happy` easily, and
+    // the whole wheel errand reports a stationary pose too.
+    const p = makePlayer({ fps: 12 });
+    p.play('happy');
+    expect(p.state()).toBe('happy');
+    const poses = new Set<string>();
+    for (let i = 0; i < 12; i += 1) {
+      p.advance(90); // over one art frame at 12 fps
+      poses.add(`${p.sprite.position.y.toFixed(3)}|${p.sprite.scale.y.toFixed(3)}`);
+    }
+    expect(poses.size, 'an artless state froze instead of falling back to a bob').toBeGreaterThan(1);
+  });
+});
+
 describe('stride clock, for states that declare a stridePx', () => {
   it('does not advance on time alone, however long it is given', () => {
     const p = makePlayer({ fps: 12 });

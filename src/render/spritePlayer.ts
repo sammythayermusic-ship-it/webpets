@@ -17,7 +17,8 @@
 import { Rectangle, Sprite, Texture } from 'pixi.js';
 import { PET_FPS } from '../sim/constants';
 import { createSequencer, type SequenceDef } from './sequencer';
-import type { ManifestSprite } from './types';
+import type { Expression } from './expression';
+import type { ManifestSprite, PetAnim } from './types';
 
 export interface SpritePlayer {
   readonly sprite: Sprite;
@@ -51,8 +52,20 @@ const FALLBACK_REF_FRAME = 80;
 /** Ceiling on frames advanced in one `advance()`, so a long stall cannot spin the sequencer. */
 const MAX_FRAMES_PER_ADVANCE = 16;
 
-/** Bob/squash fallback for states whose art is missing. */
-const FALLBACK_SEQUENCES: Readonly<Record<string, SequenceDef>> = {
+/**
+ * Bob/squash fallback for states whose art is missing.
+ *
+ * Typed as every state the app can ask for -- `PetAnim` from the simulation, `Expression` from the
+ * mood -- so leaving one out is a compile error rather than a silent freeze. It was `Record<string,
+ * _>` and the three mood poses were missing, which is exactly the bug that invites:
+ *
+ * `moodAnim()` names happy/excited/curious for EVERY species and there is no capability check at the
+ * call site, but only the fish has that art. With neither art nor a fallback, the sequencer's frame
+ * index never advances, `refresh()` draws the base texture with a zero offset forever, and the hamster
+ * stops breathing and blinking the moment it feels happy -- which a content, well-fed one does easily,
+ * and which the whole wheel errand does too. No crash, no warning, just a still photograph.
+ */
+const FALLBACK_SEQUENCES: Readonly<Record<PetAnim | Expression, SequenceDef>> = {
   idle: { sequence: [0, 0, 0, 0, 1, 1, 1, 1], loop: true },
   eat: { sequence: [0, 1, 1, 0], loop: false, returnTo: 'idle' },
   hungry: { sequence: [0, 0, 0, 1, 1, 1], loop: true },
@@ -62,6 +75,9 @@ const FALLBACK_SEQUENCES: Readonly<Record<string, SequenceDef>> = {
   // forever and the pet slides along frozen, which is the exact bug the walk exists to fix, wearing a
   // disguise. The fallback at least bobs.
   walk: { sequence: [0, 0, 1, 1], loop: true },
+  happy: { sequence: [0, 1, 1, 0], loop: true },
+  excited: { sequence: [0, 1, 0, 1], loop: true },
+  curious: { sequence: [0, 0, 1, 1], loop: true },
 };
 
 export interface SpritePlayerOptions {

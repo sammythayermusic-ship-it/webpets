@@ -233,12 +233,17 @@ def toy_material(name, color, roughness=0.45, sheen=0.25, sss=0.0,
         mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     nt = mat.node_tree
-    bsdf = nt.nodes.get("Principled BSDF")
-    if bsdf is None:
-        bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
-        out = nt.nodes.get("Material Output") or nt.nodes.new(
-            "ShaderNodeOutputMaterial")
-        nt.links.new(bsdf.outputs[0], out.inputs[0])
+    # START FROM A CLEAN TREE on every build. This used to keep whatever was already there and only
+    # re-point the terminal links, while `belly_gradient` and `fur_surface` unconditionally added
+    # nodes -- so every rebuild appended another chain to the same material. `WP_ham_fur` had reached
+    # 121 nodes: 33 texture-coordinate nodes, 20 colour ramps and 13 bumps, of which 31, 19 and 12
+    # respectively were orphaned. It still rendered correctly, but only because the last chain built
+    # was the one left linked. A build script that is not idempotent is a build script that is
+    # slowly lying to you.
+    nt.nodes.clear()
+    bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    nt.links.new(bsdf.outputs[0], out.inputs[0])
 
     def setv(key, value):
         if key in bsdf.inputs:
@@ -310,7 +315,7 @@ def belly_gradient(mat, top_color, bottom_color, lo, hi, space_object=None):
     return ramp
 
 
-def fur_surface(mat, scale=240.0, strength=0.22, sheen=0.55, space_object=None):
+def fur_surface(mat, scale=240.0, strength=0.50, distance=0.0018, sheen=0.55, space_object=None):
     """Break a flat material up with a noise bump and give it a soft fresnel sheen.
 
     The hamster had no texture of any kind -- no noise, no bump, no UVs -- so it read as moulded
@@ -318,9 +323,18 @@ def fur_surface(mat, scale=240.0, strength=0.22, sheen=0.55, space_object=None):
     under a pixel and would only add noise. It is a shallow bump at a wavelength you can actually
     see, plus the sheen that makes a furred silhouette catch light at its edge.
 
-    `scale` is in the texture's coordinate units, which are metres here, so a scale of 240 gives
-    features about 4 mm across -- roughly 3 logical px at delivery, which survives the downscale.
-    Much finer and it averages away to nothing; much coarser and it reads as dents.
+    `scale` is in the texture's coordinate units. Those are the RIG's object space, and TexCoord's
+    object output is the inverse matrix INCLUDING scale, so a scale of 240 is one period per 1/240 of
+    an object-space metre = 4.17 mm, which the rig's 1.18 turns into 4.92 mm of world -- about 3.6
+    logical px at delivery. That part was always right.
+
+    What was wrong was the amplitude. `Strength x Distance x` the fBm's own ~0.35 swing is the actual
+    relief, and at the original 0.24 x 0.0008 that came to 0.067 mm against a 4.92 mm wavelength: a
+    73:1 ratio, about 2.5 degrees of normal perturbation, one to three levels out of 255 on a mostly
+    diffuse surface -- and then OpenImageDenoise removed the remainder, because a sub-1% high
+    frequency ripple is precisely what a denoiser is built to erase. The graph was connected and the
+    feature size was right; the hamster looked like plastic because the bump was two orders of
+    magnitude below visibility. Visible bump wants nearer 10-30:1; these defaults give 15.6:1.
     """
     nt = mat.node_tree
     bsdf = nt.nodes["Principled BSDF"]
@@ -333,7 +347,7 @@ def fur_surface(mat, scale=240.0, strength=0.22, sheen=0.55, space_object=None):
     noise.inputs["Roughness"].default_value = 0.6
     bump = nt.nodes.new("ShaderNodeBump")
     bump.inputs["Strength"].default_value = strength
-    bump.inputs["Distance"].default_value = 0.0008
+    bump.inputs["Distance"].default_value = distance
     nt.links.new(tex.outputs["Object"], noise.inputs["Vector"])
     nt.links.new(noise.outputs["Fac"], bump.inputs["Height"])
     nt.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
