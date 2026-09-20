@@ -288,3 +288,117 @@ describe('fish frames', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// Everything above is the FISH's art, and much of it is fish-specific by nature: a cage has no glass
+// to be see-through, no waterline to keep a corpse under, and no Blender-projected geometry.json.
+//
+// What follows is the subset that holds for ANY species' art, run over every entry in the manifest, so
+// a second species is covered from the day its placeholders land rather than from the day it gets a
+// render. The load-bearing one is the same as ever -- bg's alpha bbox must equal opaqueRect, because
+// that rect is what decides which pixels of an always-on-top window swallow clicks.
+
+const GRID = { w: 320, h: 240 };
+
+describe.each(Object.keys(manifest.habitats))('habitat art: %s', (key) => {
+  const hab = manifest.habitats[key];
+  if (!hab) throw new Error(`no habitat ${key}`);
+  const layers = hab.layers.filter((l) => l.file !== undefined);
+
+  it('draws every layer at one shared whole multiple of the logical grid', () => {
+    const multiples = new Set<number>();
+    for (const l of layers) {
+      const [w, h] = pngSize(l.file as string);
+      expect(w % GRID.w, `${l.name}: ${w}px is not a whole multiple of ${GRID.w}`).toBe(0);
+      expect(w / GRID.w, `${l.name}: aspect`).toBe(h / GRID.h);
+      multiples.add(w / GRID.w);
+    }
+    expect(multiples.size, `layers disagree on scale: ${[...multiples].join(', ')}`).toBe(1);
+  });
+
+  it('matches opaqueRect to the background exactly, which is the click-through contract', () => {
+    const bgLayer = layers.find((l) => l.name === 'bg');
+    expect(bgLayer, 'no bg layer').toBeDefined();
+    if (!bgLayer) return;
+    const png = load(bgLayer.file as string);
+    const mult = png.width / GRID.w;
+    const box = alphaBox(png, 0.5);
+    expect(box).not.toBeNull();
+    if (!box) return;
+    expect({
+      x: Math.floor(box[0] / mult),
+      y: Math.floor(box[1] / mult),
+      w: Math.ceil((box[2] + 1) / mult) - Math.floor(box[0] / mult),
+      h: Math.ceil((box[3] + 1) / mult) - Math.floor(box[1] / mult),
+    }).toEqual(hab.opaqueRect);
+  });
+
+  it('has a soft contact shadow, so the habitat does not look pasted onto the desktop', () => {
+    // The 0.5 threshold must measure the object and the 0.01 threshold must reach further. Equal boxes
+    // mean hard alpha with nothing under it -- which reads as a sticker, and is also what would make
+    // the opaqueRect above meaningless, since there would be nothing for the threshold to exclude.
+    const bgLayer = layers.find((l) => l.name === 'bg');
+    if (!bgLayer) return;
+    const png = load(bgLayer.file as string);
+    const hard = alphaBox(png, 0.5);
+    const soft = alphaBox(png, 0.01);
+    expect(hard).not.toBeNull();
+    expect(soft).not.toBeNull();
+    if (!hard || !soft) return;
+    expect(soft[3], 'nothing softer than the object extends below it').toBeGreaterThan(hard[3]);
+  });
+});
+
+describe.each(Object.keys(manifest.sprites))('sprite art: %s', (key) => {
+  const sp = manifest.sprites[key];
+  if (!sp) throw new Error(`no sprite ${key}`);
+  const entries = Object.entries(sp.states);
+
+  it('ships exactly the frames it declares, each a square whole multiple of the logical frame', () => {
+    for (const [name, def] of entries) {
+      const files = stateFiles(def);
+      expect(files.length, `${name}: files vs frames`).toBe(def.frames);
+      for (const f of files) {
+        const [w, h] = pngSize(f);
+        expect(w, `${name}/${f}: not square`).toBe(h);
+        expect(w % sp.frame[0], `${name}/${f}: ${w} is not a multiple of ${sp.frame[0]}`).toBe(0);
+      }
+    }
+  });
+
+  it('draws the pet larger than its collision box but not by a whole body', () => {
+    for (const [name, def] of entries) {
+      const files = stateFiles(def);
+      const png = load(files[0] as string);
+      const mult = png.width / sp.frame[0];
+      const box = alphaBox(png, 0.01);
+      expect(box).not.toBeNull();
+      if (!box) return;
+      const w = (box[2] - box[0] + 1) / mult;
+      const h = (box[3] - box[1] + 1) / mult;
+      expect(w, `${name}: narrower than its body box`).toBeGreaterThan(sp.body.w);
+      expect(h, `${name}: shorter than its body box`).toBeGreaterThan(sp.body.h);
+      expect((w - sp.body.w) / 2, `${name}: overhangs its body box horizontally`).toBeLessThanOrEqual(12);
+      expect((h - sp.body.h) / 2, `${name}: overhangs its body box vertically`).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it('centres every state on the frame, because the mirror flips about that axis', () => {
+    for (const [name, def] of entries) {
+      const png = load(stateFiles(def)[0] as string);
+      const mult = png.width / sp.frame[0];
+      const box = alphaBox(png, 0.01);
+      if (!box) return;
+      // HORIZONTAL only. A turn flips scale.x about the frame centre, so an off-centre drawing jumps
+      // sideways by twice its offset every time the pet turns around -- that is a real defect. Vertical
+      // offset is not: it is what the per-state `anchor` exists to carry, and the fish's `dead` pose is
+      // deliberately 9.57 px off centre so a corpse floats at the waterline. Asserting y here would be
+      // asserting against the mechanism.
+      expect(Math.abs((box[0] + box[2] + 1) / 2 / mult - sp.frame[0] / 2), `${name}: x`).toBeLessThanOrEqual(3);
+      expect(box[0], `${name}: touches the left edge`).toBeGreaterThan(0);
+      expect(box[1], `${name}: touches the top edge`).toBeGreaterThan(0);
+      expect(box[2], `${name}: touches the right edge`).toBeLessThan(png.width - 1);
+      expect(box[3], `${name}: touches the bottom edge`).toBeLessThan(png.height - 1);
+    }
+  });
+});

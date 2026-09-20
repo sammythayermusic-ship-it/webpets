@@ -237,7 +237,15 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
       refreshHitRegions();
     }
 
-    if (s.pet.species !== prev.pet.species) audio.setAmbient(s.pet.species, true);
+    if (s.pet.species !== prev.pet.species || s.pet.habitat !== prev.pet.habitat) {
+      // Re-mount by reloading. The scene is built once at boot and its reference is captured by the
+      // HUD, speech, the resize grip, the dev panel and this very subscription, so swapping it live
+      // means re-wiring six modules that each believe they own it. A reload re-runs the whole boot
+      // sequence against the species now on disk, which is the same path a normal launch takes and is
+      // therefore the one path already covered by tests. `setSpecies` has flushed before we get here.
+      location.reload();
+      return;
+    }
 
     // Alert / death one-shots on transitions (audio files are optional; missing ones are no-ops).
     if (prev.pet.alive && !s.pet.alive && s.pet.id === prev.pet.id) {

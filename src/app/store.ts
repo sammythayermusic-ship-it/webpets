@@ -30,6 +30,7 @@ import type {
   SettingsDoc,
 } from './types';
 import { createPersistence, defaultGraveyard, defaultSettings, migratePetDoc, PET_VERSION, type Persistence } from './persistence';
+import { speciesModule } from '../species';
 import { decide } from './notifications';
 import { resolveNight } from './daynight';
 
@@ -235,15 +236,24 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
         const s = get();
         set({ nightOverride: night, night: resolveNight(s.settings.dayNight, night, now()) });
       },
-      setSpecies(species, habitat) {
-        if (species !== 'fish' || habitat !== 'bowl') {
-          console.warn(`[dev] species ${species}/${habitat} is not available in Phase 0`);
+      async setSpecies(species, habitat) {
+        // Was a hardcoded `!== 'fish' || !== 'bowl'`. Now it asks the registry, so a species becomes
+        // switchable the moment it is built rather than when someone remembers to edit this line --
+        // and a species that is declared in the union but has no module still cannot be selected into
+        // an empty habitat.
+        const mod = speciesModule(species);
+        if (!mod || mod.layout.habitat !== habitat) {
+          console.warn(`[dev] species ${species}/${habitat} is not implemented`);
           return;
         }
         const s = get();
         if (s.pet.species === species && s.pet.habitat === habitat) return;
         set({ pet: { ...s.pet, species, habitat } });
         savePet();
+        // Flushed rather than left to the 500 ms throttle: main.ts reloads the app to re-mount the
+        // scene for the new species, and a reload inside that window would lose the very change that
+        // triggered it and bring back the old pet.
+        await persist.flush();
       },
     };
 

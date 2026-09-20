@@ -354,6 +354,30 @@ Version 2 is the twice-a-day clock; version 1 was a 45-point meal on a 60-hour b
 
 The sim builder implements the test list in `docs/SIM-TESTS.md` first.
 
+## Species
+
+`src/species/index.ts` maps `Species` to a `SpeciesModule` — layout, behaviour factory, line pools.
+Its map is `Partial<Record<Species, SpeciesModule>>` deliberately: the union has had four members since
+the first commit while only some are built, and a total map would be a lie. `requireSpecies` throws;
+`speciesModule` returns null. Both "is this available" guards — the dev panel's option list and
+`store.setSpecies` — ask the registry rather than keeping their own list.
+
+A species' movement domain is a `MoveBounds`: `rect`, `surfaceY`, `floorY`, `inside`, `clamp`. Two
+implementations — `makeWaterBounds` (an ellipse clipped to a band) and `makeFloorBounds` (a walkable
+line, where `surfaceY === floorY`). The behaviour cannot tell them apart, and neither can the scene's
+tick interpolation, which relies only on the body-eroded region being convex. Bubbles, the glass sheen
+and the death fog are gated on the domain being water; they are aquatic physics, not parameterisable
+geometry.
+
+`PetOutput.speciesDelta` carries per-tick `speciesData` increments (the hamster's `wheelKm`). The scene
+accumulates them; the app calls `scene.drainSpeciesDelta()` on the day/night cadence and banks them
+with `actions.addSpeciesData`, which refuses to credit a dead pet. Writing through per tick would be 8
+throttled disk saves a second.
+
+Switching species calls `location.reload()` after a flush. The scene is built once at boot and its
+reference is held by five modules, so a live swap means re-wiring all of them; a reload re-runs the
+boot sequence against the species on disk, which is the path already under test.
+
 ## App store (`src/app/store.ts`, Zustand vanilla, no React)
 
 `createAppStore(platform: Platform): AppStore` implementing `AppState`/`AppActions` from `src/app/types.ts`.

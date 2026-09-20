@@ -89,8 +89,11 @@ export interface DevActions {
   resetClock(): void;
   /** Dev-forced day/night override for the scene; null = follow settings. */
   setNightOverride(night: boolean | null): void;
-  /** Phase 0: only fish/bowl is selectable; the control renders disabled for other species. */
-  setSpecies(species: Species, habitat: Habitat): void;
+  /**
+   * Switch the pet's species, if that species is implemented. Flushes to disk before resolving,
+   * because the caller reloads the app to re-mount the scene and a throttled save would be lost.
+   */
+  setSpecies(species: Species, habitat: Habitat): Promise<void>;
 }
 
 export interface AppActions {

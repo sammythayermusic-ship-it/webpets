@@ -7,6 +7,7 @@ import type { DevPanelHandle, UiDeps } from './types';
 import { button, el, relRect, stopDrag } from './dom';
 import { eventLine, formatDate, formatOffset } from './format';
 import { labelFor } from './model';
+import { speciesModule } from '../species';
 
 export interface DevPanelHandleExt extends DevPanelHandle {
   open(): void;
@@ -22,16 +23,26 @@ interface SpeciesOption {
   enabled: boolean;
 }
 
-const SPECIES_OPTIONS: readonly SpeciesOption[] = [
-  { species: 'fish', habitat: 'bowl', enabled: true },
-  { species: 'fish', habitat: 'tank', enabled: false },
-  { species: 'hamster', habitat: 'cage', enabled: false },
-  { species: 'hamster', habitat: 'terrarium', enabled: false },
-  { species: 'frog', habitat: 'pond', enabled: false },
-  { species: 'frog', habitat: 'jar', enabled: false },
-  { species: 'chicken', habitat: 'brooder', enabled: false },
-  { species: 'chicken', habitat: 'coop', enabled: false },
-];
+/**
+ * The eight species/habitat pairs of the Blueprint, with `enabled` derived from the registry rather
+ * than hand-maintained.
+ *
+ * It used to be a literal list with one `true` in it, which meant "is this built" was recorded in two
+ * places -- here and the store's guard -- and both had to be remembered. Now a species becomes
+ * selectable by existing.
+ */
+const SPECIES_OPTIONS: readonly SpeciesOption[] = (
+  [
+    { species: 'fish', habitat: 'bowl' },
+    { species: 'fish', habitat: 'tank' },
+    { species: 'hamster', habitat: 'cage' },
+    { species: 'hamster', habitat: 'terrarium' },
+    { species: 'frog', habitat: 'pond' },
+    { species: 'frog', habitat: 'jar' },
+    { species: 'chicken', habitat: 'brooder' },
+    { species: 'chicken', habitat: 'coop' },
+  ] as const
+).map((o) => ({ ...o, enabled: speciesModule(o.species)?.layout.habitat === o.habitat }));
 
 function formatClock(ts: number): string {
   const d = new Date(ts);

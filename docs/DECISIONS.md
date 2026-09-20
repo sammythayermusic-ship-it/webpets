@@ -720,3 +720,105 @@ returns immediately, and a failure to fetch the window handle inside the closure
 the frontend to persist the setting as applied. It waits on a channel now, like `layering_readback` always
 has. A toggle that says it is on while the window has none of the flags is precisely the failure this area
 already cost an evening to.
+
+## the second species
+
+Phase 1 starts here. The hamster rather than the dog, because the Blueprint already specifies it in
+§8 (wander, wheel with RPM scaling off fullness, bottle, cheeks, nap) and the repo already has
+`assets/habitats-160x120/hamster-cage.png`, while `'hamster'` and `'cage'` have been members of the
+`Species` and `Habitat` unions since the first commit. A dog would have needed a fifth species, a
+ninth habitat, an invented species design and art from nothing — all of it design work, none of it
+the thing that was actually interesting about a second species.
+
+Sammy's Phase 0 sign-off was "take them as fine". Four §11 acceptance items have therefore never been
+confirmed by a human — **the tray menu and hunger chip, notifications actually firing, click-through
+onto the desktop behind, and Cmd+Shift+P**. They are recorded here as unverified rather than counted
+as passed.
+
+### WaterBounds was never about water
+
+The load-bearing discovery. Only TWO production imports reached into `src/species/fish` — the
+behaviour in `scene.ts` and the line pools in `speech.ts` — so the registry surface was tiny. What
+made a land animal look like a rewrite was that `WaterBounds` was the movement primitive for the whole
+app: required in the behaviour interface, required in the manifest schema, consumed by four render
+modules.
+
+Its members were never aquatic. A rect, a top, a bottom, a membership test and a nearest-legal-point
+clamp describe any movement domain, so it became `MoveBounds` with `makeWaterBounds` (ellipse) and
+`makeFloorBounds` (a walkable line) as the two implementations. **Convexity is the property that
+matters** and both satisfy it: `scene.ts` interpolates the drawn position between simulation ticks and
+relies on the region eroded by the body box staying convex.
+
+Bubbles, the glass sheen and the death fog are gated on the domain being water. They are physics
+rather than geometry that happens to be elliptical — bubbles rise from a floor to a surface and pop, a
+fog needs a volume to fill — so on land they are absent rather than degenerate.
+
+### the cage is a line, and the wheel sits on it
+
+A hamster walks one row and picks targets by NAME, where a fish moves through a volume and computes
+every target. So the wheel, the hopper and the bedding pile are `sites` data rather than constants
+inside the state machine, which is also what will let the same behaviour be re-laid-out for the
+terrarium upgrade.
+
+The wheel looks like it breaks the one-row rule and does not: its axle is above the floor, but a
+hamster runs at the BOTTOM of the wheel, so the animal's centre while running is a floor position and
+the spinning rim is art behind it. Modelling it otherwise meant letting the pet leave the floor, and
+then the walkable domain stops being a line at all.
+
+`wheelKm` is sized against a real animal — 5.8 km/h while running, so a night of intermittent use
+lands in the low single-digit kilometres. It is meant to be a number that could go on a leaderboard,
+and a fantasy rate would be worse than none. It travels on `PetOutput.speciesDelta`, a generic bag
+rather than a `wheelKm` field, because `PetOutput` is what every species returns. The scene
+accumulates and the app drains on the day/night cadence rather than writing through per tick: the
+hamster earns a fraction of a metre 8 times a second, and a write per tick would be 8 throttled disk
+saves a second for a number read once a session. `speciesData` had existed on `PetState` from the
+first commit with nothing ever writing to it.
+
+### switching species reloads
+
+`store.setSpecies` mutated state and nothing re-mounted, so the dev panel's dropdown had never done
+anything. The fix is `location.reload()` rather than a live swap: the scene is built once at boot and
+its reference is captured by the HUD, speech, the resize grip, the dev panel and the store
+subscription, so swapping it live means re-wiring five modules that each believe they own it. A reload
+re-runs the whole boot sequence against the species now on disk — the same path a normal launch takes,
+and therefore the one path already covered by tests. `setSpecies` flushes before returning, because a
+reload inside the 500 ms save throttle would resurrect the previous pet.
+
+Both "is this species available" guards — the dev panel's option list and the store's hard
+`!== 'fish'` — now ask the registry. "Is it built" was recorded in two places and both had to be
+remembered; a species becomes selectable by existing.
+
+### placeholders that pass the real gates
+
+CLAUDE.md promises generated placeholders and the generator had been deleted (`f78fb06`), so the rule
+had no implementation behind it. The new `tools/gen_placeholders.py` emits the manifest fragment as
+well as the PNGs — sprite anchors must match each state's measured alpha centroid to about 0.05 px,
+and writing those by hand against art you also wrote by hand is a guessing game with sixteen chances
+to be wrong.
+
+`habitatArt.test.ts` was hardwired to `fish/bowl` with a throw. It now also runs a species-generic
+block over every manifest entry, so a second species is covered from the day its placeholders land.
+The split is not "strict gates for renders, lax ones for placeholders": the generic block keeps the
+layer-multiple check, the soft-shadow check and the load-bearing one — **bg's alpha-0.5 bbox must
+equal `opaqueRect`**, because that rect decides which pixels of an always-on-top window swallow
+clicks. Only genuinely fish-specific gates stayed behind: the glass, the waterline, and the
+Blender-projected `geometry.json`.
+
+Two things the generic block deliberately does NOT assert:
+
+- **Vertical centring.** The fish's own test checks the x axis only and says why — a turn flips
+  `scale.x` about the frame centre, so horizontal offset makes the pet jump sideways every time it
+  turns. Vertical offset is what the per-state `anchor` exists to carry, and the fish's `dead` pose is
+  deliberately 9.57 px off centre so a corpse floats at the waterline. Asserting y would be asserting
+  against the mechanism.
+- **Motion in a single-frame state.** The gate skips states with fewer than two frames, so the
+  hamster's `dead` is one still frame. The shipped fish's `dead` has six only because a corpse
+  floating on water genuinely drifts. Giving a hamster on bedding a bob to clear a 2% threshold would
+  have been inventing motion to satisfy a test.
+
+The shadow had to be tuned into a narrow band and both ends were hit: at blur radius 26 it faded to
+alpha 1 and read as no shadow at all, and at fill alpha 170 it reached 169 and dragged the
+click-through region 16 logical px below the cage — which would have made the window eat clicks over
+bare desk. The generator validates both properties BEFORE writing, because on each of those failures
+the bad PNG was already on disk when the check fired, and the next test run measured art the generator
+had itself rejected.

@@ -336,6 +336,29 @@ describe('app store', () => {
     expect((settings as unknown as { scaleSteps: number }).scaleSteps).toBe(SCALE_S);
   });
 
+  it('switches to an implemented species and refuses one that is only declared', async () => {
+    const { store, platform } = await bootStore();
+    const a = store.getState().actions;
+    expect(store.getState().pet.species).toBe('fish');
+
+    await a.dev.setSpecies('hamster', 'cage');
+    expect(store.getState().pet.species).toBe('hamster');
+    expect(store.getState().pet.habitat).toBe('cage');
+    // Flushed, not left to the throttle: main.ts reloads to re-mount the scene, and a reload inside
+    // the 500 ms save window would resurrect the fish.
+    expect((platform.files.get(PET_FILE) as PetDoc).pet.species).toBe('hamster');
+
+    // Declared in the Species union since the first commit, never implemented. The guard used to be a
+    // hardcoded `!== 'fish'`; it asks the registry now, so this stays refused without anyone
+    // maintaining a second list.
+    await a.dev.setSpecies('frog', 'pond');
+    expect(store.getState().pet.species).toBe('hamster');
+
+    // Right species, wrong habitat: the terrarium is the hamster's Phase-1 upgrade and has no layout.
+    await a.dev.setSpecies('hamster', 'terrarium');
+    expect(store.getState().pet.habitat).toBe('cage');
+  });
+
   it('banks speciesData additively, ignores nothing-happened, and refuses to credit a corpse', async () => {
     const { store } = await bootStore();
     const a = store.getState().actions;

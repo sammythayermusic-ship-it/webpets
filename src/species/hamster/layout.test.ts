@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   CAGE_FLOOR_RECT,
@@ -12,9 +13,46 @@ import {
 import { makeFloorBounds } from '../../render/water';
 import { GRID_H, GRID_W } from '../../sim/constants';
 
-// The manifest cross-check lands with the cage art. What is assertable before the art exists is that
-// the cage is internally coherent -- which is most of what actually goes wrong with a layout, and all
-// of what would make the hamster unreachable by its own furniture.
+// Two jobs. The first block is the same contract the fish's layout test enforces: layout.ts and
+// assets/manifest.json must agree, because the renderer reads one and the behaviour reads the other.
+// It matters more here than it did for the fish, because a THIRD copy of these numbers lives in
+// `tools/gen_placeholders.py`, which is what writes the manifest entry -- so this is the thing that
+// catches someone editing layout.ts and not regenerating the art.
+//
+// The rest asserts the cage is internally coherent, which is most of what actually goes wrong with a
+// layout and all of what would leave the hamster unable to reach its own furniture.
+
+const manifestUrl = new URL('../../../assets/manifest.json', import.meta.url);
+const manifest = JSON.parse(readFileSync(manifestUrl, 'utf8')) as {
+  habitats: Record<string, Record<string, unknown>>;
+  sprites: Record<string, Record<string, unknown>>;
+};
+
+describe('cage layout vs the manifest', () => {
+  const cage = manifest.habitats['hamster/cage'];
+
+  it('matches assets/manifest.json', () => {
+    expect(cage).toBeDefined();
+    expect(cage?.['opaqueRect']).toEqual(CAGE_OPAQUE_RECT);
+    expect(cage?.['pantryRect']).toEqual(CAGE_PANTRY_RECT);
+    expect(cage?.['petAnchor']).toEqual([...CAGE_PET_ANCHOR]);
+    expect(manifest.sprites['hamster']?.['body']).toEqual(HAMSTER_BODY);
+  });
+
+  it('describes the same walkable span the behaviour uses', () => {
+    // The manifest still carries `water`/`waterShape` because the schema requires them. For a cage they
+    // are the walkable span flattened to one row, and they have to agree with the floor rect the
+    // species module actually hands the behaviour -- otherwise the art is laid out for one cage and the
+    // hamster walks around a different one.
+    const water = cage?.['water'] as { x: number; y: number; w: number };
+    expect(water.x).toBe(CAGE_FLOOR_RECT.x);
+    expect(water.w).toBe(CAGE_FLOOR_RECT.w);
+    expect(water.y).toBe(CAGE_STAND_Y);
+    const shape = cage?.['waterShape'] as { surfaceY: number; floorY: number };
+    expect(shape.surfaceY).toBe(CAGE_STAND_Y);
+    expect(shape.floorY).toBe(CAGE_STAND_Y);
+  });
+});
 
 describe('cage layout', () => {
   it('fits inside the habitat grid', () => {
