@@ -336,6 +336,35 @@ describe('app store', () => {
     expect((settings as unknown as { scaleSteps: number }).scaleSteps).toBe(SCALE_S);
   });
 
+  it('banks speciesData additively, ignores nothing-happened, and refuses to credit a corpse', async () => {
+    const { store } = await bootStore();
+    const a = store.getState().actions;
+    expect(store.getState().pet.speciesData).toEqual({});
+
+    a.addSpeciesData({ wheelKm: 0.25 });
+    a.addSpeciesData({ wheelKm: 0.5 });
+    expect(store.getState().pet.speciesData['wheelKm']).toBeCloseTo(0.75, 9);
+
+    // Empty and zero deltas are no-ops rather than writes: the scene drains on a timer and most
+    // drains are empty, so this is the common case and it must not touch the pet or the disk.
+    const before = store.getState().pet;
+    a.addSpeciesData({});
+    a.addSpeciesData({ wheelKm: 0 });
+    a.addSpeciesData({ wheelKm: Number.NaN });
+    expect(store.getState().pet).toBe(before);
+
+    // Counters from more than one species coexist; nothing here knows what a wheel is.
+    a.addSpeciesData({ cricketsCaught: 3 });
+    expect(store.getState().pet.speciesData).toEqual({ wheelKm: 0.75, cricketsCaught: 3 });
+
+    // A dead pet earns nothing. A scene still mounted over a corpse would otherwise keep crediting
+    // the wheel, and speciesData is the part of the pet that survives into the graveyard record.
+    a.dev.forceState('dead');
+    expect(store.getState().pet.alive).toBe(false);
+    a.addSpeciesData({ wheelKm: 99 });
+    expect(store.getState().pet.speciesData['wheelKm']).toBeCloseTo(0.75, 9);
+  });
+
   it('carries a version-1 pet across the twice-a-day retune without harming it', async () => {
     // The whole point, end to end. This pet was last fed 30 hours ago with a full bar, which on the old
     // clock reads exactly 50%. Loaded naively under the new clock that same anchor reads zero, is nine

@@ -167,6 +167,14 @@ export interface HabitatScene {
   /** Window-local CSS px, null when the pointer left. Drives glass sheen and parallax. */
   setPointer(x: number | null, y: number | null): void;
   on(event: SceneEvent, cb: () => void): () => void;
+  /**
+   * Take the `speciesData` counters earned since the last call, and reset them.
+   *
+   * A drain rather than an event because these tick at 8 Hz in fractions — the hamster banks about a
+   * quarter of a metre per tick — and an event per increment would mean a store write and a throttled
+   * disk save eight times a second for a number that is read once a session.
+   */
+  drainSpeciesDelta(): Record<string, number>;
   /** Rect of the habitat's opaque pixels inside the window, CSS px: (24 + opaqueRect.x*s, ...). */
   habitatHitRect(): Rect;
   /** The same rect in LOGICAL grid px, before any scaling. The resize handle needs it to turn cursor
@@ -273,6 +281,15 @@ export interface PetOutput {
   anim: PetAnim;
   /** Index into input.flakes that was eaten this tick, else null. */
   biteFlakeIndex: number | null;
+  /**
+   * Per-tick increments to the pet's `speciesData` counters — the hamster's `wheelKm` while the wheel
+   * turns, and later the frog's `cricketsCaught` and the chicken's `eggs`.
+   *
+   * A generic bag rather than a named field, because `PetOutput` is the contract EVERY species returns
+   * and a `wheelKm` on it would be three-quarters dead weight. Omitted entirely on a tick that earned
+   * nothing, so the common case costs no allocation.
+   */
+  speciesDelta?: Readonly<Record<string, number>>;
 }
 
 /**

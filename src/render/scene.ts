@@ -153,6 +153,8 @@ export function createScene(
   /** False until the behavior has positioned the pet once; the sprite stays hidden so it never flashes at (0, 0). */
   let placed = false;
   const listeners: Record<SceneEvent, Set<() => void>> = { bite: new Set(), 'flakes-gone': new Set() };
+  /** Unbanked `speciesData` increments since the last drain. See `drainSpeciesDelta`. */
+  let speciesAccum: Record<string, number> = {};
 
   const emit = (event: SceneEvent): void => {
     for (const cb of Array.from(listeners[event])) cb();
@@ -292,9 +294,20 @@ export function createScene(
     placed = true;
     if (ate) emit('bite');
     if (before > 0 && m.flakes.count() === 0 && (ate || dissolved > 0)) emit('flakes-gone');
+    // Species counters accumulate here and are drained by the app on its own cadence rather than
+    // written through on every tick: the hamster earns a fraction of a metre 8 times a second, and a
+    // store write per tick would be 8 persisted saves a second to record a number nobody reads live.
+    if (out.speciesDelta) {
+      for (const [k, v] of Object.entries(out.speciesDelta)) speciesAccum[k] = (speciesAccum[k] ?? 0) + v;
+    }
   };
 
   const scene: HabitatScene = {
+    drainSpeciesDelta() {
+      const out = speciesAccum;
+      speciesAccum = {};
+      return out;
+    },
     async mount(el, s) {
       if (m) throw new Error('scene already mounted');
       scale = s;

@@ -302,6 +302,9 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   if (!store.getState().hidden) await platform.window.show();
   startScheduler(store, platform);
   setInterval(() => store.getState().actions.tick(), NIGHT_REFRESH_MS);
+  // Bank what the pet earned while we were not looking. On the same cadence as the day/night refresh
+  // because it is the same kind of thing: a slow counter that nobody watches tick.
+  setInterval(() => store.getState().actions.addSpeciesData(scene.drainSpeciesDelta()), NIGHT_REFRESH_MS);
 
 
   // Dev-only diagnostics bridge (tools/vite-diag-plugin.ts); tree-shaken out of production builds.

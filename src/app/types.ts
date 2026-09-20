@@ -104,6 +104,11 @@ export interface AppActions {
   newPet(): void;
   /** Marks the current dead pet's card as seen so the scene switches to the memorial. */
   acknowledgeDeath(): void;
+  /**
+   * Bank `speciesData` counters earned by the scene — the hamster's `wheelKm`, later the frog's
+   * `cricketsCaught` and the chicken's `eggs`. Additive and idempotent-on-empty.
+   */
+  addSpeciesData(delta: Readonly<Record<string, number>>): void;
   setScale(s: Scale): Promise<void>;
   setMuted(b: boolean): void;
   setNotificationsMuted(b: boolean): void;

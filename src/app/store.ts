@@ -354,6 +354,20 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
         savePet();
       },
 
+      addSpeciesData(delta) {
+        const entries = Object.entries(delta).filter(([, v]) => Number.isFinite(v) && v !== 0);
+        if (entries.length === 0) return;
+        const s = get();
+        // A dead pet earns nothing. Without this a scene still mounted over a corpse could keep
+        // crediting the wheel, and `speciesData` is the one part of the pet that survives into the
+        // graveyard record.
+        if (!s.pet.alive) return;
+        const next = { ...s.pet.speciesData };
+        for (const [k, v] of entries) next[k] = (next[k] ?? 0) + v;
+        set({ pet: { ...s.pet, speciesData: next } });
+        savePet();
+      },
+
       acknowledgeDeath() {
         const s = get();
         if (s.pet.alive || s.latches.deathAcknowledgedFor === s.pet.id) return;
