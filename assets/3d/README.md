@@ -30,12 +30,45 @@ be rebuilt by hand belongs in the repo**, and a render is not a source.
 
 ## Known flaws, still to fix
 
-Both are geometry, both need Blender open with the plugin connected:
+Both need Blender open with the plugin connected.
 
-- **The tail's swallowtail notch** is rounded away by the subdivision surface — the fork
-  reads as a paddle. Needs supporting loops or edge creases either side of the notch.
-- **The pectoral fins** (`HERO_fish_fin_pec_l` / `_r`) read as a nub in profile. They need
-  to be broader and angled so they have a silhouette side-on.
+### The tail fork vanishes in most poses — and it is NOT the subdivision surface
+
+The first diagnosis was that the swallowtail notch was being rounded away by the level-2
+subsurf, and that creasing the notch would fix it. **That is wrong, and creasing would have
+been wasted work.** Measured off the shipped frames:
+
+| state | fork depth (px) | tail height (px) | reads as |
+|---|---|---|---|
+| `dead` | 9–11 | 104–112 | a clean swallowtail |
+| `idle` | 5–10 | 98–112 | a shallow dimple |
+| `hungry` | 3–4 | 87–95 | a rounded paddle |
+
+The `dead` frames prove the notch is real, well-formed geometry — subsurf has not eaten it.
+And across all 26 frames measured, **fork depth correlates +0.84 with the tail's projected
+height**. The fork dies exactly when the fin foreshortens. Subsurf would smooth the notch in
+every pose regardless of angle; it could not produce that correlation.
+
+So the cause is that the tail is a **flat fan in a side-on orthographic view**: when the rig
+swings it, the fin plane turns away from `CAM_fish` and the notch collapses along with the
+fin's height. Candidate fixes, in the order worth trying:
+
+1. Give the fin curvature or dihedral so it never presents perfectly edge-on — a real
+   caudal fin is not a flat card.
+2. Deepen the notch in the outline so what survives the foreshortening still reads.
+3. Reduce the tail's roll in the rig through the swing.
+
+### The pectoral fins read as a nub
+
+`HERO_fish_fin_pec_l` / `_r` are small in the normal side pose but show as a proper
+triangular fin in the belly-up `dead` frames — **the same signature as the tail**, so the
+same flat-fan-seen-edge-on cause is the first hypothesis to test, not a separate problem.
+Verify against the rig before reshaping.
+
+### The lesson
+
+Both flaws were described from memory as mesh problems. Ten minutes of measuring the frames
+already in the repo said otherwise. Measure before opening Blender.
 
 After either change: re-render all 62 frames across the 8 states, re-derive the per-state
 anchors, and update `assets/manifest.json`. The two registration tests in
