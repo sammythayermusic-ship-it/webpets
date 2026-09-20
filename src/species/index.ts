@@ -7,8 +7,8 @@
 // commit while only one was ever implemented, so a type that claimed all four were present would be
 // lying. Callers handle the miss.
 
-import type { Species } from '../sim/types';
-import type { SpeciesModule } from './types';
+import type { Habitat, Species } from '../sim/types';
+import type { SpeciesLayout, SpeciesModule } from './types';
 import { FISH_MODULE } from './fish/module';
 import { HAMSTER_MODULE } from './hamster/module';
 
@@ -27,6 +27,11 @@ export function requireSpecies(species: Species): SpeciesModule {
   const m = REGISTRY[species];
   if (!m) throw new Error(`species "${species}" is declared but not implemented`);
   return m;
+}
+
+/** The layout for one species in one habitat, or null if that pairing is not built. */
+export function speciesLayout(species: Species, habitat: Habitat): SpeciesLayout | null {
+  return REGISTRY[species]?.layouts[habitat] ?? null;
 }
 
 /** Which species are actually playable. The dev panel's dropdown reads this rather than a second list. */

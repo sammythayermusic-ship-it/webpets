@@ -477,3 +477,190 @@ def key_curve(ob, path, index, frames_values, interp='LINEAR'):
         ob.keyframe_insert(data_path=path, index=(-1 if index is None else index),
                            frame=f)
     return len(frames_values)
+
+
+# --------------------------------------------------------------- textured materials
+#
+# The cage had twelve materials and not one texture node between them, which is most of why it read
+# as cheap next to the bowl. The bowl's gravel runs TWO Voronoi evaluations at the same scale -- one
+# into a bump so every grain has its own relief, one into a colour ramp so every grain has its own
+# brown -- and that single material plus a ten-colour pebble palette is the bulk of the difference.
+# These are that trick, generalised.
+
+
+def voronoi_scatter(mat, ramp_stops, scale=92.0, bump_strength=0.55, bump_distance=0.004,
+                    roughness=0.85, world_space=True):
+    """Per-cell colour and per-cell relief from two Voronoi evaluations.
+
+    `world_space` is the part that matters for a scatter of loose objects. Object or Generated
+    coordinates restart at every object's own origin, so 400 bedding chips would each sample the SAME
+    slice of noise and come out identical -- the texture would vary across a chip but not between
+    chips, which is the opposite of what bedding needs. Reading world position instead lays one field
+    across the whole pile, so each chip picks up whatever cell it happens to be lying in.
+    """
+    nt = mat.node_tree
+    bsdf = nt.nodes["Principled BSDF"]
+    src = nt.nodes.new("ShaderNodeNewGeometry") if world_space else nt.nodes.new("ShaderNodeTexCoord")
+    out_socket = src.outputs["Position"] if world_space else src.outputs["Object"]
+
+    shape = nt.nodes.new("ShaderNodeTexVoronoi")
+    shape.feature = 'DISTANCE_TO_EDGE'
+    shape.inputs["Scale"].default_value = scale
+    shape.inputs["Randomness"].default_value = 0.9
+    bump = nt.nodes.new("ShaderNodeBump")
+    bump.inputs["Strength"].default_value = bump_strength
+    bump.inputs["Distance"].default_value = bump_distance
+    nt.links.new(out_socket, shape.inputs["Vector"])
+    nt.links.new(shape.outputs["Distance"], bump.inputs["Height"])
+    nt.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+
+    tone = nt.nodes.new("ShaderNodeTexVoronoi")
+    tone.feature = 'F1'
+    tone.inputs["Scale"].default_value = scale
+    tone.inputs["Randomness"].default_value = 0.9
+    sep = nt.nodes.new("ShaderNodeSeparateColor")
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    nt.links.new(out_socket, tone.inputs["Vector"])
+    nt.links.new(tone.outputs["Color"], sep.inputs["Color"])
+    nt.links.new(sep.outputs["Red"], ramp.inputs["Fac"])
+    els = ramp.color_ramp.elements
+    while len(els) > 1:
+        els.remove(els[-1])
+    for k, (pos, col) in enumerate(ramp_stops):
+        e = els[0] if k == 0 else els.new(pos)
+        e.position = pos
+        e.color = (*col, 1.0)
+    ramp.color_ramp.interpolation = 'LINEAR'
+    nt.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = roughness
+    return mat
+
+
+def wood_grain(mat, base, dark, scale=18.0, stretch=14.0, bump_strength=0.30):
+    """Stretched noise into base colour and bump: grain running along the plank's long axis.
+
+    The stretch is the whole thing -- wood is anisotropic and an unstretched noise reads as stone.
+    Scaling the coordinate down along X by `stretch` before sampling makes the cells long and thin.
+    """
+    nt = mat.node_tree
+    bsdf = nt.nodes["Principled BSDF"]
+    tex = nt.nodes.new("ShaderNodeTexCoord")
+    mapping = nt.nodes.new("ShaderNodeMapping")
+    mapping.inputs["Scale"].default_value = (1.0 / stretch, 1.0, 1.0)
+    noise = nt.nodes.new("ShaderNodeTexNoise")
+    noise.inputs["Scale"].default_value = scale
+    noise.inputs["Detail"].default_value = 6.0
+    noise.inputs["Roughness"].default_value = 0.55
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    els = ramp.color_ramp.elements
+    els[0].position, els[0].color = 0.30, (*dark, 1.0)
+    els[1].position, els[1].color = 0.68, (*base, 1.0)
+    bump = nt.nodes.new("ShaderNodeBump")
+    bump.inputs["Strength"].default_value = bump_strength
+    bump.inputs["Distance"].default_value = 0.0016
+    nt.links.new(tex.outputs["Object"], mapping.inputs["Vector"])
+    nt.links.new(mapping.outputs["Vector"], noise.inputs["Vector"])
+    nt.links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
+    nt.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    nt.links.new(noise.outputs["Fac"], bump.inputs["Height"])
+    nt.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    return mat
+
+
+# --------------------------------------------------------------- shared primitives
+#
+# These moved here from wp_cage.py when the terrarium needed them too. They are generic geometry
+# with no habitat in them, and duplicating a bevel helper across two habitats is how the two quietly
+# stop matching.
+
+def clear_collection(name):
+    """Remove a collection and everything in it, so the script is idempotent."""
+    col = bpy.data.collections.get(name)
+    if col is None:
+        return
+    for ob in list(col.objects):
+        bpy.data.objects.remove(ob, do_unlink=True)
+    bpy.data.collections.remove(col)
+
+
+def rounded_box(name, w, d, h, r, collection, segments=8):
+    """A box with rounded vertical edges and a softened top, built as a bmesh.
+
+    A cube with a Bevel modifier would do the same thing, but bevel works in local space and this
+    object gets no uniform scale, so doing it in geometry keeps the radius honest at every size.
+    """
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    bmesh.ops.scale(bm, vec=Vector((w, d, h)), verts=bm.verts)
+    bmesh.ops.bevel(
+        bm,
+        geom=list(bm.verts) + list(bm.edges) + list(bm.faces),
+        offset=r,
+        segments=segments,
+        profile=0.5,
+        affect='EDGES',
+        # Not optional. The tub walls are WALL=0.010 thick and asked for a 0.006 bevel, which needs
+        # 0.012 of room -- the two opposing bevels crossed and produced inverted, self-intersecting
+        # faces down the full height of all four walls. Clamping costs nothing anywhere else.
+        clamp_overlap=True,
+    )
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    ob = new_object(name, me, collection)
+    shade_smooth(ob)
+    return ob
+
+
+def cylinder(name, radius, height, collection, verts=24, axis='Z'):
+    bm = bmesh.new()
+    bmesh.ops.create_cone(
+        bm, cap_ends=True, cap_tris=False, segments=verts,
+        radius1=radius, radius2=radius, depth=height,
+    )
+    if axis == 'Y':
+        bmesh.ops.rotate(bm, verts=bm.verts, cent=(0, 0, 0),
+                         matrix=Vector((1, 0, 0)).to_track_quat('Z', 'Y').to_matrix())
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    ob = new_object(name, me, collection)
+    shade_smooth(ob)
+    return ob
+
+
+def sphere(name, rx, ry, rz, collection, segments=24, rings=14):
+    """An ellipsoid. Ears, eyes, paws and nose are all one of these with different radii."""
+    bm = bmesh.new()
+    bmesh.ops.create_uvsphere(bm, u_segments=segments, v_segments=rings, radius=1.0)
+    bmesh.ops.scale(bm, vec=Vector((rx, ry, rz)), verts=bm.verts)
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    ob = new_object(name, me, collection)
+    shade_smooth(ob)
+    return ob
+
+
+def torus(name, major, minor, collection, major_seg=40, minor_seg=10):
+    bm = bmesh.new()
+    bmesh.ops.create_circle(bm, cap_ends=False, segments=major_seg, radius=major)
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    ob = new_object(name, me, collection)
+    sk = ob.modifiers.new("Skin", 'SKIN')
+    # Without this the ring renders FACETED while every bar built by bar() renders smooth, because
+    # bar() sets it and this did not. The wheel rim is the one shape in the cage that has to be a
+    # clean circle, and at 67 px across it was the only visibly polygonal thing in frame. The
+    # shade_smooth() call below cannot cover for it: the base mesh is an edge loop with no polygons
+    # at all, so it is a no-op here.
+    sk.use_smooth_shade = True
+    for v in ob.data.skin_vertices[0].data:
+        v.radius = (minor, minor)
+    add_subsurf(ob, 2)
+    shade_smooth(ob)
+    return ob
+
+
+# ----------------------------------------------------------------------- materials

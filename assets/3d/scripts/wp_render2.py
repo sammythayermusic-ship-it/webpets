@@ -298,6 +298,43 @@ if "cage" in JOBS:
     shoot("CAM_cage", CAGE_RES, os.path.join(stage, "decor_front.png"))
     reset_visibility()
 
+
+# --------------------------------------------------------- the glass terrarium
+#
+# FOUR passes, between the cage's three and the bowl's five. The extra one over the cage is the front
+# pane; the two fewer than the bowl are its `_mask` and its `un_composite` division, and neither is
+# needed here. Both of those exist to defeat a CURVED refractor: through a sphere the gravel you see
+# at a pixel is not the gravel that projects there, so the near/far matte has to be rendered through
+# the same optics. A flat pane under an orthographic camera at normal incidence deviates the ray by
+# nothing, and a parallel-sided slab exits parallel regardless. Screen position is geometric position,
+# so `decor_front` can simply be a second beauty pass and `bg` -- rendered with the pane hidden --
+# never contains the front reflections that would otherwise have to be divided back out.
+TERR_RES = (1280, 960)
+
+if "terrarium" in JOBS:
+    stage = os.path.join(OUT, "terrarium")
+    reset_visibility()
+    only_collection("WP_Terrarium", "WP_Ground")
+    shoot("CAM_terr", TERR_RES, os.path.join(stage, "bg.png"))
+    only_collection("WP_Terrarium", "WP_Ground", "WP_TerrariumMemorial")
+    shoot("CAM_terr", TERR_RES, os.path.join(stage, "memorial.png"))
+    # The near wooden rail alone, to be drawn back over the pet. No WP_Ground: a shadow baked into
+    # this layer would fall on top of the hamster.
+    only_collection("WP_TerrariumFront")
+    shoot("CAM_terr", TERR_RES, os.path.join(stage, "decor_front.png"))
+    # The front pane alone. Everything else is HIDE_RENDER, not visible_camera=False -- the bowl's
+    # comment explains why and it applies to any transmissive pass: a refracted ray is not a camera
+    # ray, so an object merely hidden from the camera still gets hit by one and comes back opaque,
+    # and the glass layer returns as a solid wall over the hamster.
+    reset_visibility()
+    sc.cycles.film_transparent_glass = True
+    only_collection("WP_TerrariumGlass")
+    for o in MESHES:
+        o.hide_render = not o.name.startswith("ENV_terr_glass_front")
+    shoot("CAM_terr", TERR_RES, os.path.join(stage, "glass.png"))
+    sc.cycles.film_transparent_glass = False
+    reset_visibility()
+
 if "hamster" in JOBS or any(s[0] in JOBS for s in HAM_STATES):
     reset_visibility()
     only_collection("WP_Hamster")

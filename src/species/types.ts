@@ -46,7 +46,17 @@ export interface SpeciesLayout {
  */
 export interface SpeciesModule {
   readonly species: Species;
-  readonly layout: SpeciesLayout;
+  /**
+   * Every habitat this species can live in, keyed by habitat.
+   *
+   * It was a single `layout`, which made "a species" and "a species in its one habitat" the same
+   * thing -- and the blueprint declares two habitats for each of the four species. `layout.ts` had
+   * already written down the intent: the sites are data precisely so "the same behaviour [can] be
+   * re-laid-out for the terrarium upgrade without touching the state machine".
+   */
+  readonly layouts: Readonly<Partial<Record<Habitat, SpeciesLayout>>>;
+  /** Which habitat a newly created pet of this species gets. */
+  readonly defaultHabitat: Habitat;
   /** Fresh state machine per mount; never shared between scenes. */
   createBehavior(): PetBehavior;
   readonly lines: Readonly<Record<Personality, Readonly<Record<LinePool, readonly string[]>>>>;

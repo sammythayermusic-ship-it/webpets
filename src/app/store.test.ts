@@ -354,9 +354,16 @@ describe('app store', () => {
     await a.dev.setSpecies('frog', 'pond');
     expect(store.getState().pet.species).toBe('hamster');
 
-    // Right species, wrong habitat: the terrarium is the hamster's Phase-1 upgrade and has no layout.
-    await a.dev.setSpecies('hamster', 'terrarium');
+    // Right species, wrong habitat. The terrarium used to be the example here -- it was the hamster's
+    // unbuilt upgrade -- and it is built now, so the assertion moved to a pairing that genuinely is
+    // not. The rule under test is unchanged: a species may only be switched into a habitat it
+    // actually declares a layout for, and the guard asks the registry rather than a hardcoded list.
+    await a.dev.setSpecies('hamster', 'tank');
     expect(store.getState().pet.habitat).toBe('cage');
+
+    // And the terrarium, which IS built, is accepted.
+    await a.dev.setSpecies('hamster', 'terrarium');
+    expect(store.getState().pet.habitat).toBe('terrarium');
   });
 
   it('banks speciesData additively, ignores nothing-happened, and refuses to credit a corpse', async () => {

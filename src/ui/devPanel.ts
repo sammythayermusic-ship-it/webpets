@@ -42,7 +42,7 @@ const SPECIES_OPTIONS: readonly SpeciesOption[] = (
     { species: 'chicken', habitat: 'brooder' },
     { species: 'chicken', habitat: 'coop' },
   ] as const
-).map((o) => ({ ...o, enabled: speciesModule(o.species)?.layout.habitat === o.habitat }));
+).map((o) => ({ ...o, enabled: speciesModule(o.species)?.layouts[o.habitat] !== undefined }));
 
 function formatClock(ts: number): string {
   const d = new Date(ts);

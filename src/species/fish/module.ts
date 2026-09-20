@@ -11,15 +11,18 @@ import { FISH_LINES } from './lines';
 
 export const FISH_MODULE: SpeciesModule = {
   species: 'fish',
-  layout: {
-    habitat: 'bowl',
-    domain: { kind: 'water', shape: BOWL_WATER_SHAPE },
-    opaqueRect: BOWL_OPAQUE_RECT,
-    petAnchor: BOWL_PET_ANCHOR,
-    body: FISH_BODY,
-    // A bowl has no furniture: every target the fish picks is computed from the water volume.
-    // `sites` stays undefined rather than empty so "this species navigates to places" is a visible
-    // distinction rather than a silently empty lookup.
+  defaultHabitat: 'bowl',
+  layouts: {
+    bowl: {
+      habitat: 'bowl',
+      domain: { kind: 'water', shape: BOWL_WATER_SHAPE },
+      opaqueRect: BOWL_OPAQUE_RECT,
+      petAnchor: BOWL_PET_ANCHOR,
+      body: FISH_BODY,
+      // A bowl has no furniture: every target the fish picks is computed from the water volume.
+      // `sites` stays undefined rather than empty so "this species navigates to places" is a visible
+      // distinction rather than a silently empty lookup.
+    },
   },
   createBehavior: createFishBehavior,
   lines: FISH_LINES,

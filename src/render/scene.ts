@@ -366,7 +366,9 @@ export function createScene(
       // of water; a cage is a line of bedding to walk along. Both satisfy the same MoveBounds contract,
       // which is what lets the tick interpolation, the body-box clamp and every behaviour branch stay
       // identical between them.
-      const domain = species.layout.domain;
+      const layout = species.layouts[subject.habitat];
+      if (!layout) throw new Error(`species "${subject.species}" has no layout for "${subject.habitat}"`);
+      const domain = layout.domain;
       const bounds =
         domain.kind === 'water'
           ? makeWaterBounds(domain.shape)

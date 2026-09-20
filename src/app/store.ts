@@ -242,7 +242,7 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
         // and a species that is declared in the union but has no module still cannot be selected into
         // an empty habitat.
         const mod = speciesModule(species);
-        if (!mod || mod.layout.habitat !== habitat) {
+        if (!mod || mod.layouts[habitat] === undefined) {
           console.warn(`[dev] species ${species}/${habitat} is not implemented`);
           return;
         }

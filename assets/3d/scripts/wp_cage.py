@@ -46,98 +46,6 @@ BLUE_DARK = (0.004, 0.045, 0.125)
 WIRE = (0.780, 0.812, 0.855)
 
 
-def clear_collection(name):
-    """Remove a collection and everything in it, so the script is idempotent."""
-    col = bpy.data.collections.get(name)
-    if col is None:
-        return
-    for ob in list(col.objects):
-        bpy.data.objects.remove(ob, do_unlink=True)
-    bpy.data.collections.remove(col)
-
-
-def rounded_box(name, w, d, h, r, collection, segments=8):
-    """A box with rounded vertical edges and a softened top, built as a bmesh.
-
-    A cube with a Bevel modifier would do the same thing, but bevel works in local space and this
-    object gets no uniform scale, so doing it in geometry keeps the radius honest at every size.
-    """
-    bm = bmesh.new()
-    bmesh.ops.create_cube(bm, size=1.0)
-    bmesh.ops.scale(bm, vec=Vector((w, d, h)), verts=bm.verts)
-    bmesh.ops.bevel(
-        bm,
-        geom=list(bm.verts) + list(bm.edges) + list(bm.faces),
-        offset=r,
-        segments=segments,
-        profile=0.5,
-        affect='EDGES',
-        # Not optional. The tub walls are WALL=0.010 thick and asked for a 0.006 bevel, which needs
-        # 0.012 of room -- the two opposing bevels crossed and produced inverted, self-intersecting
-        # faces down the full height of all four walls. Clamping costs nothing anywhere else.
-        clamp_overlap=True,
-    )
-    me = bpy.data.meshes.new(name)
-    bm.to_mesh(me)
-    bm.free()
-    ob = wb.new_object(name, me, collection)
-    wb.shade_smooth(ob)
-    return ob
-
-
-def cylinder(name, radius, height, collection, verts=24, axis='Z'):
-    bm = bmesh.new()
-    bmesh.ops.create_cone(
-        bm, cap_ends=True, cap_tris=False, segments=verts,
-        radius1=radius, radius2=radius, depth=height,
-    )
-    if axis == 'Y':
-        bmesh.ops.rotate(bm, verts=bm.verts, cent=(0, 0, 0),
-                         matrix=Vector((1, 0, 0)).to_track_quat('Z', 'Y').to_matrix())
-    me = bpy.data.meshes.new(name)
-    bm.to_mesh(me)
-    bm.free()
-    ob = wb.new_object(name, me, collection)
-    wb.shade_smooth(ob)
-    return ob
-
-
-def sphere(name, rx, ry, rz, collection, segments=24, rings=14):
-    """An ellipsoid. Ears, eyes, paws and nose are all one of these with different radii."""
-    bm = bmesh.new()
-    bmesh.ops.create_uvsphere(bm, u_segments=segments, v_segments=rings, radius=1.0)
-    bmesh.ops.scale(bm, vec=Vector((rx, ry, rz)), verts=bm.verts)
-    me = bpy.data.meshes.new(name)
-    bm.to_mesh(me)
-    bm.free()
-    ob = wb.new_object(name, me, collection)
-    wb.shade_smooth(ob)
-    return ob
-
-
-def torus(name, major, minor, collection, major_seg=40, minor_seg=10):
-    bm = bmesh.new()
-    bmesh.ops.create_circle(bm, cap_ends=False, segments=major_seg, radius=major)
-    me = bpy.data.meshes.new(name)
-    bm.to_mesh(me)
-    bm.free()
-    ob = wb.new_object(name, me, collection)
-    sk = ob.modifiers.new("Skin", 'SKIN')
-    # Without this the ring renders FACETED while every bar built by bar() renders smooth, because
-    # bar() sets it and this did not. The wheel rim is the one shape in the cage that has to be a
-    # clean circle, and at 67 px across it was the only visibly polygonal thing in frame. The
-    # shade_smooth() call below cannot cover for it: the base mesh is an edge loop with no polygons
-    # at all, so it is a no-op here.
-    sk.use_smooth_shade = True
-    for v in ob.data.skin_vertices[0].data:
-        v.radius = (minor, minor)
-    wb.add_subsurf(ob, 2)
-    wb.shade_smooth(ob)
-    return ob
-
-
-# ----------------------------------------------------------------------- materials
-
 def materials():
     m = {}
     m['tub'] = wb.toy_material("WP_cage_tub", BLUE, roughness=0.38, sheen=0.30)
@@ -189,7 +97,7 @@ def build_tub(col, m):
     from outside and buried every piece of bedding inside it -- a tub you cannot see into is a brick.
     Explicit walls also keep the draft honest, since each one leans on its own.
     """
-    floor = rounded_box("ENV_cage_floor", CAGE_W - 2 * WALL, CAGE_D - 2 * WALL, 0.008, 0.003, col)
+    floor = wb.rounded_box("ENV_cage_floor", CAGE_W - 2 * WALL, CAGE_D - 2 * WALL, 0.008, 0.003, col)
     floor.location = (0.0, 0.0, GROUND + 0.010)
     wb.assign(floor, m['tub'])
 
@@ -197,7 +105,7 @@ def build_tub(col, m):
         along_x = nx == 0
         w = CAGE_W if along_x else WALL
         d = WALL if along_x else CAGE_D
-        wall = rounded_box(f"ENV_cage_wall_{i}", w, d, TUB_H, 0.004, col)
+        wall = wb.rounded_box(f"ENV_cage_wall_{i}", w, d, TUB_H, 0.004, col)
         wall.location = (
             nx * (CAGE_W / 2 - WALL / 2),
             ny * (CAGE_D / 2 - WALL / 2),
@@ -219,7 +127,7 @@ def build_tub(col, m):
         along_x = nx == 0
         w = CAGE_W + 0.010 if along_x else 0.014
         d = 0.014 if along_x else CAGE_D + 0.010
-        rim = rounded_box(f"ENV_cage_rim_{i}", w, d, 0.013, 0.005, col)
+        rim = wb.rounded_box(f"ENV_cage_rim_{i}", w, d, 0.013, 0.005, col)
         rim.location = (
             nx * (CAGE_W / 2 - 0.002),
             ny * (CAGE_D / 2 - 0.002),
@@ -228,7 +136,7 @@ def build_tub(col, m):
         wb.assign(rim, m['tub_rim'])
 
     for i, (sx, sy) in enumerate(((-1, -1), (1, -1), (-1, 1), (1, 1))):
-        f = rounded_box(f"ENV_cage_foot_{i}", 0.026, 0.020, 0.014, 0.005, col)
+        f = wb.rounded_box(f"ENV_cage_foot_{i}", 0.026, 0.020, 0.014, 0.005, col)
         f.location = (sx * (CAGE_W / 2 - 0.028), sy * (CAGE_D / 2 - 0.022), GROUND + 0.005)
         wb.assign(f, m['tub_rim'])
     return floor
@@ -293,7 +201,7 @@ def build_bars(col, m):
         x = -hw + (2 * hw) * i / (n_roof - 1)
         bar(f"ENV_cage_roof_{i}", (x, -hd, z1), (x, hd, z1))
 
-    handle = torus("ENV_cage_handle", 0.030, 0.0026, col, major_seg=28)
+    handle = wb.torus("ENV_cage_handle", 0.030, 0.0026, col, major_seg=28)
     handle.rotation_euler = (math.radians(90), 0, 0)
     handle.location = (0.0, 0.0, z1 + 0.012)
     wb.assign(handle, m['wire'])
@@ -311,7 +219,7 @@ def build_bedding(col, m, rng):
 
     # A base slab first, so no blue shows between chips. 150 loose chips on a bare floor read as
     # crumbs someone spilled; bedding has to look like a layer the animal could burrow into.
-    base = rounded_box("PRP_bed_base", CAGE_W - 2 * WALL - 0.002, CAGE_D - 2 * WALL - 0.002,
+    base = wb.rounded_box("PRP_bed_base", CAGE_W - 2 * WALL - 0.002, CAGE_D - 2 * WALL - 0.002,
                        0.012, 0.004, col)
     base.location = (0.0, 0.0, top - 0.010)
     wb.assign(base, m['bed_b'])
@@ -321,7 +229,7 @@ def build_bedding(col, m, rng):
         w = rng.uniform(0.007, 0.016)
         d = rng.uniform(0.004, 0.008)
         h = rng.uniform(0.0015, 0.0030)
-        chip = rounded_box(f"PRP_bed_{i}", w, d, h, min(w, d, h) * 0.35, col, segments=2)
+        chip = wb.rounded_box(f"PRP_bed_{i}", w, d, h, min(w, d, h) * 0.35, col, segments=2)
         x = rng.uniform(-CAGE_W / 2 + WALL + 0.004, CAGE_W / 2 - WALL - 0.004)
         y = rng.uniform(-CAGE_D / 2 + WALL + 0.004, CAGE_D / 2 - WALL - 0.004)
         # Piled slightly deeper toward the back, so the bed has a front-to-back gradient rather than
@@ -381,20 +289,20 @@ def build_wheel(col, m):
     n_rung = 22
     for k in range(n_rung):
         a = 2 * math.pi * k / n_rung
-        rung = cylinder(f"PRP_wheel_rung_{k}", 0.0022, HALF_D * 2, col, verts=10)
+        rung = wb.cylinder(f"PRP_wheel_rung_{k}", 0.0022, HALF_D * 2, col, verts=10)
         rung.rotation_euler = (math.radians(90), 0, 0)
         rung.location = (cx + math.cos(a) * R, cy, cz + math.sin(a) * R)
         wb.assign(rung, m['tub_light'])
 
     # Two hoops holding the rungs, near and far. The near one is the wheel's silhouette.
     for tag, oy in (("f", -HALF_D), ("b", HALF_D)):
-        hoop = torus(f"PRP_wheel_hoop_{tag}", R, 0.0030, col, major_seg=48)
+        hoop = wb.torus(f"PRP_wheel_hoop_{tag}", R, 0.0030, col, major_seg=48)
         hoop.rotation_euler = (math.radians(90), 0, 0)
         hoop.location = (cx, cy + oy, cz)
         wb.assign(hoop, m['tub'])
 
     # A back plate, so you see a coloured interior through the rungs rather than the cage wall.
-    back = cylinder("PRP_wheel_back", R - 0.002, 0.003, col, verts=48)
+    back = wb.cylinder("PRP_wheel_back", R - 0.002, 0.003, col, verts=48)
     back.rotation_euler = (math.radians(90), 0, 0)
     back.location = (cx, cy + HALF_D + 0.002, cz)
     wb.assign(back, m['tub'])
@@ -403,24 +311,24 @@ def build_wheel(col, m):
     # a centre to rotate about visually. On the front they would just re-close the disc.
     for k in range(4):
         a = k * math.pi / 2
-        sp = rounded_box(f"PRP_wheel_spoke_{k}", R * 0.84, 0.0030, 0.0030, 0.0012, col, segments=3)
+        sp = wb.rounded_box(f"PRP_wheel_spoke_{k}", R * 0.84, 0.0030, 0.0030, 0.0012, col, segments=3)
         sp.location = (cx + math.cos(a) * R * 0.42, cy + HALF_D, cz + math.sin(a) * R * 0.42)
         sp.rotation_euler = (0, -a, 0)
         wb.assign(sp, m['tub_rim'])
 
-    hub = cylinder("PRP_wheel_hub", 0.0075, 0.008, col, verts=24)
+    hub = wb.cylinder("PRP_wheel_hub", 0.0075, 0.008, col, verts=24)
     hub.rotation_euler = (math.radians(90), 0, 0)
     hub.location = (cx, cy + HALF_D - 0.003, cz)
     wb.assign(hub, m['tub_rim'])
 
     # Stand: two legs and an axle, so the wheel is held rather than floating.
     for sx in (-1, 1):
-        leg = rounded_box(f"PRP_wheel_leg_{'l' if sx < 0 else 'r'}", 0.004, 0.004,
+        leg = wb.rounded_box(f"PRP_wheel_leg_{'l' if sx < 0 else 'r'}", 0.004, 0.004,
                           cz - BED_TOP + 0.010, 0.0015, col, segments=3)
         leg.location = (cx + sx * 0.030, cy + HALF_D + 0.004, BED_TOP + (cz - BED_TOP) / 2 - 0.005)
         leg.rotation_euler = (0, math.radians(-14 * sx), 0)
         wb.assign(leg, m['metal'])
-    axle = cylinder("PRP_wheel_axle", 0.0030, 0.034, col, verts=16)
+    axle = wb.cylinder("PRP_wheel_axle", 0.0030, 0.034, col, verts=16)
     axle.rotation_euler = (math.radians(90), 0, 0)
     axle.location = (cx, cy + 0.004, cz)
     wb.assign(axle, m['metal'])
@@ -431,25 +339,25 @@ def build_bottle(col, m, bar_top):
     cx, cy = 0.042, CAGE_D / 2 - 0.012
     top_z = BED_TOP + 0.108
     H = 0.054
-    body = cylinder("PRP_bottle_body", 0.0125, H, col, verts=28)
+    body = wb.cylinder("PRP_bottle_body", 0.0125, H, col, verts=28)
     body.location = (cx, cy, top_z - H / 2)
     wb.assign(body, m['bottle'])
 
-    water = cylinder("PRP_bottle_water", 0.0112, H * 0.66, col, verts=28)
+    water = wb.cylinder("PRP_bottle_water", 0.0112, H * 0.66, col, verts=28)
     water.location = (cx, cy, top_z - H + H * 0.66 / 2 + 0.002)
     wb.assign(water, m['water'])
 
-    cap = cylinder("PRP_bottle_cap", 0.0135, 0.010, col, verts=28)
+    cap = wb.cylinder("PRP_bottle_cap", 0.0135, 0.010, col, verts=28)
     cap.location = (cx, cy, top_z + 0.004)
     wb.assign(cap, m['tub'])
 
-    spout = cylinder("PRP_bottle_spout", 0.0030, 0.038, col, verts=14)
+    spout = wb.cylinder("PRP_bottle_spout", 0.0030, 0.038, col, verts=14)
     spout.rotation_euler = (math.radians(24), 0, 0)
     spout.location = (cx, cy - 0.009, top_z - H - 0.014)
     wb.assign(spout, m['metal'])
 
     for sx in (-1, 1):
-        clip = rounded_box(f"PRP_bottle_clip_{'l' if sx < 0 else 'r'}", 0.004, 0.016, 0.004, 0.0015,
+        clip = wb.rounded_box(f"PRP_bottle_clip_{'l' if sx < 0 else 'r'}", 0.004, 0.016, 0.004, 0.0015,
                            col, segments=3)
         clip.location = (cx + sx * 0.013, cy + 0.006, top_z - 0.008)
         wb.assign(clip, m['wire'])
@@ -470,15 +378,15 @@ def build_hopper(col, m, rng):
     cx, cy = 0.102, 0.010
     W, D, H = 0.034, 0.026, 0.070
 
-    base = rounded_box("PRP_hopper_base", W + 0.004, D + 0.004, 0.010, 0.003, col)
+    base = wb.rounded_box("PRP_hopper_base", W + 0.004, D + 0.004, 0.010, 0.003, col)
     base.location = (cx, cy, BED_TOP + 0.005)
     wb.assign(base, m['tub'])
 
-    body = rounded_box("PRP_hopper", W, D, H - 0.006, 0.004, col)
+    body = wb.rounded_box("PRP_hopper", W, D, H - 0.006, 0.004, col)
     body.location = (cx, cy, BED_TOP + 0.008 + (H - 0.006) / 2)
     wb.assign(body, m['bottle'])
 
-    lid = rounded_box("PRP_hopper_lid", W + 0.003, D + 0.003, 0.007, 0.0025, col)
+    lid = wb.rounded_box("PRP_hopper_lid", W + 0.003, D + 0.003, 0.007, 0.0025, col)
     lid.location = (cx, cy, BED_TOP + H + 0.004)
     wb.assign(lid, m['tub_rim'])
 
@@ -488,7 +396,7 @@ def build_hopper(col, m, rng):
     # 45% of the body, so the level reads and the surface looks like food rather than paint.
     grains = []
     for i in range(90):
-        g = rounded_box(f"PRP_hopper_grain_{i}", 0.0040, 0.0028, 0.0026, 0.0010, col, segments=2)
+        g = wb.rounded_box(f"PRP_hopper_grain_{i}", 0.0040, 0.0028, 0.0026, 0.0010, col, segments=2)
         g.location = (cx + rng.uniform(-0.011, 0.011),
                       cy + rng.uniform(-0.007, 0.007),
                       BED_TOP + 0.011 + rng.uniform(0.0, H * 0.42))
@@ -505,7 +413,7 @@ def build_hopper(col, m, rng):
 
     # A few loose seeds spilled at the foot of it, which is what sells a feeder as used.
     for i in range(14):
-        sd = rounded_box(f"PRP_seed_{i}", 0.0038, 0.0026, 0.0022, 0.0009, col, segments=2)
+        sd = wb.rounded_box(f"PRP_seed_{i}", 0.0038, 0.0026, 0.0022, 0.0009, col, segments=2)
         sd.location = (cx + rng.uniform(-0.034, 0.020), cy + rng.uniform(-0.024, 0.016),
                        BED_TOP + 0.002)
         sd.rotation_euler = (0, 0, rng.uniform(0, math.pi))
@@ -645,20 +553,20 @@ def build_hamster(col, m):
     parts = []
 
     # ---- head group -----------------------------------------------------------------------
-    head = sphere("HERO_ham_head", 0.0205, 0.0185, 0.0180, col, segments=26, rings=16)
+    head = wb.sphere("HERO_ham_head", 0.0205, 0.0185, 0.0180, col, segments=26, rings=16)
     head.location = (0.0295, 0.0, 0.0065)
     wb.assign(head, fur)
     parts.append(head)
 
     # Muzzle and cheeks. These are what turn a sphere into a face: without them the nose sits on a
     # bare curve and there is no jaw for the eyes to sit above.
-    muzzle = sphere("HERO_ham_muzzle", 0.0098, 0.0086, 0.0066, col, segments=20, rings=12)
+    muzzle = wb.sphere("HERO_ham_muzzle", 0.0098, 0.0086, 0.0066, col, segments=20, rings=12)
     muzzle.location = (0.0442, 0.0, -0.0008)
     wb.assign(muzzle, fur)
     parts.append(muzzle)
 
     for tag, sy in (("l", 1), ("r", -1)):
-        cheek = sphere(f"HERO_ham_cheek_{tag}", 0.0098, 0.0090, 0.0082, col, segments=18, rings=12)
+        cheek = wb.sphere(f"HERO_ham_cheek_{tag}", 0.0098, 0.0090, 0.0082, col, segments=18, rings=12)
         cheek.location = (0.0355, sy * 0.0112, -0.0005)
         wb.assign(cheek, fur)
         parts.append(cheek)
@@ -667,7 +575,7 @@ def build_hamster(col, m):
         # were flat in local Y, which is the axis `animate_hamster` keys for the ear flick -- so the
         # flick was spinning a near-circular disc about its own normal and changed nothing at all.
         # With the disc flat in Z, local Y lies in its plane and the same keys now tilt it visibly.
-        ear = sphere(f"HERO_ham_ear_{tag}", 0.0104, 0.0096, 0.0030, col, segments=20, rings=12)
+        ear = wb.sphere(f"HERO_ham_ear_{tag}", 0.0104, 0.0096, 0.0030, col, segments=20, rings=12)
         ear.location = (0.0242, sy * 0.0125, 0.0250)
         ear.rotation_euler = (sy * math.radians(-52), 0.0, sy * math.radians(-16))
         wb.assign(ear, fur)
@@ -685,7 +593,7 @@ def build_hamster(col, m):
         # shows on one side only -- and at this yaw the two ears face opposite ways, so one of them
         # always presented its shadowed back. Poking through both faces costs nothing and reads from
         # either side; the fur rim around it is what still makes it an ear.
-        ear_in = sphere(f"HERO_ham_ear_in_{tag}", 0.0062, 0.0057, 0.0040, col, segments=16, rings=10)
+        ear_in = wb.sphere(f"HERO_ham_ear_in_{tag}", 0.0062, 0.0057, 0.0040, col, segments=16, rings=10)
         ear_in.parent = ear
         ear_in.location = (0.0, 0.0, 0.0)
         wb.assign(ear_in, inner)
@@ -694,19 +602,19 @@ def build_hamster(col, m):
         # Eyes. The old pair cleared the head surface by 0.16 mm -- 0.12 logical px -- which is the
         # near-tangent case that renders a ragged intersection ring. These sit on the head sphere,
         # whose surface at this angle is ~0.0165 out, and protrude a full millimetre.
-        eye = sphere(f"HERO_ham_eye_{tag}", 0.0056, 0.0056, 0.0060, col, segments=18, rings=12)
+        eye = wb.sphere(f"HERO_ham_eye_{tag}", 0.0056, 0.0056, 0.0060, col, segments=18, rings=12)
         eye.location = (0.0420, sy * 0.0125, 0.0150)
         wb.assign(eye, eye_m)
         parts.append(eye)
 
-        glint = sphere(f"HERO_ham_glint_{tag}", 0.0017, 0.0017, 0.0017, col, segments=10, rings=7)
+        glint = wb.sphere(f"HERO_ham_glint_{tag}", 0.0017, 0.0017, 0.0017, col, segments=10, rings=7)
         glint.location = (0.0452, sy * 0.0142, 0.0182)
         wb.assign(glint, glint_m)
         parts.append(glint)
 
         # Paws and feet in FUR, not the pink inner-ear material. At 9 x 6 and 11 x 8 logical px they
         # are among the largest colour blocks on the sprite, and in pink they read as mittens.
-        paw = sphere(f"HERO_ham_paw_{tag}", 0.0066, 0.0046, 0.0038, col, segments=16, rings=10)
+        paw = wb.sphere(f"HERO_ham_paw_{tag}", 0.0066, 0.0046, 0.0038, col, segments=16, rings=10)
         paw.location = (0.0225, sy * 0.0120, -0.0208)
         wb.assign(paw, fur)
         parts.append(paw)
@@ -717,24 +625,24 @@ def build_hamster(col, m):
         # belly. They have never rendered, in any state -- which is also why animating them would
         # have changed nothing. Now the sole clears the belly by 3 mm and the foot stands 1.75 mm
         # proud of the flank.
-        foot = sphere(f"HERO_ham_foot_{tag}", 0.0080, 0.0054, 0.0040, col, segments=16, rings=10)
+        foot = wb.sphere(f"HERO_ham_foot_{tag}", 0.0080, 0.0054, 0.0040, col, segments=16, rings=10)
         foot.location = (-0.0140, sy * 0.0215, -0.0255)
         wb.assign(foot, fur)
         parts.append(foot)
 
-    nose = sphere("HERO_ham_nose", 0.0036, 0.0034, 0.0027, col, segments=16, rings=10)
+    nose = wb.sphere("HERO_ham_nose", 0.0036, 0.0034, 0.0027, col, segments=16, rings=10)
     nose.location = (0.0528, 0.0, 0.0012)
     wb.assign(nose, nose_m)
     parts.append(nose)
 
-    tail = sphere("HERO_ham_tail", 0.0050, 0.0034, 0.0034, col, segments=14, rings=9)
+    tail = wb.sphere("HERO_ham_tail", 0.0050, 0.0034, 0.0034, col, segments=14, rings=9)
     tail.location = (-0.0340, 0.0, 0.004)
     wb.assign(tail, fur)
     parts.append(tail)
 
     # A sunflower seed held between the paws. Hidden by default and shown only in the states that
     # want it, because a hamster carrying a seed while asleep or dead reads as a mistake.
-    seed = rounded_box("HERO_ham_seed", 0.0072, 0.0044, 0.0038, 0.0016, col, segments=4)
+    seed = wb.rounded_box("HERO_ham_seed", 0.0072, 0.0044, 0.0038, 0.0016, col, segments=4)
     seed.location = (0.0286, 0.0, -0.0196)
     seed.rotation_euler = (0, math.radians(18), 0)
     wb.assign(seed, m['seed'])
@@ -1065,7 +973,7 @@ def share_front_rim():
     bounding box, and that box is `opaqueRect`, the window's click-through contract.
     """
     col = wb.get_collection("WP_CageFront")
-    # Unlink, never clear_collection(): these objects are SHARED with WP_Cage, and
+    # Unlink, never wb.clear_collection(): these objects are SHARED with WP_Cage, and
     # clear_collection deletes objects rather than unlinking them -- it would take the tub's front
     # rim out of the scene altogether.
     for ob in list(col.objects):
@@ -1102,10 +1010,10 @@ def build_memorial(col, m):
     bbox so the hit region does not move on death. A small marker in the bedding does both, and it is
     what the bowl does with its tiny flag.
     """
-    post = cylinder("PRP_cage_mem_post", 0.0022, 0.040, col, verts=12)
+    post = wb.cylinder("PRP_cage_mem_post", 0.0022, 0.040, col, verts=12)
     post.location = (0.004, -0.012, BED_TOP + 0.018)
     wb.assign(post, m['metal'])
-    flag = rounded_box("PRP_cage_mem_flag", 0.020, 0.0016, 0.013, 0.0006, col, segments=3)
+    flag = wb.rounded_box("PRP_cage_mem_flag", 0.020, 0.0016, 0.013, 0.0006, col, segments=3)
     flag.location = (0.015, -0.012, BED_TOP + 0.031)
     wb.assign(flag, wb.toy_material("WP_cage_mem_flag", (0.62, 0.20, 0.22), roughness=0.5, sheen=0.4))
 
@@ -1119,7 +1027,7 @@ def build_lights():
     the concept's colour from base colour alone -- which is what a shared lighting rig is supposed to
     do, and the reason the cage lives in the bowl's scene at all.
     """
-    clear_collection("WP_CageLight")
+    wb.clear_collection("WP_CageLight")
 
 
 # What one grid pixel is worth in metres, fixed by the cage camera: 0.420 m of world across the
@@ -1182,7 +1090,7 @@ def build_cameras(ham_aim_z=None):
 
 def main():
     rng = random.Random(20260920)
-    clear_collection("WP_Cage")
+    wb.clear_collection("WP_Cage")
     col = wb.get_collection("WP_Cage")
     m = materials()
     build_tub(col, m)
@@ -1191,9 +1099,9 @@ def main():
     build_wheel(col, m)
     build_bottle(col, m, z1)
     build_hopper(col, m, rng)
-    clear_collection("WP_Hamster")
+    wb.clear_collection("WP_Hamster")
     hcol = wb.get_collection("WP_Hamster")
-    clear_collection("WP_CageMemorial")
+    wb.clear_collection("WP_CageMemorial")
     build_memorial(wb.get_collection("WP_CageMemorial"), m)
     share_ground()
     print("WP_FRONT_RIM", share_front_rim())

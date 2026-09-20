@@ -129,6 +129,76 @@
         "w": 24,
         "h": 50
       }
+    },
+    "hamster/terrarium": {
+      "grid": [
+        320,
+        240
+      ],
+      "layers": [
+        {
+          "name": "bg",
+          "file": "habitats/hamster/terrarium/bg.png",
+          "z": 0
+        },
+        {
+          "name": "memorial",
+          "file": "habitats/hamster/terrarium/memorial.png",
+          "z": 0
+        },
+        {
+          "name": "pet",
+          "z": 0
+        },
+        {
+          "name": "food",
+          "z": 0
+        },
+        {
+          "name": "fx",
+          "z": 0
+        },
+        {
+          "name": "decor_front",
+          "file": "habitats/hamster/terrarium/decor_front.png",
+          "z": 0
+        },
+        {
+          "name": "glass",
+          "file": "habitats/hamster/terrarium/glass.png",
+          "z": 0
+        }
+      ],
+      "water": {
+        "x": 20,
+        "y": 119,
+        "w": 250,
+        "h": 1
+      },
+      "waterShape": {
+        "cx": 145,
+        "cy": 119,
+        "rx": 125,
+        "ry": 1,
+        "surfaceY": 119,
+        "floorY": 119
+      },
+      "petAnchor": [
+        145,
+        119
+      ],
+      "opaqueRect": {
+        "x": 14,
+        "y": 15,
+        "w": 303,
+        "h": 200
+      },
+      "pantryRect": {
+        "x": 242,
+        "y": 18,
+        "w": 24,
+        "h": 50
+      }
     }
   },
   "sprites": {
