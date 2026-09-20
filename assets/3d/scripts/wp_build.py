@@ -215,8 +215,19 @@ def fan(name, outline, collection, thickness=0.003, subsurf=2):
 
 def toy_material(name, color, roughness=0.45, sheen=0.25, sss=0.0,
                  sss_color=None, alpha=1.0, transmission=0.0,
-                 emission=None, emission_strength=0.0):
-    """A matte vinyl-toy Principled material with a gentle sheen."""
+                 emission=None, emission_strength=0.0,
+                 metallic=0.0, specular=0.30, coat=0.0, coat_roughness=0.03):
+    """A matte vinyl-toy Principled material with a gentle sheen.
+
+    `metallic` and `specular` are parameters rather than constants because they were constants,
+    and that was a real bug: every surface in the project was pinned to `Metallic = 0.0`, so the
+    cage's 64 chrome wire bars, its axle and the bottle spout all rendered as grey *plastic* --
+    and chrome wire is most of what says "cage". `specular` was likewise pinned at 0.30 against
+    Blender's 0.5 default, i.e. 60% of physical dielectric specular on everything.
+
+    Both default to the old values on purpose. Changing them globally would silently restyle every
+    shipped fish and bowl frame; callers that want metal ask for it.
+    """
     mat = bpy.data.materials.get(name)
     if mat is None:
         mat = bpy.data.materials.new(name)
@@ -235,12 +246,15 @@ def toy_material(name, color, roughness=0.45, sheen=0.25, sss=0.0,
 
     setv("Base Color", (*color, 1.0))
     setv("Roughness", roughness)
-    setv("Metallic", 0.0)
+    setv("Metallic", metallic)
     setv("IOR", 1.45)
     setv("Alpha", alpha)
     setv("Sheen Weight", sheen)
     setv("Sheen Roughness", 0.35)
-    setv("Specular IOR Level", 0.30)
+    setv("Specular IOR Level", specular)
+    if coat > 0.0:
+        setv("Coat Weight", coat)
+        setv("Coat Roughness", coat_roughness)
     if sss > 0.0:
         setv("Subsurface Weight", sss)
         setv("Subsurface Radius", (0.010, 0.006, 0.004))
@@ -263,11 +277,22 @@ def assign(ob, mat):
     return mat
 
 
-def belly_gradient(mat, top_color, bottom_color, lo, hi):
-    """Drive Base Color from an object-space Z ramp (top -> bottom)."""
+def belly_gradient(mat, top_color, bottom_color, lo, hi, space_object=None):
+    """Drive Base Color from an object-space Z ramp (top -> bottom).
+
+    `space_object` is the fix for a real defect. TexCoord's "Object" output without one means each
+    object's OWN local space, so a material shared across several parts samples a different space on
+    every one of them. The hamster's ears (local z +/-0.0095) and tail (+/-0.0032) share the body's
+    fur material, whose ramp is built for the body's +/-0.024 -- so they only ever sampled the
+    middle of it and rendered a flat mid-tone that did not match the head they sit on. Pointing
+    every part at ONE object, the rig, makes the gradient a property of the animal instead of a
+    property of whichever mesh happens to be sampling it.
+    """
     nt = mat.node_tree
     bsdf = nt.nodes["Principled BSDF"]
     tex = nt.nodes.new("ShaderNodeTexCoord")
+    if space_object is not None:
+        tex.object = space_object
     sep = nt.nodes.new("ShaderNodeSeparateXYZ")
     rng = nt.nodes.new("ShaderNodeMapRange")
     ramp = nt.nodes.new("ShaderNodeValToRGB")
@@ -283,6 +308,39 @@ def belly_gradient(mat, top_color, bottom_color, lo, hi):
     ramp.color_ramp.interpolation = 'EASE'
     nt.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
     return ramp
+
+
+def fur_surface(mat, scale=240.0, strength=0.22, sheen=0.55, space_object=None):
+    """Break a flat material up with a noise bump and give it a soft fresnel sheen.
+
+    The hamster had no texture of any kind -- no noise, no bump, no UVs -- so it read as moulded
+    plastic rather than an animal. This is not fur: real hair at this delivery size would be well
+    under a pixel and would only add noise. It is a shallow bump at a wavelength you can actually
+    see, plus the sheen that makes a furred silhouette catch light at its edge.
+
+    `scale` is in the texture's coordinate units, which are metres here, so a scale of 240 gives
+    features about 4 mm across -- roughly 3 logical px at delivery, which survives the downscale.
+    Much finer and it averages away to nothing; much coarser and it reads as dents.
+    """
+    nt = mat.node_tree
+    bsdf = nt.nodes["Principled BSDF"]
+    tex = nt.nodes.new("ShaderNodeTexCoord")
+    if space_object is not None:
+        tex.object = space_object
+    noise = nt.nodes.new("ShaderNodeTexNoise")
+    noise.inputs["Scale"].default_value = scale
+    noise.inputs["Detail"].default_value = 4.0
+    noise.inputs["Roughness"].default_value = 0.6
+    bump = nt.nodes.new("ShaderNodeBump")
+    bump.inputs["Strength"].default_value = strength
+    bump.inputs["Distance"].default_value = 0.0008
+    nt.links.new(tex.outputs["Object"], noise.inputs["Vector"])
+    nt.links.new(noise.outputs["Fac"], bump.inputs["Height"])
+    nt.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    if "Sheen Weight" in bsdf.inputs:
+        bsdf.inputs["Sheen Weight"].default_value = sheen
+        bsdf.inputs["Sheen Roughness"].default_value = 0.25
+    return mat
 
 
 # ------------------------------------------------------------------ render

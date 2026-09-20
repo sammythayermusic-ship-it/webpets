@@ -54,6 +54,38 @@ def base():
     sc.render.resolution_percentage = 100
     sc.render.use_overwrite = True
     sc.render.filter_size = 1.5
+    quality()
+
+
+def quality():
+    """Everything below used to live only in the .blend, which is how it went unnoticed.
+
+    `samples` is NOT the dial. Adaptive sampling was set to a threshold of 0.01 with no minimum,
+    so almost every pixel decided it had converged and stopped long before the 220-sample cap --
+    raising the cap on the command line bought nothing at all. The threshold is the cap that was
+    actually binding, and it is set here now so it is visible in source rather than inherited.
+
+    The two clamps are firefly cheats that were suppressing exactly the through-plastic light and
+    the wire highlights this scene is built around. They are loosened rather than removed: with a
+    small bright key and transmissive props, something has to catch genuine outliers.
+    """
+    c = sc.cycles
+    c.use_adaptive_sampling = True
+    c.adaptive_threshold = 0.002          # was 0.01
+    c.adaptive_min_samples = 64           # was 0 (auto), which let pixels quit almost immediately
+    c.max_bounces = 16                    # was 8
+    c.transmission_bounces = 24           # was 8: the bottle and hopper are several interfaces deep
+    c.diffuse_bounces = 6                 # was 4
+    c.glossy_bounces = 6                  # was 4
+    c.sample_clamp_indirect = 30.0        # was 10.0
+    c.blur_glossy = 0.2                   # was 1.0
+    c.denoising_input_passes = 'RGB_ALBEDO_NORMAL'
+    c.denoising_prefilter = 'ACCURATE'
+    c.denoising_quality = 'HIGH'
+    try:
+        c.denoising_use_gpu = True        # was CPU; same image, less wall clock
+    except AttributeError:
+        pass
 
 
 def set_material(ob, name):
