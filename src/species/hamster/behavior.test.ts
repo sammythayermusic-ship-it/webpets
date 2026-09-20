@@ -218,17 +218,25 @@ describe('hamster behavior', () => {
   });
 
   it('reset returns it to the start, so a remount is not a continuation', () => {
+    // Stated as equality with a freshly built behaviour fed the same rng stream, which is what "not a
+    // continuation" actually means. The earlier form measured how far `moved` and `after` each sat
+    // from the cage's centre and required `moved` to be the farther one -- an assertion about where a
+    // 500-step pseudo-random walk happens to stop, not about `reset`. It held only while the sites sat
+    // where they did; moving the wheel and the hopper to match the render left the walk ending near
+    // the middle, and a test that reads the layout's geography rather than the code's behaviour tells
+    // you nothing on the day it breaks.
+    const fresh = createHamsterBehavior().step(input({}, seeded(4)));
+
     const rng = seeded(4);
     const b = createHamsterBehavior();
     for (let i = 0; i < 500; i += 1) b.step(input({}, rng));
     const moved = b.step(input({}, rng));
     b.reset();
-    const after = b.step(input({}, rng));
-    expect(after.x).not.toBe(moved.x);
-    // Back at the centre, give or take the one step this very tick already took: `reset` clears the
-    // state, it does not freeze the animal.
-    const centre = CAGE_FLOOR_RECT.x + CAGE_FLOOR_RECT.w / 2;
-    expect(Math.abs(after.x - centre)).toBeLessThanOrEqual(2.2);
-    expect(Math.abs(moved.x - centre)).toBeGreaterThan(Math.abs(after.x - centre));
+    const after = b.step(input({}, seeded(4)));
+
+    expect(after.x, 'reset left it where it had walked to').not.toBe(moved.x);
+    expect(after.x).toBe(fresh.x);
+    expect(after.y).toBe(fresh.y);
+    expect(after.anim).toBe(fresh.anim);
   });
 });

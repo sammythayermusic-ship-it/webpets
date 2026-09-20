@@ -23,8 +23,12 @@ const FLOOR_DROP_HEIGHT = 28;
  * seed floating at the animal's waist. This puts it under the drawn body — which also keeps it clear
  * of the pet sprite, since the `food` layer draws above `pet` (right for a flake in front of a fish,
  * wrong for a seed underfoot).
+ *
+ * 24 is measured: the hamster's feet project that far below `RIG_ham_root` through `CAM_cage`. It is a
+ * fact about the only floor species there is, so it lives here for now — a second floor species with a
+ * different build would have to move it onto `SpeciesLayout` beside the body box.
  */
-export const FLOOR_REST_BELOW = 16;
+export const FLOOR_REST_BELOW = 24;
 /** Inset from each end of the walkable span, so food never lands somewhere the pet cannot stand. */
 const FLOOR_SPAWN_INSET = 20;
 /** Settled flakes dissolve after this many 8 fps steps (30 s). */

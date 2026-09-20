@@ -92,37 +92,42 @@
         {
           "name": "fx",
           "z": 0
+        },
+        {
+          "name": "decor_front",
+          "file": "habitats/hamster/cage/decor_front.png",
+          "z": 0
         }
       ],
       "water": {
-        "x": 58,
-        "y": 185,
-        "w": 204,
+        "x": 38,
+        "y": 125,
+        "w": 244,
         "h": 1
       },
       "waterShape": {
         "cx": 160,
-        "cy": 185,
-        "rx": 102,
+        "cy": 125,
+        "rx": 122,
         "ry": 1,
-        "surfaceY": 185,
-        "floorY": 185
+        "surfaceY": 125,
+        "floorY": 125
       },
       "petAnchor": [
-        140,
-        185
+        160,
+        125
       ],
       "opaqueRect": {
-        "x": 40,
-        "y": 40,
-        "w": 240,
-        "h": 170
+        "x": 34,
+        "y": 17,
+        "w": 276,
+        "h": 213
       },
       "pantryRect": {
-        "x": 70,
-        "y": 152,
-        "w": 28,
-        "h": 34
+        "x": 224,
+        "y": 96,
+        "w": 27,
+        "h": 44
       }
     }
   },
@@ -388,8 +393,8 @@
       ],
       "fps": 12,
       "body": {
-        "w": 44,
-        "h": 30
+        "w": 56,
+        "h": 41
       },
       "states": {
         "idle": {
@@ -403,7 +408,78 @@
               "sprites/hamster/idle/idle_0005.png",
               "sprites/hamster/idle/idle_0006.png",
               "sprites/hamster/idle/idle_0007.png",
-              "sprites/hamster/idle/idle_0008.png"
+              "sprites/hamster/idle/idle_0008.png",
+              "sprites/hamster/idle/idle_0009.png",
+              "sprites/hamster/idle/idle_0010.png",
+              "sprites/hamster/idle/idle_0011.png",
+              "sprites/hamster/idle/idle_0012.png"
+            ]
+          },
+          "frames": 12,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        },
+        "eat": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/hamster/eat/eat_0001.png",
+              "sprites/hamster/eat/eat_0002.png",
+              "sprites/hamster/eat/eat_0003.png",
+              "sprites/hamster/eat/eat_0004.png",
+              "sprites/hamster/eat/eat_0005.png",
+              "sprites/hamster/eat/eat_0006.png",
+              "sprites/hamster/eat/eat_0007.png",
+              "sprites/hamster/eat/eat_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": false,
+          "anchor": [
+            -0.15,
+            2.6
+          ],
+          "returnTo": "idle"
+        },
+        "hungry": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/hamster/hungry/hungry_0001.png",
+              "sprites/hamster/hungry/hungry_0002.png",
+              "sprites/hamster/hungry/hungry_0003.png",
+              "sprites/hamster/hungry/hungry_0004.png",
+              "sprites/hamster/hungry/hungry_0005.png",
+              "sprites/hamster/hungry/hungry_0006.png",
+              "sprites/hamster/hungry/hungry_0007.png",
+              "sprites/hamster/hungry/hungry_0008.png"
             ]
           },
           "frames": 8,
@@ -419,63 +495,8 @@
           ],
           "loop": true,
           "anchor": [
-            0.13,
-            -0.25
-          ]
-        },
-        "eat": {
-          "source": {
-            "kind": "sequence",
-            "files": [
-              "sprites/hamster/eat/eat_0001.png",
-              "sprites/hamster/eat/eat_0002.png",
-              "sprites/hamster/eat/eat_0003.png",
-              "sprites/hamster/eat/eat_0004.png",
-              "sprites/hamster/eat/eat_0005.png",
-              "sprites/hamster/eat/eat_0006.png"
-            ]
-          },
-          "frames": 6,
-          "sequence": [
-            0,
-            1,
-            2,
-            3,
-            4,
-            5
-          ],
-          "loop": false,
-          "anchor": [
-            0.13,
-            -0.25
-          ],
-          "returnTo": "idle"
-        },
-        "hungry": {
-          "source": {
-            "kind": "sequence",
-            "files": [
-              "sprites/hamster/hungry/hungry_0001.png",
-              "sprites/hamster/hungry/hungry_0002.png",
-              "sprites/hamster/hungry/hungry_0003.png",
-              "sprites/hamster/hungry/hungry_0004.png",
-              "sprites/hamster/hungry/hungry_0005.png",
-              "sprites/hamster/hungry/hungry_0006.png"
-            ]
-          },
-          "frames": 6,
-          "sequence": [
-            0,
-            1,
-            2,
-            3,
-            4,
-            5
-          ],
-          "loop": true,
-          "anchor": [
-            0.13,
-            -0.25
+            0.04,
+            5.25
           ]
         },
         "sleep": {
@@ -501,8 +522,8 @@
           ],
           "loop": true,
           "anchor": [
-            0.13,
-            -0.24
+            0.07,
+            7.26
           ]
         },
         "dead": {
@@ -518,8 +539,8 @@
           ],
           "loop": true,
           "anchor": [
-            0.16,
-            -0.13
+            -0.3,
+            9.0
           ]
         }
       }

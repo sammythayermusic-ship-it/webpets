@@ -242,4 +242,39 @@ if "fish" in JOBS or any(s[0] in JOBS for s in STATES):
                   frame=first + i)
     reset_visibility()
 
+# ---------------------------------------------------------------- the cage
+#
+# Far simpler than the bowl's five passes. Those exist because the bowl's glass REFRACTS: the front
+# reflections have to be divided back out in post so the three layers add them exactly once. A cage
+# has no glass, so one beauty pass with the shadow catcher on is the whole job -- and it already
+# carries the soft contact shadow the art gate measures.
+CAGE_RES = (1280, 960)
+HAM_RES = (320, 320)
+HAM_STATES = [("idle", 1001, 12), ("eat", 1101, 8), ("hungry", 1201, 8),
+              ("sleep", 1301, 6), ("dead", 1401, 1)]
+
+if "cage" in JOBS:
+    stage = os.path.join(OUT, "cage")
+    reset_visibility()
+    only_collection("WP_Cage", "WP_Ground")
+    shoot("CAM_cage", CAGE_RES, os.path.join(stage, "bg.png"))
+    only_collection("WP_Cage", "WP_Ground", "WP_CageMemorial")
+    shoot("CAM_cage", CAGE_RES, os.path.join(stage, "memorial.png"))
+    # The near-side bars again, alone, to be drawn back over the pet. No WP_Ground here: this layer is
+    # the bars and nothing else, and a shadow baked into it would fall on top of the hamster.
+    only_collection("WP_CageFront")
+    shoot("CAM_cage", CAGE_RES, os.path.join(stage, "decor_front.png"))
+    reset_visibility()
+
+if "hamster" in JOBS or any(s[0] in JOBS for s in HAM_STATES):
+    reset_visibility()
+    only_collection("WP_Hamster")
+    wanted = [s for s in HAM_STATES if "hamster" in JOBS or s[0] in JOBS]
+    for name, first, count in wanted:
+        for i in range(count):
+            shoot("CAM_hamster", HAM_RES,
+                  os.path.join(OUT, "hamster", name, "%s_%04d.png" % (name, i + 1)),
+                  frame=first + i)
+    reset_visibility()
+
 print("WP_DONE", flush=True)
