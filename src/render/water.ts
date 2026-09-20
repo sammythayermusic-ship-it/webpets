@@ -8,13 +8,13 @@
 // darts, because a filter slow enough to hide a 125 ms step is slow enough to trail a fast move by
 // 24 screen px. The quantisation had to go at the source instead.
 
-import type { WaterBounds, WaterShape } from './types';
+import type { MoveBounds, Rect, WaterShape } from './types';
 
 function clampNum(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-export function makeWaterBounds(shape: WaterShape): WaterBounds {
+export function makeWaterBounds(shape: WaterShape): MoveBounds {
   const { cx, cy, rx, ry, surfaceY, floorY } = shape;
   const top = Math.max(surfaceY, cy - ry);
   const bottom = Math.min(floorY, cy + ry);
@@ -72,6 +72,47 @@ export function makeWaterBounds(shape: WaterShape): WaterBounds {
     rect: { x: cx - rx, y: surfaceY, w: 2 * rx, h: floorY - surfaceY },
     surfaceY,
     floorY,
+    inside,
+    clamp,
+  };
+}
+
+/**
+ * A rectangular walkable floor: the land equivalent of {@link makeWaterBounds}.
+ *
+ * A hamster does not swim through a volume, it walks along a line, so `surfaceY === floorY === standY`
+ * and the vertical clamp collapses to that one row. Everything else is the same contract, which is the
+ * point — the behaviour, the tick interpolation and the body-box clamp cannot tell the two apart.
+ *
+ * `rect` is the walkable span in grid px, measured to the pet's CENTRE line rather than its feet; the
+ * body box is applied on top by the clamp exactly as it is in water.
+ */
+export function makeFloorBounds(area: { rect: Rect; standY: number }): MoveBounds {
+  const { rect, standY } = area;
+  const left = rect.x;
+  const right = rect.x + rect.w;
+
+  // The region is closed, so its own boundary counts as inside -- the same reason `makeWaterBounds`
+  // carries an epsilon. A pet clamped hard against the cage wall sits exactly on the boundary and must
+  // not then fail its own membership test.
+  const EDGE = 1e-9;
+  const inside = (x: number, y: number): boolean =>
+    x >= left - EDGE && x <= right + EDGE && Math.abs(y - standY) <= EDGE;
+
+  const clamp = (x: number, y: number, halfW: number, halfH: number): { x: number; y: number } => {
+    const hw = Math.max(0, halfW);
+    // A body wider than the walkable span collapses to its centre rather than escaping either side.
+    const avail = Math.max(0, (right - left) / 2 - hw);
+    const cx = (left + right) / 2;
+    void y;
+    void halfH;
+    return { x: clampNum(x, cx - avail, cx + avail), y: standY };
+  };
+
+  return {
+    rect: { x: rect.x, y: standY, w: rect.w, h: 0 },
+    surfaceY: standY,
+    floorY: standY,
     inside,
     clamp,
   };

@@ -2,7 +2,7 @@
 // silent when dead or muted. Line pools come from src/species/fish/lines.ts (data only).
 
 import type { AppState } from '../app/types';
-import { FISH_LINES } from '../species/fish/lines';
+import { speciesModule } from '../species';
 import type { SpeechHandle, UiDeps } from './types';
 import { el, pickRandom, rootSize } from './dom';
 import { labelFor } from './model';
@@ -99,9 +99,12 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
   }
 
   function pick(pool: SpeechPool): string | null {
-    const personality = store.getState().pet.personality;
-    const pools = FISH_LINES[personality];
-    return pickRandom(pools[pool]);
+    // Species first, then personality. This read `FISH_LINES[personality]` directly, which is why a
+    // hamster would have spoken the fish's lines however much of the rest of it was built.
+    const { species, personality } = store.getState().pet;
+    const mod = speciesModule(species);
+    if (!mod) return null;
+    return pickRandom(mod.lines[personality][pool]);
   }
 
   function sayFrom(pool: SpeechPool): void {

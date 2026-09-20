@@ -17,18 +17,19 @@
 import { Application, Container, Rectangle, type Ticker } from 'pixi.js';
 import { DEFAULT_SCALE, GRID_H, GRID_W, PET_FPS, WINDOW_PAD, scaleFactor, windowSizeForScale, type Scale } from '../sim/constants';
 import type { Rect, Rng } from '../sim/types';
-import { createFishBehavior } from '../species/fish/behavior';
+import { requireSpecies } from '../species';
 import { configureAssetPipeline, loadTextures } from './assets';
 import { createBubbles, createSheen, parallaxOffset, type Bubbles, type Sheen } from './fx';
 import { createFlakes, type Flakes } from './food';
 import { buildLayers, type LayerStack } from './layers';
 import { createSpritePlayer, type SpritePlayer } from './spritePlayer';
 import { stateFiles } from './manifest';
-import { makeWaterBounds } from './water';
+import { makeFloorBounds, makeWaterBounds } from './water';
 import { decayAttention, moodAnim, moodOf, type Mood } from '../sim/mood';
 import { createExpressionGate } from './expression';
 import { createPacer, type Pacer } from './pacer';
-import type { FishBehavior, HabitatScene, Manifest, ManifestHabitat, ManifestSprite, SceneEvent, SceneView, WaterBounds } from './types';
+import type { HabitatScene, Manifest, ManifestHabitat, ManifestSprite, MoveBounds, PetBehavior, SceneEvent, SceneView } from './types';
+import type { Habitat, Species } from '../sim/types';
 
 const STEP_MS = 1000 / PET_FPS;
 /** Cap the accumulator so a background tab does not replay minutes of steps at once. */
@@ -48,8 +49,20 @@ const WATCHDOG_INTERVAL_MS = 16;
 const MOOD_HOLD_TICKS = 8;
 /** How fast the pointer's pull on the pet rises and falls, per tick. Roughly half a second either way. */
 const PULL_EASE = 0.25;
-const HABITAT_KEY = 'fish/bowl';
-const SPRITE_KEY = 'fish';
+/**
+ * Which species the scene draws, when the caller does not say.
+ *
+ * A default rather than a constant: `createScene` used to hardcode `'fish/bowl'` and `'fish'` as
+ * module-level keys and take no species argument at all, which is the single reason a second species
+ * could not be displayed however much of it was implemented.
+ */
+const DEFAULT_SUBJECT: SceneSubject = { species: 'fish', habitat: 'bowl' };
+
+/** Which species and habitat a scene is mounted for. */
+export interface SceneSubject {
+  species: Species;
+  habitat: Habitat;
+}
 
 /** `windowSizeForScale` from `src/sim/constants.ts` in the `{ w, h }` shape the scene uses internally. */
 export function windowSize(scale: Scale): { w: number; h: number } {
@@ -61,8 +74,8 @@ interface Mounted {
   app: Application;
   layers: LayerStack;
   player: SpritePlayer;
-  behavior: FishBehavior;
-  bounds: WaterBounds;
+  behavior: PetBehavior;
+  bounds: MoveBounds;
   flakes: Flakes;
   bubbles: Bubbles;
   sheen: Sheen;
@@ -72,11 +85,17 @@ interface Mounted {
   watchdog: Pacer;
 }
 
-export function createScene(manifest: Manifest, rng: Rng = Math.random): HabitatScene {
-  const habitat: ManifestHabitat | undefined = manifest.habitats[HABITAT_KEY];
-  const spriteDef: ManifestSprite | undefined = manifest.sprites[SPRITE_KEY];
-  if (!habitat) throw new Error(`manifest has no habitat "${HABITAT_KEY}"`);
-  if (!spriteDef) throw new Error(`manifest has no sprite "${SPRITE_KEY}"`);
+export function createScene(
+  manifest: Manifest,
+  subject: SceneSubject = DEFAULT_SUBJECT,
+  rng: Rng = Math.random,
+): HabitatScene {
+  const species = requireSpecies(subject.species);
+  const habitatKey = `${subject.species}/${subject.habitat}`;
+  const habitat: ManifestHabitat | undefined = manifest.habitats[habitatKey];
+  const spriteDef: ManifestSprite | undefined = manifest.sprites[subject.species];
+  if (!habitat) throw new Error(`manifest has no habitat "${habitatKey}"`);
+  if (!spriteDef) throw new Error(`manifest has no sprite "${subject.species}"`);
   // The window geometry is derived from the constants, so a manifest describing a different logical
   // grid would be drawn into a window with no room for it. The art's RESOLUTION is free to differ —
   // that factor is derived per texture in layers.ts — but the logical grid is not.
@@ -326,7 +345,19 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       const textures = new Map([...optionalTex, ...requiredTex]);
 
       const layers = buildLayers(habitat, textures);
-      const bounds = makeWaterBounds(habitat.waterShape);
+      // The movement domain comes from the SPECIES, not from the habitat's art. A bowl is an ellipse
+      // of water; a cage is a line of bedding to walk along. Both satisfy the same MoveBounds contract,
+      // which is what lets the tick interpolation, the body-box clamp and every behaviour branch stay
+      // identical between them.
+      const domain = species.layout.domain;
+      const bounds =
+        domain.kind === 'water'
+          ? makeWaterBounds(domain.shape)
+          : makeFloorBounds({ rect: domain.rect, standY: domain.standY });
+      // Bubbles, the glass sheen and the death fog are water PHYSICS, not geometry that happens to be
+      // elliptical -- bubbles rise from a floor to a surface and pop, and a fog needs a volume to fill.
+      // On land there is no sensible parameterisation of them, so they are absent rather than degenerate.
+      const aquatic = domain.kind === 'water';
       // The scene is the one module that legitimately knows both clocks, so it passes the tick length
       // in rather than the player importing PET_FPS: a flip then covers exactly the tick the behaviour
       // holds position for, and the fish spins in place before swimming on.
@@ -345,9 +376,9 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
       const flakes = createFlakes(habitat.waterShape, bounds);
       layers.slots.food.addChild(flakes.container);
       const bubbles = createBubbles(habitat.waterShape, bounds);
-      layers.slots.fx.addChild(bubbles.container);
+      if (aquatic) layers.slots.fx.addChild(bubbles.container);
       const sheen = createSheen();
-      layers.slots.glass.addChild(sheen.sprite);
+      if (aquatic) layers.slots.glass.addChild(sheen.sprite);
 
       const stage: Container = app.stage;
       stage.addChild(layers.root);
@@ -419,7 +450,7 @@ export function createScene(manifest: Manifest, rng: Rng = Math.random): Habitat
         advance(Math.min(MAX_ACC_MS, now - lastAdvanceAt));
       });
 
-      m = { app, layers, player, behavior: createFishBehavior(), bounds, flakes, bubbles, sheen, advance, tick, watchdog };
+      m = { app, layers, player, behavior: species.createBehavior(), bounds, flakes, bubbles, sheen, advance, tick, watchdog };
       layoutHabitat();
       if (view) applyView(view, null);
       applyPointer();

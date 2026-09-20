@@ -1,4 +1,5 @@
 export { createFishBehavior } from './behavior';
+export { FISH_MODULE } from './module';
 export {
   BOWL_OPAQUE_RECT,
   BOWL_PET_ANCHOR,

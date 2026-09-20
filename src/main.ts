@@ -185,8 +185,11 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   // 2. Scene + canvas, then the #ui overlay above it.
   const app = requireApp();
   const manifest = await loadManifest();
-  const scene = createScene(manifest);
+  // Read the store BEFORE building the scene: which species the pet is decides which behaviour,
+  // habitat art and speech pool the scene mounts, and the scene used to be built from two hardcoded
+  // keys that made the saved pet's species purely decorative.
   const initial = store.getState();
+  const scene = createScene(manifest, { species: initial.pet.species, habitat: initial.pet.habitat });
   await scene.mount(app, initial.settings.scale);
   const ui = document.createElement('div');
   ui.id = 'ui';

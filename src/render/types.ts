@@ -209,23 +209,46 @@ export interface HabitatScene {
   destroy(): void;
 }
 
-/** Water bounds helper built by render from the manifest's waterShape; passed to the behavior each tick. */
-export interface WaterBounds {
+/**
+ * The convex region a pet may move within, built by render from the habitat and handed to the
+ * behaviour every tick.
+ *
+ * Nothing in this shape was ever specific to water — a rect, a top, a bottom, a membership test and a
+ * nearest-legal-point clamp describe any movement domain. It was called `WaterBounds` because a fish
+ * bowl was the only habitat, and that name then propagated into the behaviour interface, the manifest
+ * schema and four render modules, which is what made a land animal look like a rewrite rather than a
+ * second implementation.
+ *
+ * Convexity is load-bearing and not incidental: `scene.ts` interpolates the drawn position between
+ * simulation ticks and relies on the region eroded by the body box staying convex, so a point on the
+ * segment between two legal positions is itself legal. An ellipse and a rectangle both satisfy that.
+ */
+export interface MoveBounds {
   rect: Rect;
+  /** Top of the band. The waterline for a bowl; the standing line for a floor habitat. */
   surfaceY: number;
+  /** Bottom of the band. Equal to `surfaceY` where the pet walks on a single line rather than swims. */
   floorY: number;
   inside(x: number, y: number): boolean;
-  /** Nearest point whose body box (halfW, halfH) stays inside the water. */
+  /** Nearest point whose body box (halfW, halfH) stays inside the region. */
   clamp(x: number, y: number, halfW: number, halfH: number): { x: number; y: number };
 }
 
-export interface FishInput {
+/**
+ * The old name for {@link MoveBounds}, still imported by the fish's own tests.
+ *
+ * Kept deliberately rather than editing those tests: the whole claim of this refactor is that it
+ * changes no behaviour, and a suite that had to be rewritten to keep passing would prove nothing.
+ */
+export type WaterBounds = MoveBounds;
+
+export interface PetInput {
   hunger: number;
   label: HungerLabel;
   alive: boolean;
   asleep: boolean;
   flakes: Array<{ x: number; y: number }>;
-  bounds: WaterBounds;
+  bounds: MoveBounds;
   body: { w: number; h: number };
   /**
    * Something the pet is interested in, in grid px, with 0..1 of how much it cares. Null when there is
@@ -236,7 +259,7 @@ export interface FishInput {
   rng: Rng;
 }
 
-export interface FishOutput {
+export interface PetOutput {
   /** Integer grid px of the body center. */
   x: number;
   y: number;
@@ -252,10 +275,21 @@ export interface FishOutput {
   biteFlakeIndex: number | null;
 }
 
-export interface FishBehavior {
+/**
+ * One species' movement and animation state machine. One `step` call is one 8 fps simulation tick.
+ *
+ * Deliberately says nothing about water, food kind, or what the habitat contains: everything it needs
+ * arrives in {@link PetInput}, and everything it decides leaves in {@link PetOutput}.
+ */
+export interface PetBehavior {
   /** One call = one 8 fps tick. */
-  step(input: FishInput): FishOutput;
+  step(input: PetInput): PetOutput;
   reset(): void;
 }
+
+/** Former names, kept so the fish's tests compile unchanged. See {@link WaterBounds}. */
+export type FishInput = PetInput;
+export type FishOutput = PetOutput;
+export type FishBehavior = PetBehavior;
 
 export type { TrayChipSize };
