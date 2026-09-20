@@ -383,6 +383,24 @@ describe.each(Object.keys(manifest.sprites))('sprite art: %s', (key) => {
     }
   });
 
+  it('registers a locomotor state to the idle pose, or every start and stop pops', () => {
+    // A state that declares `stridePx` is one the pet enters and leaves constantly -- the hamster
+    // starts walking, stops to sniff, starts again. The manifest `anchor` is what registers a pose
+    // against idle's, so if a walk sits 3 px lower than the stand, the animal hops on every step it
+    // takes and every pause it makes. Nothing else in the suite would catch it: the walk's own frames
+    // are perfectly consistent with each other.
+    const idle = sp.states['idle'];
+    for (const [name, def] of entries) {
+      if (def.stridePx === undefined) continue;
+      expect(def.stridePx, `${name}: stride must be real ground`).toBeGreaterThan(0);
+      expect(def.sequence.length, `${name}: a one-frame cycle cannot animate`).toBeGreaterThan(1);
+      const a = def.anchor ?? [0, 0];
+      const b = idle?.anchor ?? [0, 0];
+      expect(Math.abs(a[0] - b[0]), `${name}: anchor x vs idle`).toBeLessThanOrEqual(1.5);
+      expect(Math.abs(a[1] - b[1]), `${name}: anchor y vs idle`).toBeLessThanOrEqual(1.5);
+    }
+  });
+
   it('centres every state on the frame, because the mirror flips about that axis', () => {
     for (const [name, def] of entries) {
       const png = load(stateFiles(def)[0] as string);

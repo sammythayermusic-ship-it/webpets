@@ -22,8 +22,15 @@ import type { ManifestSprite } from './types';
 export interface SpritePlayer {
   readonly sprite: Sprite;
   play(state: string): void;
-  /** Advance every render-rate clock this player owns: the animation frame clock and the turn tween. */
-  advance(dtMs: number): void;
+  /**
+   * Advance every render-rate clock this player owns.
+   *
+   * `dtMs` drives the turn tween, and the frame clock for ordinary states. `distancePx` is the ground
+   * the pet covered on screen since the last call, and it drives the frame clock instead for any state
+   * that declares a `stridePx` -- see {@link ManifestSpriteState.stridePx}. Omitting it leaves
+   * locomotor states frozen, which is the correct reading of "went nowhere".
+   */
+  advance(dtMs: number, distancePx?: number): void;
   /** Target facing. The flip is tweened; `turning` is accepted for contract compatibility and ignored. */
   setFacing(facing: 1 | -1, turning: boolean): void;
   /** Body centre in grid px. Fractional between behaviour ticks — the scene interpolates. */
@@ -51,6 +58,10 @@ const FALLBACK_SEQUENCES: Readonly<Record<string, SequenceDef>> = {
   hungry: { sequence: [0, 0, 0, 1, 1, 1], loop: true },
   sleep: { sequence: [0, 0, 0, 0, 1, 1, 1, 1], loop: true },
   dead: { sequence: [0, 0, 0, 0, 1, 1, 1, 1], loop: true },
+  // Without an entry here a `walk` with no art does not fail loudly -- the sequencer returns frame 0
+  // forever and the pet slides along frozen, which is the exact bug the walk exists to fix, wearing a
+  // disguise. The fallback at least bobs.
+  walk: { sequence: [0, 0, 1, 1], loop: true },
 };
 
 export interface SpritePlayerOptions {
@@ -137,6 +148,22 @@ export function createSpritePlayer(
   let py = 0;
   let reducedMotion = false;
   let frameAcc = 0;
+  /** Ground covered since the last frame step, for locomotor states. Reset on any state change. */
+  let distAcc = 0;
+
+  /**
+   * Px of ground per animation frame for a locomotor state, or null for a time-driven one.
+   *
+   * Divided by the SEQUENCE length rather than the frame count: the sequence is what the player
+   * actually steps through, and a cycle that holds a frame twice covers its stride over those steps
+   * too. Getting this wrong by using `frames` would make any state with a non-trivial sequence drift.
+   */
+  const strideOf = (state: string): number | null => {
+    const st = def.states[state];
+    if (!st || st.stridePx === undefined) return null;
+    const steps = st.sequence.length;
+    return steps > 0 ? st.stridePx / steps : null;
+  };
   /** The flip tween: scale.x sweeps turnFrom -> turnTo as turnClock runs 0 -> turnMs. */
   let turnFrom: 1 | -1 = 1;
   let turnTo: 1 | -1 = 1;
@@ -209,19 +236,37 @@ export function createSpritePlayer(
       seq.play(state);
       // Only on a real state change, so a new state gets a whole frame's worth of time. Deliberately
       // not reset for a `returnTo` handover inside advance(), which should flow continuously.
-      if (seq.state() !== before) frameAcc = 0;
+      if (seq.state() !== before) {
+        frameAcc = 0;
+        distAcc = 0;
+      }
       refresh();
     },
-    advance(dtMs) {
-      frameAcc += dtMs;
+    advance(dtMs, distancePx = 0) {
+      // Which clock drives the frames depends on the state, not on the caller. A locomotor state
+      // measures ground covered; everything else measures time. The turn tween below is always
+      // time-based -- a pet that turns on the spot covers no distance, and freezing its turn until it
+      // walked somewhere would be absurd.
+      const stride = strideOf(seq.state());
       let guard = 0;
-      while (frameAcc >= frameMs && guard < MAX_FRAMES_PER_ADVANCE) {
-        frameAcc -= frameMs;
-        seq.step();
-        guard += 1;
+      if (stride !== null) {
+        distAcc += Math.abs(distancePx);
+        while (distAcc >= stride && guard < MAX_FRAMES_PER_ADVANCE) {
+          distAcc -= stride;
+          seq.step();
+          guard += 1;
+        }
+        if (guard >= MAX_FRAMES_PER_ADVANCE) distAcc = 0;
+      } else {
+        frameAcc += dtMs;
+        while (frameAcc >= frameMs && guard < MAX_FRAMES_PER_ADVANCE) {
+          frameAcc -= frameMs;
+          seq.step();
+          guard += 1;
+        }
+        // A stall long enough to hit the ceiling has no meaningful animation phase left to preserve.
+        if (guard >= MAX_FRAMES_PER_ADVANCE) frameAcc = 0;
       }
-      // A stall long enough to hit the ceiling has no meaningful animation phase left to preserve.
-      if (guard >= MAX_FRAMES_PER_ADVANCE) frameAcc = 0;
       if (turnClock < turnMs) turnClock = Math.min(turnMs, turnClock + dtMs);
       refresh();
     },
@@ -251,6 +296,10 @@ export function createSpritePlayer(
       turnTo = facing;
       turnClock = turnMs;
       frameAcc = 0;
+      // The stride clock too. Without this, ground banked by the outgoing pet survives into the
+      // incoming one and it takes its first step early -- the same class of bug as leaving frameAcc
+      // set, and just as invisible.
+      distAcc = 0;
       refresh();
     },
     state() {

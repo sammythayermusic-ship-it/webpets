@@ -100,6 +100,23 @@ const WHEEL_KM_PER_TICK = 0.0002;
 /** Ticks between re-rolls of the wander target while pottering on the bedding. */
 const WANDER_EVERY = 24;
 
+/**
+ * How fast the hamster may change speed, in px per tick per tick.
+ *
+ * Without this the animal is a conveyor: `walkSpeed` is a constant per hunger band, applied in full on
+ * the first tick of a trip and dropped to nothing on the last. Ramping in and out is most of what
+ * separates something that walks from something that is being slid.
+ */
+const ACCEL = 0.45;
+
+/** Below this much movement in a tick, the hamster counts as standing still rather than walking. */
+const WALK_THRESHOLD = 0.12;
+
+/** How often a pottering hamster stops to sniff about, and for how long. */
+const PAUSE_CHANCE = 0.035;
+const PAUSE_MIN_TICKS = 6;
+const PAUSE_MAX_TICKS = 22;
+
 function walkSpeed(label: HungerLabel): number {
   switch (label) {
     case 'starving':
@@ -131,8 +148,21 @@ function moveTowardX(x: number, tx: number, maxStep: number): number {
   return x + Math.sign(dx) * maxStep;
 }
 
+/** Ease `current` toward `target` by at most ACCEL. */
+function ramp(current: number, target: number): number {
+  const d = target - current;
+  if (Math.abs(d) <= ACCEL) return target;
+  return current + Math.sign(d) * ACCEL;
+}
+
 export function createHamsterBehavior(): PetBehavior {
   let inited = false;
+  /** Current ground speed, px/tick. Ramped toward what the branch wants rather than set outright. */
+  let speed = 0;
+  /** Ticks left of a deliberate stop. */
+  let pauseTicks = 0;
+  /** Per-trip speed scale, so two walks across the same bedding are not identical. */
+  let tripScale = 1;
   let x = 0;
   let y = 0;
   let facing: 1 | -1 = 1;
@@ -157,6 +187,9 @@ export function createHamsterBehavior(): PetBehavior {
     errandCooldown = 0;
     wanderTo = 0;
     wanderTicks = 0;
+    speed = 0;
+    pauseTicks = 0;
+    tripScale = 1;
   };
 
   const init = (bounds: MoveBounds, halfW: number, halfH: number): void => {
@@ -262,7 +295,8 @@ export function createHamsterBehavior(): PetBehavior {
         if (errand.site === 'wheel') ranThisTick = WHEEL_KM_PER_TICK * wheelRate(input.hunger);
         if (errandTicks === 0) stopErrand();
       } else {
-        nx = moveTowardX(x, target, walkSpeed(input.label));
+        speed = ramp(speed, walkSpeed(input.label));
+        nx = moveTowardX(x, target, speed);
         if (Math.abs(nx - target) <= ARRIVE_EPS) {
           errandTicks = errand.minTicks + Math.floor(rng() * (errand.maxTicks - errand.minTicks));
         }
@@ -283,10 +317,24 @@ export function createHamsterBehavior(): PetBehavior {
           // A target anywhere on the walkable span. The clamp decides what is actually reachable, so
           // this may aim past the wall and simply arrive at it.
           wanderTo = bounds.rect.x + rng() * bounds.rect.w;
+          // Re-rolled per trip, so successive crossings of the same bedding are not identical.
+          tripScale = 0.75 + rng() * 0.45;
         }
-        nx = moveTowardX(x, wanderTo, walkSpeed(input.label));
+        // Stopping to sniff. A hamster that walks without ever pausing reads as machinery however
+        // good the walk cycle is -- and these are also the only moments the mood poses can surface,
+        // now that moving has a state of its own.
+        if (pauseTicks > 0) {
+          pauseTicks -= 1;
+        } else if (rng() < PAUSE_CHANCE) {
+          pauseTicks = PAUSE_MIN_TICKS + Math.floor(rng() * (PAUSE_MAX_TICKS - PAUSE_MIN_TICKS));
+        }
+        const want = pauseTicks > 0 ? 0 : walkSpeed(input.label) * tripScale;
+        speed = ramp(speed, want);
+        nx = moveTowardX(x, wanderTo, speed);
       }
     }
+
+    if (nx === x) speed = ramp(speed, 0);
 
     // Clamp LAST, always, exactly once. Every branch above proposes a position and this is the only
     // thing that decides whether it is legal -- which is what makes "the body box never leaves the
@@ -305,6 +353,13 @@ export function createHamsterBehavior(): PetBehavior {
         turnCooldown = TURN_COOLDOWN;
       }
     }
+
+    // `walk` is derived from the movement that ACTUALLY happened, once, after the clamp -- not set in
+    // each of the branches that move. Every branch proposes a position and the clamp decides it, so a
+    // hamster walking into a wall proposes 2.2 px and travels none of it; asking the branches would
+    // have it striding on the spot. This is also why `idle` now means genuinely stationary, which is
+    // what lets the mood poses in scene.ts stop playing over a sliding pet.
+    if (anim === 'idle' && Math.abs(x - prevX) >= WALK_THRESHOLD) anim = 'walk';
 
     if (eatTicks > 0) anim = 'eat';
 

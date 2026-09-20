@@ -436,6 +436,38 @@
             0.0
           ]
         },
+        "walk": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/hamster/walk/walk_0001.png",
+              "sprites/hamster/walk/walk_0002.png",
+              "sprites/hamster/walk/walk_0003.png",
+              "sprites/hamster/walk/walk_0004.png",
+              "sprites/hamster/walk/walk_0005.png",
+              "sprites/hamster/walk/walk_0006.png",
+              "sprites/hamster/walk/walk_0007.png",
+              "sprites/hamster/walk/walk_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": true,
+          "anchor": [
+            -0.07,
+            0.65
+          ],
+          "stridePx": 20.0
+        },
         "eat": {
           "source": {
             "kind": "sequence",
@@ -463,8 +495,8 @@
           ],
           "loop": false,
           "anchor": [
-            0.35,
-            3.4
+            0.27,
+            3.37
           ],
           "returnTo": "idle"
         },
@@ -495,8 +527,8 @@
           ],
           "loop": true,
           "anchor": [
-            -0.26,
-            3.97
+            -0.2,
+            3.95
           ]
         },
         "sleep": {
@@ -522,8 +554,8 @@
           ],
           "loop": true,
           "anchor": [
-            -0.29,
-            6.64
+            -0.26,
+            6.59
           ]
         },
         "dead": {
@@ -539,8 +571,8 @@
           ],
           "loop": true,
           "anchor": [
-            -1.05,
-            7.8
+            -0.68,
+            7.18
           ]
         }
       }

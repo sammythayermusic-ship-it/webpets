@@ -174,6 +174,7 @@ function spriteState(v: unknown, path: string): ManifestSpriteState {
     loop: bool(v['loop'], `${path}.loop`),
   };
   if (v['anchor'] !== undefined) out.anchor = numPair(v['anchor'], `${path}.anchor`);
+  if (v['stridePx'] !== undefined) out.stridePx = positive(v['stridePx'], `${path}.stridePx`);
   if (v['returnTo'] !== undefined) out.returnTo = str(v['returnTo'], `${path}.returnTo`);
   if (v['offsets'] !== undefined) {
     if (!Array.isArray(v['offsets']) || v['offsets'].length !== frames) {

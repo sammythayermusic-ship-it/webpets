@@ -105,6 +105,19 @@ export interface ManifestSpriteState {
   frames: number;
   sequence: number[];
   loop: boolean;
+  /**
+   * Grid px this state's full cycle carries the pet. Present == the state is LOCOMOTOR, and its
+   * frames advance on distance travelled rather than on a clock.
+   *
+   * This is what stops the feet sliding. A walk is not a thing that happens at a rate, it is a thing
+   * that happens per unit of ground: the hamster's speed is 2.2, 1.4 or 0.3 px per tick depending on
+   * how hungry it is, so one 12 fps loop played against a wall clock would cover three different
+   * distances and the feet would skate through two of them. Declaring the stride here lets the player
+   * advance one frame every `stridePx / sequence.length` px at ANY speed, and it lives in the manifest
+   * beside the art because it is a property OF the art -- change how far the legs reach and this
+   * number changes with it.
+   */
+  stridePx?: number;
   returnTo?: string;
   /** Per-frame integer [dx, dy] offsets in grid px, same length as `frames`. */
   offsets?: Array<[number, number]>;
@@ -133,7 +146,7 @@ export interface Manifest {
   sprites: Record<string, ManifestSprite>; // key species
 }
 
-export type PetAnim = 'idle' | 'eat' | 'hungry' | 'sleep' | 'dead';
+export type PetAnim = 'idle' | 'walk' | 'eat' | 'hungry' | 'sleep' | 'dead';
 
 /** alive: normal. dead: belly-up + fog, bubbles stop. memorial: empty bowl with a flag (after the death card is dismissed). */
 export type ScenePhase = 'alive' | 'dead' | 'memorial';

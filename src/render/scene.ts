@@ -125,6 +125,8 @@ export function createScene(
    * pet anchor and are never null, which is what makes it impossible for the fish to lerp in from
    * (0, 0) — the failure the old "hidden until the first step" placement had in a different form.
    */
+  /** Last drawn position, for measuring ground covered. Null means "next frame is a placement". */
+  let lastDrawn: { x: number; y: number } | null = null;
   let poseFrom = { x: habitat.petAnchor[0], y: habitat.petAnchor[1] };
   let poseTo = { x: habitat.petAnchor[0], y: habitat.petAnchor[1] };
   /**
@@ -203,6 +205,7 @@ export function createScene(
         acc = 0; // the new pet's first tick is a whole one
         expression.reset();
         m.player.resetPose(ax, ay, 1);
+        lastDrawn = null;
         // `resetPose` moves the sprite but does not touch the sequencer, so the new pet was drawn
         // using whatever state the old one died in — the belly-up `dead` art, which also carries the
         // largest registration offset of any state — until the next behaviour tick replaced it.
@@ -386,6 +389,7 @@ export function createScene(
       // own px/py inside refresh(), which play()/setFacing() call, so a direct assignment is wiped the
       // first time the view is applied.
       player.resetPose(habitat.petAnchor[0], habitat.petAnchor[1], 1);
+      lastDrawn = null;
       layers.slots.pet.addChild(player.sprite);
       // The DOMAIN, not the manifest's waterShape. Those two only coincide for the fish: the cage
       // carries a degenerate ellipse purely to satisfy the schema, and feeding read it literally.
@@ -420,8 +424,19 @@ export function createScene(
         // them convex, so every point on the segment between two legal centres is itself legal.
         attention = decayAttention(attention, dtMs, pointer !== null);
         const t = acc / STEP_MS;
-        m.player.setPosition(poseFrom.x + (poseTo.x - poseFrom.x) * t, poseFrom.y + (poseTo.y - poseFrom.y) * t);
-        m.player.advance(dtMs);
+        const drawnX = poseFrom.x + (poseTo.x - poseFrom.x) * t;
+        const drawnY = poseFrom.y + (poseTo.y - poseFrom.y) * t;
+        // Ground covered on screen since the last rendered frame, which is what a walk cycle's stride
+        // is measured against. Taken from the DRAWN positions rather than from the behaviour's speed
+        // constant on purpose: the per-tick delta is not always `walkSpeed`, because arriving snaps
+        // short and the bounds clamp can shorten a tick against a wall. The pixels are the truth.
+        //
+        // `lastDrawn` is null for the first frame after a placement, where the delta would be a jump
+        // from wherever the sprite used to be -- across a habitat switch, the width of the screen.
+        const travelled = lastDrawn === null ? 0 : Math.hypot(drawnX - lastDrawn.x, drawnY - lastDrawn.y);
+        lastDrawn = { x: drawnX, y: drawnY };
+        m.player.setPosition(drawnX, drawnY);
+        m.player.advance(dtMs, travelled);
         m.flakes.interpolate(t, dtMs);
         m.bubbles.update(dtMs, rng);
         m.layers.update(dtMs);

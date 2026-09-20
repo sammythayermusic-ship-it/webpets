@@ -283,7 +283,7 @@ if "fish" in JOBS or any(s[0] in JOBS for s in STATES):
 CAGE_RES = (1280, 960)
 HAM_RES = (320, 320)
 HAM_STATES = [("idle", 1001, 12), ("eat", 1101, 8), ("hungry", 1201, 8),
-              ("sleep", 1301, 6), ("dead", 1401, 1)]
+              ("sleep", 1301, 6), ("dead", 1401, 1), ("walk", 1501, 8)]
 
 if "cage" in JOBS:
     stage = os.path.join(OUT, "cage")

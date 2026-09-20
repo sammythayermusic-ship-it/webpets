@@ -551,6 +551,22 @@ FUR_BELLY = (0.700, 0.580, 0.408)
 # with room to spare. That costs silhouette width, which is what HAM_SCALE below pays for.
 HAM_YAW_DEG = -50.0
 HAM_SCALE = 1.18
+
+# One full walk cycle carries the hamster this far across the habitat, in logical px. It is declared
+# to the renderer as `stridePx` in the manifest, and the foot amplitude below is solved from it.
+WALK_STRIDE_PX = 20.0
+# Half the ground a planted foot covers, in the rig's own (pre-scale) metres. A foot down for half
+# the cycle must travel back S/2 while the body goes forward S/2, so the half-amplitude is S/4.
+WALK_FOOT_AMP = (WALK_STRIDE_PX / 4.0) * (0.440 / 320.0) / HAM_SCALE
+# How high a foot lifts on the swing. 3 mm is about 2 logical px -- enough to read as clearing the
+# ground, little enough not to look like a prance.
+WALK_FOOT_LIFT = 0.0030
+WALK_PAW_LIFT = 0.0024
+# Amplitude of the body bob, two per cycle. The strongest locomotion cue at this size.
+WALK_BOB = 0.0022
+# World +X in the rig's own frame, which is the axis a stride must be keyed along. See the walk block.
+WALK_U_X = math.cos(math.radians(50.0))
+WALK_U_Y = math.sin(math.radians(50.0))
 # 4.7 logical px, in metres at the cage's 0.44/320 m per px.
 HAM_CENTRE_SHIFT = 4.7 * (0.440 / 320.0)
 
@@ -695,8 +711,14 @@ def build_hamster(col, m):
         wb.assign(paw, fur)
         parts.append(paw)
 
+        # Moved out and down. At the authored (+/-0.0182, -0.0218) these were ENTIRELY INSIDE the
+        # body: the loft is 0.02515 half-wide at x=-0.014 and reaches to z=-0.02654, so a foot
+        # reaching y=0.0236 with its sole at -0.0258 was narrower than the flank and higher than the
+        # belly. They have never rendered, in any state -- which is also why animating them would
+        # have changed nothing. Now the sole clears the belly by 3 mm and the foot stands 1.75 mm
+        # proud of the flank.
         foot = sphere(f"HERO_ham_foot_{tag}", 0.0080, 0.0054, 0.0040, col, segments=16, rings=10)
-        foot.location = (-0.0140, sy * 0.0182, -0.0218)
+        foot.location = (-0.0140, sy * 0.0215, -0.0255)
         wb.assign(foot, fur)
         parts.append(foot)
 
@@ -726,7 +748,10 @@ def build_hamster(col, m):
     for ob in parts:
         if ob.name.startswith('HERO_ham_ear_in_'):
             continue
-        for key, suffix in (('ear', 'ear_'), ('eye', 'eye_'), ('glint', 'glint_'), ('paw', 'paw_')):
+        # `foot` joins the list for the walk: the hind feet have always existed in the mesh but were
+        # never in this dict, so nothing could key them. A quadruped walk needs all four.
+        for key, suffix in (('ear', 'ear_'), ('eye', 'eye_'), ('glint', 'glint_'),
+                            ('paw', 'paw_'), ('foot', 'foot_')):
             if ob.name.startswith('HERO_ham_' + suffix):
                 named[f"{key}_{ob.name[-1]}"] = ob
     return rig, named
@@ -734,7 +759,7 @@ def build_hamster(col, m):
 
 # Frame blocks, continuing wp_render2's 100-apart spacing past the fish's 1..701.
 HAM_STATES = [("idle", 1001, 12), ("eat", 1101, 8), ("hungry", 1201, 8),
-              ("sleep", 1301, 6), ("dead", 1401, 1)]
+              ("sleep", 1301, 6), ("dead", 1401, 1), ("walk", 1501, 8)]
 
 
 def animate_hamster(rig, parts):
@@ -763,7 +788,9 @@ def animate_hamster(rig, parts):
     eye_l, eye_r = parts['eye_l'], parts['eye_r']
     glint_l, glint_r = parts['glint_l'], parts['glint_r']
     paw_l, paw_r = parts['paw_l'], parts['paw_r']
-    for ob in (rig, body, ear_l, ear_r, eye_l, eye_r, glint_l, glint_r, paw_l, paw_r):
+    foot_l, foot_r = parts['foot_l'], parts['foot_r']
+    limbs = {'paw_l': paw_l, 'paw_r': paw_r, 'foot_l': foot_l, 'foot_r': foot_r}
+    for ob in (rig, body, ear_l, ear_r, eye_l, eye_r, glint_l, glint_r, paw_l, paw_r, foot_l, foot_r):
         wb.clear_anim(ob)
     if parts.get('seed') is not None:
         wb.clear_anim(parts['seed'])
@@ -774,6 +801,10 @@ def animate_hamster(rig, parts):
     ear_pitch = {}
     eye_sz = {}
     paw_z, paw_x = {}, {}
+    # Per-limb offsets, {limb name: {frame: (dx, dy, dz)}}. Every state but `walk` moves the two sides
+    # together and just mirrors paw_x/paw_z into all four; the walk is the only thing that needs the
+    # diagonal pairs to disagree, and it writes here directly.
+    limb_off = {k: {} for k in ('paw_l', 'paw_r', 'foot_l', 'foot_r')}
     seed_sz = {}
     seed = parts.get('seed')
     # Every channel below must be given a value in EVERY state block. A block that leaves one out does
@@ -862,6 +893,97 @@ def animate_hamster(rig, parts):
         ear_pitch[f] = math.radians(30 + 2.5 * math.cos(t * math.tau + 0.5))
         eye_sz[f] = 0.06                              # shut
 
+    # ---- walk: a diagonal-pair gait, authored so a planted foot does not slide -------
+    #
+    # The arithmetic is the whole point. The renderer advances this cycle on GROUND COVERED, not on a
+    # clock -- `stridePx` in the manifest says one cycle carries the hamster WALK_STRIDE_PX. So for a
+    # foot to be genuinely planted while it is down, it must travel backwards in the animal's own
+    # space by exactly as far as the animal travels forwards in the world.
+    #
+    # Over a cycle the body advances S. A foot planted for a fraction beta of that cycle must move
+    # back S*beta in local space. With beta = 0.5 and S = 20 px that is 10 px of local travel, and a
+    # local +X displacement reaches the screen scaled by HAM_SCALE and foreshortened by cos(HAM_YAW),
+    # which is what WALK_FOOT_AMP solves for. Change the stride and that constant changes with it, or
+    # the feet skate.
+    #
+    # Diagonal pairs (front-left with hind-right) rather than a lateral sequence: at 63 logical px a
+    # four-beat lateral walk reads as a shuffle, while two beats read clearly as steps.
+    f0, n = 1501, 8
+    for i in range(n):
+        f = f0 + i
+        phase = i / n
+
+        # THE STRIDE IS KEYED ALONG THE GROUND, NOT ALONG THE SPINE. This is the thing that is easy
+        # to get wrong and impossible to see in the viewport. The hamster is yawed 50 degrees toward
+        # the camera, so "backwards along its own -X" is not "backwards along the direction it is
+        # travelling": a foot slid along local -X tracks horizontally but also CLIMBS, because local
+        # X carries a vertical component through this camera. Measured on the first version: the
+        # planted foot held to 0.33 px horizontally and rose 7.87 px over the same stance.
+        #
+        # World +X expressed in the rig's own frame is (cos 50, sin 50, 0), so a displacement D along
+        # that unit vector is exactly D of world travel and nothing else.
+        #
+        # The rig also pitches about its own origin while the limbs hang ~21 mm below it, which swings
+        # them fore-and-aft. Rather than approximate that away, x_t is SOLVED so the foot's world X
+        # lands on base + D exactly, pitch included.
+        pitch = math.radians(-1.0 + 2.6 * math.cos(math.tau * 2 * phase))
+        # The oscillating part of the body bob. A planted foot must not ride up and down with the
+        # body, so stance cancels it; a swinging foot is in the air and should follow. Divided by the
+        # rig scale because the rig's own z is in parent space while a limb's offset is local.
+        bob_osc = -WALK_BOB * math.cos(math.tau * 2 * phase)
+
+        def limb(ph, bx, by, bz, lift):
+            """(dx, dy, dz) for a limb at cycle phase `ph`, as an offset from its authored position.
+
+            The limb's pose is authored as where it should END UP once the rig has pitched, and then
+            run BACKWARDS through that pitch to find what to key. Inverting the rotation is exact and
+            handles both axes at once -- the earlier version solved only x and left the foot rising
+            1.3 px over its stance, because pitching a limb that hangs below the pivot moves it
+            vertically just as surely as horizontally.
+            """
+            ph = ph % 1.0
+            if ph < 0.5:                       # planted: travels backwards exactly as fast as the
+                d = WALK_FOOT_AMP * (1.0 - 4.0 * ph)   # body travels forwards, so it does not move
+                dz = -bob_osc / HAM_SCALE      # and does not ride the body's bob either
+            else:
+                sw = (ph - 0.5) / 0.5          # swinging: forward again, lifted clear
+                d = WALK_FOOT_AMP * (-1.0 + 2.0 * sw)
+                dz = lift * math.sin(math.pi * sw)
+            want_x, want_z = bx + WALK_U_X * d, bz + dz
+            c, si = math.cos(pitch), math.sin(pitch)
+            x_t = want_x * c - want_z * si
+            z_t = want_x * si + want_z * c
+            return (x_t - bx, WALK_U_Y * d, z_t - bz)
+
+        for name, ph_off, lift in (('paw_l', 0.0, WALK_PAW_LIFT), ('foot_r', 0.0, WALK_FOOT_LIFT),
+                                   ('paw_r', 0.5, WALK_PAW_LIFT), ('foot_l', 0.5, WALK_FOOT_LIFT)):
+            ob = limbs[name]
+            limb_off[name][f] = limb(phase + ph_off, ob.location.x, ob.location.y, ob.location.z, lift)
+
+        # Two bobs per cycle, lowest as each pair lands and highest at mid-stance. At 63 px the legs
+        # are 10 px blobs and the bob is doing at least as much of the work as they are.
+        # Roll and yaw are kept SMALL on purpose. They read as life, but every degree of yaw swings
+        # a planted foot sideways -- a foot 25 mm off the rig centre moves 0.8 logical px per 2.6
+        # degrees -- and that shows up directly as drift in a foot that is supposed to be nailed to
+        # the ground. Pitch is free: it moves the foot vertically, not along the direction of travel.
+        # Roll is keyed flat. It needs about 3.5 degrees to move the top of the back a single screen
+        # px, so at any amplitude that reads it is a cartoon -- but even 1.4 degrees swings a planted
+        # foot 0.4 px vertically, because the feet sit 21 mm off the roll axis. It buys nothing and
+        # costs the thing this cycle exists to protect. Keyed to 0 rather than omitted, so the curve
+        # cannot bleed across the 100-frame gap from a neighbouring state.
+        rot_x[f] = 0.0
+        rot_y[f] = pitch
+        rot_z[f] = math.radians(1.1 * math.sin(math.tau * phase + 0.5))
+        z[f] = z0 - 0.0016 + bob_osc
+        sz[f] = 1.0 + 0.016 * math.cos(math.tau * 2 * phase)
+        sx[f] = 1.0 - 0.010 * math.cos(math.tau * 2 * phase)
+        # Ears lag the body by a quarter cycle, which is what soft things do.
+        ear_pitch[f] = math.radians(-4.0 + 7.0 * math.cos(math.tau * 2 * phase - 1.4))
+        eye_sz[f] = 1.0
+        seed_sz[f] = 0.0
+        paw_z[f] = 0.0
+        paw_x[f] = 0.0
+
     # ---- dead: on its SIDE, and completely still -------------------------------------
     # Six identical frames rather than one, because `dead` is a looping state and the player expects
     # the declared count. The art gate skips the motion check for a single frame but not for six, so
@@ -900,17 +1022,27 @@ def animate_hamster(rig, parts):
     for eye in (eye_l, eye_r, glint_l, glint_r):
         wb.key_curve(eye, 'scale', 2, eye_sz)
     # Offsets from where the paw was authored, so the rest pose stays wherever the model put it.
-    for paw in (paw_l, paw_r):
-        bz, bx = paw.location.z, paw.location.x
-        wb.key_curve(paw, 'location', 2, {f: bz + v for f, v in paw_z.items()})
-        wb.key_curve(paw, 'location', 0, {f: bx + v for f, v in paw_x.items()})
+    # Fill the shared paw motion into all four limbs for every frame the walk did not already write.
+    # The hind feet inherit nothing from paw_x/paw_z in the old states (they did not move before and
+    # should not start), so only the front paws take the shared values.
+    for f, v in paw_x.items():
+        limb_off['paw_l'].setdefault(f, (v, 0.0, paw_z.get(f, 0.0)))
+        limb_off['paw_r'].setdefault(f, (v, 0.0, paw_z.get(f, 0.0)))
+        limb_off['foot_l'].setdefault(f, (0.0, 0.0, 0.0))
+        limb_off['foot_r'].setdefault(f, (0.0, 0.0, 0.0))
+    for name, ob in limbs.items():
+        bx, by, bz = ob.location.x, ob.location.y, ob.location.z
+        off = limb_off[name]
+        wb.key_curve(ob, 'location', 0, {f: bx + d[0] for f, d in off.items()})
+        wb.key_curve(ob, 'location', 1, {f: by + d[1] for f, d in off.items()})
+        wb.key_curve(ob, 'location', 2, {f: bz + d[2] for f, d in off.items()})
 
     if seed is not None:
         for axis in (0, 1, 2):
             wb.key_curve(seed, 'scale', axis, seed_sz)
         wb.set_interpolation(seed, 'CONSTANT')
 
-    for ob in (rig, body, ear_l, ear_r, eye_l, eye_r, glint_l, glint_r, paw_l, paw_r):
+    for ob in (rig, body, ear_l, ear_r, eye_l, eye_r, glint_l, glint_r, paw_l, paw_r, foot_l, foot_r):
         wb.set_interpolation(ob, 'LINEAR')
     return sum(n for _, _, n in HAM_STATES)
 
