@@ -1,0 +1,25 @@
+{
+  "name": "bakeoff-20s",
+  "comment": "The one script every bake-off candidate is recorded with: idle, pointer arrives, feed, eat, hungry, night, pointer leaves. Run with: node tools/harness.mjs script tools/bakeoff/script.json",
+  "steps": [
+    { "op": "force", "state": "fed" },
+    { "op": "night", "value": false },
+    { "op": "setBalance", "n": 1000 },
+    { "op": "pointer", "x": null },
+    { "op": "sleep", "ms": 1500 },
+    { "op": "record", "name": "bakeoff-20s", "seconds": 20, "fps": 60 },
+    { "op": "sleep", "ms": 3000 },
+    { "op": "pointer", "x": 340, "y": 300 },
+    { "op": "sleep", "ms": 2000 },
+    { "op": "feed" },
+    { "op": "sleep", "ms": 5000 },
+    { "op": "force", "state": "hungry" },
+    { "op": "sleep", "ms": 4000 },
+    { "op": "night", "value": true },
+    { "op": "sleep", "ms": 4000 },
+    { "op": "pointer", "x": null },
+    { "op": "sleep", "ms": 2500 },
+    { "op": "night", "value": null },
+    { "op": "force", "state": "fed" }
+  ]
+}

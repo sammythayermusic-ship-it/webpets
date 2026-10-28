@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:e2e": "npm run build && playwright test",
+    "build:harness": "VITE_WEBPETS_HARNESS=1 tauri build --bundles app --features harness",
     "install:app": "bash scripts/install-app.sh"
   },
   "dependencies": {

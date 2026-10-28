@@ -10,6 +10,12 @@ rust-version = "1.77.2"
 name = "webpets_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# Compiles src/harness.rs and registers its two commands: a file-driven remote control for driving
+# the packaged app from a shell script (docs/HARNESS.md). Off by default; `npm run build:harness`
+# turns it on. Never ship a build with it.
+harness = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

@@ -954,3 +954,80 @@ pseudo-random walk happens to stop, not about `reset`. Moving the sites to match
 walk ending near the middle and the test failed while nothing was broken. It now states equality with a
 freshly built behaviour fed the same rng stream, which is what "not a continuation" means — and that
 form fails when `reset` is stubbed to a no-op, which the old one no longer did.
+
+## 2026-10-28 — Next phase, step 0: health check
+
+The brief is `docs/PHASE-NEXT.md`, which overrides the Blueprint wherever they disagree. The project
+is no longer a crypto product: no coin, no wallets, no chain, at any phase. `$FEED` is food.
+
+### plan
+Run every suite, build and install the `.app`, measure the real frame rate of the installed app,
+hand-check the four acceptance items nobody ever checked (tray menu and chip, notifications firing,
+click-through onto the desktop, `Cmd+Shift+P`), refresh `CLAUDE.md`, fix anything red, write the
+checkpoint report. Build the tooling the rest of the phase needs to *verify in the built app*
+rather than in `tauri dev`, because every later step is judged on recordings of the installed app.
+
+### what the frame-rate measurement actually said
+"Packaged app at 15 fps" in the brief was true in September and is not the whole story. Two boot
+reports from the same binary on the same day, minutes apart:
+
+| launched while | `document.visibilityState` | scene advances/s | Pixi fps | render ms |
+|---|---|---|---|---|
+| the active Space was a fullscreen app (window off-screen) | `hidden` | 14 | 60 (seeded, meaningless) | 5.7 |
+| a desktop Space with the window on screen | `visible` | 61 | 63 | 0.1 |
+
+So the 15 fps is the *occluded* case, where WebKit stops `requestAnimationFrame` and the worker pacer
+in `src/render/pacer.ts` is the only clock; on screen the document is visible and the ticker runs at
+the display rate. **60 fps is reachable and is what the user sees.** The September diagnosis that an
+unactivated window is always "hidden" was made with the window on a Space that was not the active one,
+or on an older macOS; either way, do not spend effort on `_setWindowOcclusionDetectionEnabled` or
+process-suppression tricks. The pacer earns its keep when the pet is off-screen and should stay as it
+is — 14 advances/s there costs ~5% of a core and nobody is looking.
+
+Costs at 2x (688x528 window), measured with `ps` over 6 s, three processes (shell, WebContent, GPU):
+~21% of one core shown, ~5% hidden; ~200 MB RSS in total. That is a lot for a static bowl with one
+fish, and it is the number the bake-off candidates are measured against.
+
+### the four hand checks, and how each was proven without a human
+Every one passes. The proofs are the point, because they are reusable:
+
+- **Click-through.** `tools/mac/clickat.swift` posts a real CGEvent click. Click on the bowl: Blender
+  stays frontmost (the pet never steals focus). Click on the transparent pad: Finder becomes frontmost,
+  i.e. the click reached the desktop behind the window.
+- **`Cmd+Shift+P`.** Sent through System Events; `tools/mac/winlist.swift` shows the window leave the
+  on-screen list and come back.
+- **Tray menu and chip.** A real right-click on the status item (position from AX) opens a 164x331
+  menu window at layer 101 with Feed, Pantry…, Size, Mute, Notifications, Day/Night, Visible on, Launch
+  at login, Dev panel, New pet, Minimize, Quit. The chip is in the menu bar: green hunger ring around
+  the fish at 92% full.
+- **Notifications.** Dev panel `+12H` twice: stdout logs `notify: Bubbles is hungry.` and `… is
+  starving. 12h to live.`, and Notification Center's own database gains two records for
+  `com.sammythayer.webpets` with delivery timestamps. No permission prompt: the bundle id was already
+  registered.
+
+Two things noticed on the way, neither fixed here: the tray chip is still pixel art (a jagged ring and
+a 6-px fish) next to a soft-3D bowl, and Notification Center's sqlite WAL lags delivery by a few
+seconds, so a check that reads it must wait.
+
+### capture works now, and that changes the self-review loop
+The September note that `screencapture` returned black is stale: Screen Recording is granted and
+`screencapture -x` returns the real screen. Per-window capture (`-l<id>`) works only on the current
+Space. A fullscreen app's Space hides the pet by design (logged earlier), so the checks were run after
+switching to a desktop Space and switching back.
+
+### the harness
+Every later step says "record it in the installed .app, compare, fix, re-record". The packaged app has
+no devtools and the dev-only diag bridge needs the Vite server, so the installed app could only be
+driven by clicking on it. `docs/HARNESS.md` describes the fix: a file-driven remote control compiled
+in only by `npm run build:harness` (Vite env `VITE_WEBPETS_HARNESS=1` plus the cargo feature
+`harness`), reading command files from the app-data folder and writing PNGs, a video from
+`MediaRecorder` on the canvas, and state dumps. It is deliberately a *separate* build so the build a
+user gets has none of it, and it is deliberately file-based so a shell script — or the bake-off's
+one script for three candidates — can drive it with no socket, no server and no permission dialog.
+
+Verified in the packaged harness build: `MediaRecorder` in WKWebView gives H.264 in mp4
+(`avc1.42000a`), `canvas.captureStream(60)` works, and a 20 s clip of the Medium canvas is 6 MB and
+~54 fps. The harness app is built under its own bundle id (`tauri build --config
+'{"identifier":"com.sammythayer.webpets.harness","productName":"WebPets Harness"}'`) so it never
+collides with the user's `/Applications/WebPets.app`; the same trick is what lets three bake-off
+candidates be installed side by side.

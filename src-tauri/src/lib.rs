@@ -4,6 +4,9 @@
 
 mod clock;
 mod commands;
+/// Verification-only remote control; absent from a normal build. See `docs/HARNESS.md`.
+#[cfg(feature = "harness")]
+mod harness;
 mod hittest;
 mod identity;
 mod state;
@@ -121,6 +124,10 @@ pub fn run() {
             commands::autostart_get,
             commands::autostart_set,
             commands::quit_app,
+            #[cfg(feature = "harness")]
+            harness::harness_poll,
+            #[cfg(feature = "harness")]
+            harness::harness_write,
         ])
         .setup(|app| {
             // No Dock icon, no app menu bar: the tray is the app's home.

@@ -329,6 +329,16 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
     );
   }
 
+  // Verification-only remote control (docs/HARNESS.md). Same shape as the diag bridge: a dynamic
+  // import behind a build-time constant, so a normal build tree-shakes the whole module out. The
+  // matching Rust commands exist only under `--features harness`; `npm run build:harness` sets both.
+  if (import.meta.env.VITE_WEBPETS_HARNESS === '1') {
+    const devPanelHandle = devPanel;
+    void import('./dev/harness').then((mod) =>
+      mod.installHarness({ store, platform, scene, devPanel: devPanelHandle, hud: hudHandle }),
+    );
+  }
+
   // 5. "While you were gone" montage; recentEvents is read once, right after boot.
   const { recentEvents, pet } = store.getState();
   if (recentEvents.length > 0) {

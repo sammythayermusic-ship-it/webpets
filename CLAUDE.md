@@ -1,32 +1,99 @@
 # WebPets — CLAUDE.md
 
-Read `WEBPETS-BLUEPRINT.md` first. It is the full spec. Follow it in phase order and stop for review at the end of each phase.
-
 ## What this repo is
-A Tauri 2 + Vite + TypeScript + PixiJS desktop pet. A pixel-art habitat (fish bowl, hamster cage, frog pond, chicken coop) floats in the corner of the screen. The pet gets hungry on a clock that never pauses, eats when fed with $FEED, and dies if neglected. Phase 0 is fully local (no blockchain).
+A premium desktop tech pet for macOS: Tauri 2 + Vite + TypeScript (strict) + PixiJS 8. A habitat floats in the
+corner of the screen, transparent around the art, always on top, no Dock icon (the tray is its home). The pet
+gets hungry on a clock that never pauses, eats when fed, and dies if neglected. Built today: **fish in a bowl**
+and **hamster in a cage or a glass terrarium**. **Frog and chicken are not built** (declared in `Species` in
+`src/sim/types.ts`, absent from `src/species/index.ts`). Art is soft 3D rendered from `assets/3d/wp_scene.blend`
+(primitives and code, no paid generation). The direction and quality bar ("it has to look like Apple made it";
+realistic yet cyber; something you would leave open just to watch) are in `docs/PHASE-NEXT.md`.
+
+**No crypto, no NFTs, no wallets, no blockchain, no coin — at any phase.** `$FEED` is plain in-app food (a number
+in `pet.json`). Blueprint Phases 2 and 3 are shelved. Open questions, keep the code able to go either way: how
+the app makes money, whether food costs anything, whether a pet can die for good.
+
+## Read first
+1. `docs/PHASE-NEXT.md` — the current brief and step list. Overrides the Blueprint wherever they disagree.
+2. `docs/ARCHITECTURE.md` — the binding module contract (ownership, layers, window geometry, Rust commands and events, sim API). Written for Phase 0: where a later DECISIONS entry changed something, DECISIONS wins; update the contract when you change it.
+3. `docs/DECISIONS.md` — the decision log. Append under your own dated heading (`## YYYY-MM-DD — topic`).
+4. `docs/HARNESS.md` — the packaged-app verification harness (file-driven; compiled in only by `npm run build:harness`).
+5. `docs/reports/` — checkpoint reports (numbers, screenshots, recordings).
+6. `docs/NEEDS-SAMMY.md` — things only the user can do. Add to it, do not wait on it.
+7. `assets/3d/README.md` — the Blender source and its rules.
+8. `WEBPETS-BLUEPRINT.md` — the original spec. Superseded where PHASE-NEXT disagrees; its chain phases are shelved.
+`docs/SIM-TESTS.md` is the sim test list; `README.md` is user-facing and partly stale (it still describes the
+fish-only pixel-art Phase 0).
 
 ## Rules of the road
-- TypeScript strict, no `any`. `src/sim` is pure and has zero imports from render/ui. Write its tests first.
-- The 320×240 habitat grid is LOGICAL coordinates, not pixels: it defines behaviour, water bounds and hit regions
-  at any art resolution. Art is pre-rendered 3D at an integer multiple of it, filtered linearly with mipmaps, and
-  the multiple is derived from the texture. The window scale is continuous, counted in eighths of the grid
-  (0.75×–4×), so every size lands on whole pixels in both TypeScript and Rust. The simulation ticks at 8 fps; the
-  animation runs at the art's own rate and the drawn position is interpolated between ticks.
-- Never add blockchain dependencies in Phase 0.
-- Never handle seed phrases, ever.
-- When art is missing, generate labeled placeholder PNGs at the correct size and keep going. Do not ask for art.
-- Commit after each working step. Log decisions in `docs/DECISIONS.md`.
+- TypeScript strict, no `any`. `src/sim` is pure: zero imports from outside `src/sim` (`purity.test.ts` enforces it). Write its tests first.
+- Dependency direction: `sim` ← `app` ← (`render`, `ui`) ← `main`. `render` and `species` import from `sim` and from each other's types/helpers, never from `app`, `ui` or `platform`. `platform` is imported by `app`, `ui`, `dev`, `main` only.
+- The 320×240 habitat grid is LOGICAL coordinates, not pixels: it defines behaviour, water bounds and hit regions at any art resolution. Art is pre-rendered 3D at an integer multiple of it, filtered linearly with mipmaps, and the multiple is derived from the texture, never declared. Never name an asset with an `@2x` style suffix.
+- The window scale is continuous, counted in EIGHTHS of the grid (4 to 32, i.e. 0.5×–4×; 8 is 1×; fresh installs start at 6) so every size is whole pixels in TypeScript and Rust. `src/sim/constants.ts` is the one place the formula lives; `src-tauri/src/window.rs` mirrors it and `contract_sync` (Rust) plus `tests/unit/contract-sync.test.ts` pin them together.
+- The simulation ticks at 8 Hz (`PET_FPS`); animation runs at the art's own rate and the drawn position is interpolated between ticks. Sim math uses timestamps, never elapsed timers.
+- Never handle seed phrases, keys or wallets. No blockchain dependencies, ever.
+- When art is missing, generate labelled placeholder PNGs at the correct size and keep going (`tools/gen_placeholders.py`). Do not ask for art.
+- Verify in the BUILT, INSTALLED `.app`, not just `tauri dev` or a browser. Packaged-only failures are the history of this repo (blank habitat, 1 fps, stale copy running).
+- No paid generation in Blender (`bl_generate_*`, `bl_image_to_3d`). Never save over a `.blend` in place; write a copy (`resave.py`, timestamped checkpoints).
+- Everything that can only be rebuilt by hand lives in the repo (sources, scripts, geometry), not in a scratchpad or a live Blender session. A render is not a source.
+- Commit after each working step. Log decisions in `docs/DECISIONS.md`. Reports are short and plain, with no time estimates.
+- Only stop for things only Sammy can do (Apple developer account, signing, App Store, testing on his iPhone), the open questions above, spending money, or anything that cannot be undone. Put those in `docs/NEEDS-SAMMY.md` and keep working on everything else.
 
-## Assets already in this repo
-- `assets/habitats-160x120/` — the 8 habitat concept renders snapped to the 160×120 grid (bowl, tank, cage, terrarium, pond, jar, coop, brooder). These are single-layer concept art; use them as the visual target and as a temporary `bg` layer until the layered set exists.
-- `assets/reference/habitats-hires/` — the same habitats at 1024px for reference only. Do not ship these.
-- `assets/sprites/pets-80/` — 80×80 single-frame pixel sprites (blob, stilt, pompom, fox, shroom, slug). These are from an earlier art round with different species; use them only to validate the sprite player and the strip format. The real fish/hamster/frog/chicken sprites will be added later.
-- `assets/sprites/strips-80/` — example 4-frame 80×80 strips (`gus-idle`, `gus-eat`, `gus-die`, `doink-idle`) showing the exact strip layout the sprite player should read.
+## Commands
+```sh
+npm install
+npm test                  # Vitest: sim, app, ui, render, species, tests/unit
+npm run typecheck         # tsc --noEmit
+cd src-tauri && cargo test   # Rust: includes contract_sync
+npm run test:e2e          # builds, then Playwright (browser mode, mock platform)
+npm run dev               # frontend in a browser against src/platform/browser.ts
+npm run tauri dev         # real shell; notifications post as Terminal here
+npm run tauri build       # unsigned bundle at src-tauri/target/release/bundle/macos/WebPets.app
+npm run install:app       # build + install (see below)
+npm run build:harness     # verification build with the harness compiled in (docs/HARNESS.md); never ship it
+```
+**Install only with `npm run install:app`.** Every build shares the bundle id `com.sammythayer.webpets`, so macOS
+routes a launch to whichever copy is already running; a freshly built copy opened by double-click can silently
+be the OLD one. The script quits the running process (matched on the executable name `webpets`), replaces the one
+canonical `/Applications/WebPets.app`, and launches it. Never keep extra copies ("WebPets 2.app").
 
-## Start here
-1. Scaffold Tauri 2 + Vite + TS + PixiJS 8 (macOS target).
-2. `src/sim` with Vitest tests per Blueprint §5.
-3. The transparent, frameless, always-on-top window per §4.
-4. Fish in a bowl per §6–§8, using `assets/habitats-160x120/fish-bowl.png` as the temporary background and a placeholder fish strip.
-5. Hover HUD, feed, pantry, death, tray chip, notifications, dev panel.
-6. Stop and report against the Phase 0 acceptance list (§11).
+Generators and tools:
+- `python3 tools/gen_placeholders.py <species> <habitat>` — stamped PLACEHOLDER layers plus the manifest fragment (needs Pillow). `tools/gen_app_icon.py` — placeholder app and tray icons.
+- `tools/mac/clickat.swift`, `tools/mac/winlist.swift` — `swiftc -O <file> -o /tmp/<name>`; post a real click / list windows (level, bounds, on-screen) without screen-recording permission.
+- `tools/vite-diag-plugin.ts` with `src/dev/diag.ts` — dev-only snapshot bridge (`curl 'http://localhost:1420/__webpets/snap?name=x'` writes `.diag/`).
+- Blender (`/Applications/Blender.app/Contents/MacOS/Blender`, background mode, scripts in `assets/3d/scripts/`):
+  `Blender -b assets/3d/wp_scene.blend -P assets/3d/scripts/wp_render2.py -- <out_root> <jobs> <samples>`
+  (jobs: `bowl`, `fish`, or a state name). `wp_cage.py` and `wp_terrarium.py` take `-- <out.blend>`; `resave.py` writes a copy. Read the docstring at the top of each script before running it.
+
+## Layout
+- `src/sim/` — pure rules: hunger, reconcile, feed, pantry, mood, pet, ledger, constants, types. `src/sim/constants.ts` holds every tunable (feeding twice a day: 50-point meal, 24 h bar, death 12 h after zero).
+- `src/app/` — Zustand vanilla store, persistence (store plugin), 30 s scheduler, notification decisions, `view.ts` (state to scene view), day/night.
+- `src/platform/` — `types.ts` interface; `tauri.ts` (real), `browser.ts` (mock for dev and Playwright), `geometry.ts`.
+- `src/render/` — PixiJS scene, layers, sprite player, sequencer, water bounds, food, fx, expression, tray chip, asset and manifest loading, `pacer.ts`.
+- `src/species/` — `index.ts` registry (fish, hamster); `fish/` and `hamster/` each have `behavior.ts` (pure state machine), `layout.ts`, `lines.ts` (speech pools), `module.ts`; hamster adds `terrarium.ts`.
+- `src/ui/` — DOM HUD, tray wiring, speech bubbles, pantry dialog, montage, memorial, resize grip, dev panel, hit regions, keys, `styles.css`.
+- `src/audio/` — audio hooks only (Howler; missing files are skipped). Sound is deliberately out of scope beyond hooks.
+- `src/dev/` — dev-only diagnostics (`diag.ts`, `harness.ts`). `src/main.ts` — boot and all cross-module wiring, and the boot report.
+- `src-tauri/src/` — Rust shell: `window.rs` (size, snap, layering), `tray.rs`, `hittest.rs` (click-through poller), `commands.rs`, `clock.rs`, `identity.rs` (which binary is running), `state.rs`, `lib.rs`, `harness.rs` (cargo feature `harness` only).
+- `assets/3d/` — `wp_scene.blend` (source), `scripts/` (build and render pipeline), `checkpoints/` (timestamped .blend copies), `evidence/` (reference renders).
+- `assets/habitats/{fish/bowl,hamster/cage,hamster/terrarium}/` — rendered layers (`bg`, `decor_front`, `glass`, `memorial`, ...); `assets/sprites/{fish,hamster}/<state>/` — one PNG per frame; `assets/manifest.json` indexes both (habitats `fish/bowl`, `hamster/cage`, `hamster/terrarium`; sprites `fish`, `hamster`). Vite serves `assets/` as `publicDir`.
+- Reference only, nothing reads them: `assets/habitats-160x120/`, `assets/sprites/pets-80/`, `assets/sprites/strips-80/` (Phase 0 concept art and earlier-round sprites), `assets/reference/habitats-hires/` (1024 px concept renders, dropped from the build). `assets/fonts/PressStart2P` is unused.
+- `tools/` — generators, Mac helpers and `harness.mjs` (the harness driver; see `docs/HARNESS.md`). `scripts/install-app.sh` — behind `npm run install:app`.
+- `tests/unit/` (contract sync), `tests/e2e/` (Playwright: smoke, acceptance, hamster, resize). Unit tests sit beside the code as `*.test.ts`.
+- `docs/` — see Read first.
+
+## Where runtime data lives
+`~/Library/Application Support/com.sammythayer.webpets/`: `pet.json` (the living pet), `settings.json` (scale, mute,
+layering, day/night, per-monitor window positions), `graveyard.json`, `boot-report.json` (written at every boot:
+layering read back off the live window, measured advance rate, visibility). **Read `build.bundle` first** to know
+which binary wrote it. To reset, quit the app and delete the folder. In browser mode these are `localStorage` keys
+`webpets:<file>`.
+
+## macOS facts worth not rediscovering
+- The packaged window is never activated (Accessory policy, no `set_focus`), so WebKit can report `document.visibilityState === 'hidden'` and clamp timers to 1 Hz and stop rAF. `src/render/pacer.ts` (a Worker interval, unthrottled) keeps the scene alive. On screen it runs at the display rate (~61 advances/s measured, `docs/reports/checkpoint-0.md`); when the window is not on screen (another Space, a fullscreen app in front) it falls to ~15. Trust the newest `docs/reports/` number over this line.
+- Pixi's `fps` is seeded to 60 and lies when nothing runs; measure the scene's own advance counter (the boot report does).
+- `Alt+Cmd+D` collides with the system "Turn Dock Hiding On/Off" shortcut; use the tray's Dev panel item (or Shift+Alt+Cmd+D).
+- A fullscreen app covers the pet by design (known limitation, decided; do not call `setAlwaysOnTop` from JS, it would drop the window from level 25 to 5).
+- Notifications from `tauri dev` post under the Terminal identity; only the bundled `.app` posts as `com.sammythayer.webpets`.
+- `screencapture -x` from a Claude session returns real screenshots (Screen Recording is granted), but `-l<windowId>` captures a window only if it is on the CURRENT Space (off-Space it returns a transparent PNG). Find ids with `tools/mac/winlist.swift`; the diag bridge, Playwright video and AX also work. While the screen is locked macOS scales reported window rects by 0.9 about the display center.
+- Global shortcut `Cmd+Shift+P` shows or hides the pet; the tray left-click toggles, right-click opens the menu.
