@@ -1098,3 +1098,35 @@ shared script; each reports with its evidence folder under `docs/reports/bakeoff
 stage runs the same measurement script against each installed build in turn (one at a time: they
 share the bundle id). The lead scores the recordings and stills, writes the table and the decision
 here, and continues on the winner's branch. The two others are kept.
+
+## 2026-10-28 — Step 2 groundwork while the bake-off renders: the needs model
+
+The candidates were told the behaviour stays 2D and unchanged, which makes the pure sim side of
+step 2 safe to build on the mainline now and merge under whichever renderer wins. `src/sim/needs.ts`
+is that: energy, curiosity, comfort and stress, the attention events (pointer arrival, a tap on the
+glass, a meal, a bite), and the drives a behaviour reads (activity, approach, hide, nap, greet,
+surface). Nothing consumes it yet; the wiring into the store, the pointer/tap plumbing and the fish
+and hamster behaviours is the step-2 work proper, after the merge.
+
+- **Anchors, not counters**, for the same reason hunger is an anchor: the clock never pauses, so a week
+  with the app closed must leave the pet as tired, bored and settled as a week in that regime would.
+  Each need is a value at a moment, advanced under a piecewise-constant regime the app passes in
+  (asleep, hunger label, pointer present, personality). The linear and exponential pieces compose, so an
+  absence that crossed day and night is replayed as segments; a backwards clock is a no-op.
+- **Energy drains awake (empty in 16 h) and restores asleep (full in 8 h)**, faster to empty when hungry.
+  Below 0.15 and with five quiet minutes the pet wants a nap; it naps until 0.5. That hysteresis is
+  what gives the pet a day — a morning dart, a midday lull, a doze on the gravel — instead of a loop.
+- **Curiosity rises with quiet and is spent by stimulus**, at a personality rate (degen 1.6, anxious 1.2,
+  sarcastic 0.8, zen 0.6 of full-in-two-hours). A pointer arrival spends half of it; after two hours
+  away it also arms a twenty-second greeting. A sarcastic pet's `approach` ignores you until curiosity
+  crosses 0.6, then stares — the one personality trick that is a shape, not a number.
+- **Stress is a tap's jolt, halving every ten minutes**, sized by personality (anxious 0.4, zen 0.15).
+  Hide is floored per term: being rattled, being starving, and deep discomfort each add, none can
+  cancel another — the first draft let a calm pet "owe" hiding and a starving fish never kept low.
+- **Comfort lags a target** (personality calm + hunger + stress + company + sleep) with a 45-minute
+  time constant, which is what stops one tap or one meal flipping the pet's whole demeanour. The
+  target's stress is taken at the span's midpoint: exact for a linear target, and over a long absence
+  it errs toward "less rattled", which is the right error.
+- Stored under a new optional `needs` block in the pet document, normalised field by field over the
+  defaults so every existing pet wakes rested and settled; no version bump (see the settings note on
+  why a bump discards preferences). 25 tests, including a day in the life.

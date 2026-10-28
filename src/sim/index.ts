@@ -47,6 +47,19 @@ export {
 export type { Scale, TrayChipSize } from './constants';
 export { hungerAt, hungerLabel, pantryDays, projectedDeathAt, zeroAt } from './hunger';
 export { decayAttention, moodAnim, moodOf } from './mood';
+export {
+  advanceNeeds,
+  comfortTarget,
+  curiosityAt,
+  defaultNeeds,
+  drivesOf,
+  energyAt,
+  needsAt,
+  normalizeNeeds,
+  stimulate,
+  stressAt,
+} from './needs';
+export type { Drives, DrivesContext, NeedAnchor, NeedsRegime, NeedsState, Stimulus } from './needs';
 export type { Mood, MoodInput, MoodLabel } from './mood';
 export { reconcile } from './reconcile';
 export { depositPantry, feed, withdrawPantry } from './feed';
