@@ -28,9 +28,39 @@ if "night" in JOBS:
     C.shoot("CAM_bowl", (1280, 960), os.path.join(OUT, "night_full.png"), frame=LOOP)
 if "fish" in JOBS:
     C.show_collections("WP_Fish", "WP_Rig")
-    C.rig(False)
+    C.rig(False, fish=True)
     C.shoot("CAM_fish", (320, 320), os.path.join(OUT, "fish_idle_1.png"), frame=1)
     C.shoot("CAM_fish", (640, 640), os.path.join(OUT, "fish_idle_big.png"), frame=3, subframe=0.5)
+if "caustic" in JOBS:
+    # Is MNEE contributing at all? The same gravel under the key alone, caustics on and off.
+    C.show_collections("WP_Bowl", "WP_Rig")
+    C.rig(False)
+    sc.render.use_border = True
+    sc.render.use_crop_to_border = True
+    sc.render.border_min_x, sc.render.border_max_x = 0.26, 0.74
+    sc.render.border_min_y, sc.render.border_max_y = 0.24, 0.48
+    for on in (True, False):
+        bpy.data.lights["LGT_key"].cycles.is_caustics_light = on
+        C.shoot("CAM_bowl", (1280, 960), os.path.join(OUT, "caustic_%s.png" % ("on" if on else "off")), frame=LOOP)
+    bpy.data.lights["LGT_key"].cycles.is_caustics_light = True
+    sc.render.use_border = False
+    sc.render.use_crop_to_border = False
+if "gobo" in JOBS:
+    # What the caustic projector alone paints: every other light off, world black.
+    C.show_collections("WP_Bowl", "WP_Rig")
+    C.rig(False)
+    saved = {o.name: o.hide_render for o in bpy.data.objects if o.type == 'LIGHT'}
+    for o in bpy.data.objects:
+        if o.type == 'LIGHT':
+            o.hide_render = (o.name != "LGT_caustic")
+    bg = sc.world.node_tree.nodes["Background"].inputs["Strength"]
+    old = bg.default_value
+    bg.default_value = 0.0
+    C.shoot("CAM_bowl", (1280, 960), os.path.join(OUT, "gobo_only.png"), frame=LOOP)
+    bg.default_value = old
+    for o in bpy.data.objects:
+        if o.type == 'LIGHT':
+            o.hide_render = saved[o.name]
 if "loop" in JOBS:
     C.show_collections("WP_Bowl", "WP_Rig")
     C.rig(False)

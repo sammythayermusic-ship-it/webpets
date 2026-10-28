@@ -149,13 +149,23 @@ def mask_pass(stage):
     reset()
 
 
+# The loop ships cropped to the inside of the glass (a_finish.REGION, art px 308..972 x 76..732), so
+# only that part of each frame is rendered: a border with a 16 px margin, the rest of the frame left
+# empty, which is ~40% of the pixels and ~2.5x the frames per hour. Border y is bottom-up.
+LOOP_BORDER = (292 / 1280.0, 988 / 1280.0, 1.0 - 748 / 960.0, 1.0 - 60 / 960.0)
+
+
 def loop_pass(stage, prefix, night):
     reset()
     C.show_collections("WP_Bowl", "WP_RigNight" if night else "WP_Rig")
     C.rig(night)
     CATCHER.hide_render = True
+    sc.render.use_border = True
+    sc.render.use_crop_to_border = False
+    sc.render.border_min_x, sc.render.border_max_x, sc.render.border_min_y, sc.render.border_max_y = LOOP_BORDER
     for i in range(LOOP_N):
         C.shoot("CAM_bowl", BOWL_RES, os.path.join(stage, prefix, "%s_%04d.png" % (prefix.strip("/"), i + 1)), frame=LOOP + i)
+    sc.render.use_border = False
     CATCHER.hide_render = False
     reset()
 
@@ -188,7 +198,7 @@ if "memorial" in JOBS:
 if "fish" in JOBS or any(s[0] in JOBS for s in STATES):
     reset()
     C.show_collections("WP_Fish", "WP_Rig")
-    C.rig(False)
+    C.rig(False, fish=True)
     wanted = [s for s in STATES if "fish" in JOBS or s[0] in JOBS]
     for name, first, count in wanted:
         n = 0

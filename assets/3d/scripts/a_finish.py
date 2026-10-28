@@ -104,11 +104,9 @@ def contact_shadow(b_a, c_a):
 
 
 def clean_plate(prefix, loop_dir):
-    """The clean beauty pass. The DAY plate is loop frame 1 when the loop was rendered, so the
-    still bowl and the loop's first frame are literally the same pixels."""
-    first = os.path.join(STAGE, loop_dir, "%s_0001.png" % loop_dir)
-    if os.path.exists(first):
-        return load(first)
+    """The clean beauty pass, rendered AT the loop's first frame (a_render.py), so the still bowl
+    and loop frame 1 are the same picture up to denoiser noise. The loop frames themselves are
+    border renders (empty outside the water region) and cannot stand in for the whole plate."""
     return load(os.path.join(STAGE, "bowl", prefix + "bg_clean.png"))
 
 

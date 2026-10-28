@@ -46,8 +46,7 @@ def base(samples):
     c.volume_bounces = 2
     c.sample_clamp_indirect = 30.0
     c.blur_glossy = 0.2
-    c.caustics_reflective = True
-    c.caustics_refractive = True
+    # caustics_reflective/refractive are left to the scene (a_look.py turns them off; see there).
     c.denoising_input_passes = 'RGB_ALBEDO_NORMAL'
     c.denoising_prefilter = 'ACCURATE'
     c.denoising_quality = 'HIGH'
@@ -69,11 +68,13 @@ def show_collections(*names):
             o.visible_camera = True
 
 
-def rig(night):
-    """Day rig or night rig, and the matching world."""
+def rig(night, fish=False):
+    """Day rig or night rig, and the matching world. The key is brighter for the fish (see a_look.py)."""
     bpy.data.collections["WP_Rig"].hide_render = night
     bpy.data.collections["WP_RigNight"].hide_render = not night
     sc.world = bpy.data.worlds[sc["wp_night_world"]] if night else bpy.data.worlds["WP_World"]
+    key = bpy.data.lights["LGT_key"]
+    key.energy = float(sc["wp_key_fish"] if fish else sc["wp_key_bowl"]) if "wp_key_bowl" in sc else key.energy
 
 
 def shoot(camera, res, path, frame=1, subframe=0.0):
