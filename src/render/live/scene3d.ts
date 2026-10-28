@@ -9,12 +9,14 @@
 
 import {
   ACESFilmicToneMapping,
+  CanvasTexture,
   Color,
   DirectionalLight,
   Euler,
   Group,
   HemisphereLight,
   Mesh,
+  MeshBasicMaterial,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
   Object3D,
@@ -94,6 +96,13 @@ const TIER_PROBE_FRAMES = 240;
 const TIER_WARMUP_MS = 3000;
 /** Below this many advances per second while visible, drop to the lite tier. */
 const TIER_MIN_RATE = 50;
+/**
+ * Widest the transmission backbuffer gets, in device px. The refracted view is read through a
+ * rough-ish surface and blurred by its mip chain anyway, so above this width the extra pixels cost
+ * a full-screen pass plus mipmaps every frame and show nothing: Large at 2x is 2016 px wide and
+ * ran at 43 advances/s with the buffer at full size.
+ */
+const TRANSMISSION_MAX_PX = 1000;
 
 export type QualityTier = 'full' | 'lite';
 
@@ -137,6 +146,39 @@ function tierFromEnv(): QualityTier | 'auto' {
 function windowSize(scale: Scale): { w: number; h: number } {
   const { width, height } = windowSizeForScale(scale);
   return { w: width, h: height };
+}
+
+/**
+ * The soft contact shadow under the stand: a radial gradient on the desk plane, the way the rendered
+ * art carried one. A light-cast shadow is kept too but faint; a hard-edged 1024-texel shadow of four
+ * legs on a bare desktop reads as a stain, where this reads as weight.
+ */
+function createContactShadow(): Mesh {
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext('2d');
+  if (ctx) {
+    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0, 'rgba(18, 16, 36, 0.62)');
+    g.addColorStop(0.35, 'rgba(18, 16, 36, 0.4)');
+    g.addColorStop(0.7, 'rgba(18, 16, 36, 0.12)');
+    g.addColorStop(1, 'rgba(18, 16, 36, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+  }
+  const tex = new CanvasTexture(c);
+  tex.colorSpace = SRGBColorSpace;
+  const mat = new MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false });
+  const mesh = new Mesh(new PlaneGeometry(0.3, 0.3), mat);
+  mesh.name = 'contact-shadow';
+  mesh.rotation.x = -Math.PI / 2;
+  // A hair above the desk so it never z-fights with the shadow catcher, and nudged the way the key
+  // light throws the stand's shadow.
+  mesh.position.set(0.012, DESK_Y + 0.0006, -0.02);
+  mesh.renderOrder = -1;
+  return mesh;
 }
 
 function requireMesh(root: Object3D, name: string): Mesh {
@@ -229,6 +271,7 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
     if (!m) return;
     const { w, h } = windowSize(scale);
     m.renderer.setSize(w, h, false);
+    m.renderer.transmissionResolutionScale = Math.min(1, TRANSMISSION_MAX_PX / (w * m.renderer.getPixelRatio()));
     const canvas = m.renderer.domElement;
     canvas.style.width = `${w}px`;
     canvas.style.height = `${h}px`;
@@ -447,11 +490,12 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
       glbCamera?.removeFromParent();
 
       // The desk: receives the stand's and bowl's shadow and nothing else, so the desktop shows through it.
-      const desk = new Mesh(new PlaneGeometry(1.4, 1.4), new ShadowMaterial({ opacity: 0.3, color: new Color(0x1c1a2a) }));
+      const desk = new Mesh(new PlaneGeometry(1.4, 1.4), new ShadowMaterial({ opacity: 0.14, color: new Color(0x1c1a2a) }));
       desk.rotation.x = -Math.PI / 2;
       desk.position.y = DESK_Y;
       desk.receiveShadow = true;
       desk.name = 'desk';
+      const contact = createContactShadow();
 
       // Lights: the three area lights of the .blend as directionals, a hemisphere for the world, and a
       // small warm light that follows the cursor onto the glass.
@@ -466,7 +510,7 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
       key.shadow.camera.far = 3;
       key.shadow.bias = -0.0004;
       key.shadow.normalBias = 0.0025;
-      key.shadow.radius = 3;
+      key.shadow.radius = 5;
       const fill = new DirectionalLight(0xffffff, 1);
       const rim = new DirectionalLight(0xffffff, 1);
       const hemi = new HemisphereLight(0xffffff, 0x444444, 1);
@@ -481,7 +525,7 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
       const bowl = new Group();
       bowl.name = 'bowl';
       bowl.add(root);
-      scene3.add(bowl, desk, key, fill, rim, hemi, pointerLight);
+      scene3.add(bowl, desk, contact, key, fill, rim, hemi, pointerLight);
 
       const fish = createFishRig(root, world);
       scene3.add(fish.pivot);

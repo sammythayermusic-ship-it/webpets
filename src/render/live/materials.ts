@@ -202,7 +202,7 @@ export const WATER_ALIVE: WaterLook = {
   color: new Color(0.84, 0.95, 0.98),
   attenuationColor: new Color(0.22, 0.66, 0.82),
   attenuationDistance: 0.085,
-  roughness: 0.03,
+  roughness: 0.07,
 };
 export const WATER_STARVING: WaterLook = {
   color: new Color(0.84, 0.94, 0.86),
@@ -246,8 +246,10 @@ export function createWaterMaterial(world: WorldUniforms, tier: 'full' | 'lite')
   const m = new MeshPhysicalMaterial({
     metalness: 0,
     ior: 1.333,
-    specularIntensity: 1,
-    envMapIntensity: 0.7,
+    // Below 1 so the three directionals do not burn white discs into the surface; the room
+    // environment still gives the glossy sheet-of-water reflection.
+    specularIntensity: 0.45,
+    envMapIntensity: 0.6,
     side: FrontSide,
   });
   applyWaterLook(m, WATER_ALIVE);
@@ -282,7 +284,7 @@ export function createWaterMaterial(world: WorldUniforms, tier: 'full' | 'lite')
  */
 export function createGlassBackMaterial(world: WorldUniforms): MeshPhysicalMaterial {
   const m = new MeshPhysicalMaterial({
-    color: new Color(0.2, 0.56, 0.68),
+    color: new Color(0.14, 0.52, 0.64),
     roughness: 0.55,
     metalness: 0,
     envMapIntensity: 0.25,
