@@ -56,23 +56,27 @@ vWpWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
  */
 const GLSL_CAUSTIC = /* glsl */ `
 float wpCaustic(vec2 p, float t) {
-  vec2 a = p * 62.0;
+  // Wave numbers in rad/m: 230 is a 2.7 cm cell, 150 a 4 cm one; the bowl's bed is ~20 cm across.
+  vec2 a = p * 230.0;
   float s1 = sin(a.x + t * 0.9) + sin(a.y * 1.13 - t * 0.7) + sin((a.x + a.y) * 0.71 + t * 0.5);
-  vec2 b = p * 41.0 + vec2(1.7, 4.2);
+  vec2 b = p * 150.0 + vec2(1.7, 4.2);
   float s2 = sin(b.x * 0.93 - t * 0.6) + sin(b.y + t * 0.8) + sin((b.x - b.y) * 0.77 - t * 0.4);
   float v1 = 1.0 - abs(s1) / 3.0;
   float v2 = 1.0 - abs(s2) / 3.0;
-  return pow(v1, 7.0) * 0.9 + pow(v2, 9.0) * 0.7 + pow(v1 * v2, 3.0) * 0.4;
+  return pow(v1, 6.0) * 1.0 + pow(v2, 8.0) * 0.8 + pow(v1 * v2, 3.0) * 0.5;
 }
 `;
 
-const GLSL_CAUSTIC_APPLY = /* glsl */ `
+/** `k` is the strength: the bed takes the full web, the fish's skin only a glint of it. */
+function glslCausticApply(k: number): string {
+  return /* glsl */ `
 {
   float wpUnder = 1.0 - smoothstep(uWaterTop - 0.012, uWaterTop, vWpWorld.y);
   float wpc = wpCaustic(vWpWorld.xz, uTime) * uCaustic * wpUnder;
-  reflectedLight.directDiffuse += diffuseColor.rgb * wpc * 0.55;
+  reflectedLight.directDiffuse += (diffuseColor.rgb * 0.7 + 0.3) * wpc * ${k.toFixed(2)};
 }
 `;
+}
 
 /** Sum-of-sines slope field for the water's top face: returns d(height)/d(x,z) in metres per metre. */
 const GLSL_WATER_SLOPE = /* glsl */ `
@@ -111,7 +115,8 @@ const GLSL_WATER_SPECULAR = /* glsl */ `
   float wpS = mix(0.25, 1.0, wpTop);
   material.specularColor *= wpS;
   material.specularF90 *= wpS;
-  material.roughness = max(material.roughness, wpTop * 0.14);
+  // The sides refract sharply (the fish must read through them); the top is a soft streak.
+  material.roughness = mix(material.roughness * 0.4, max(material.roughness, 0.14), wpTop);
 }
 `;
 
@@ -196,7 +201,7 @@ export function withCaustics<M extends Material>(material: M, world: WorldUnifor
     addWorldUniforms(shader, world);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${GLSL_CAUSTIC}`)
-      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${GLSL_CAUSTIC_APPLY}`);
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${glslCausticApply(0.45)}`);
   };
   material.customProgramCacheKey = () => 'wp-caustic';
   material.needsUpdate = true;
@@ -330,7 +335,7 @@ export function createGlassFrontMaterial(): MeshPhysicalMaterial {
     metalness: 0,
     clearcoat: 1,
     clearcoatRoughness: 0.03,
-    envMapIntensity: 1.0,
+    envMapIntensity: 0.85,
     emissive: new Color(0.55, 0.75, 0.86),
     emissiveIntensity: 0.025,
     side: FrontSide,
@@ -343,6 +348,22 @@ export function createGlassFrontMaterial(): MeshPhysicalMaterial {
   m.blendDst = OneMinusSrcAlphaFactor;
   m.blendSrcAlpha = OneFactor;
   m.blendDstAlpha = OneMinusSrcAlphaFactor;
+  // A Fresnel rim: the silhouette of real glass catches the room however dark the room is. Added to
+  // the emissive so it rides on top of the (quiet) environment reflection and shows against any
+  // desktop. The alpha rises with it so the rim also dims what is behind, the way an edge-on wall of
+  // glass does.
+  m.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+{
+  float wpFr = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 3.0);
+  totalEmissiveRadiance += vec3(0.78, 0.9, 1.0) * wpFr * 0.34;
+  diffuseColor.a = clamp(diffuseColor.a + wpFr * 0.3, 0.0, 1.0);
+}`,
+    );
+  };
+  m.customProgramCacheKey = () => 'wp-glass-front';
   return m;
 }
 
@@ -373,7 +394,7 @@ export function withSpine<M extends Material>(material: M, u: SpineUniforms, wor
     addWorldUniforms(shader, world);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${GLSL_CAUSTIC}`)
-      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${GLSL_CAUSTIC_APPLY}`);
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${glslCausticApply(0.18)}`);
   };
   material.customProgramCacheKey = () => 'wp-spine';
   material.needsUpdate = true;

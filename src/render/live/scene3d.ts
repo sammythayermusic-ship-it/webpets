@@ -34,7 +34,7 @@ import {
   type Material,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { createStudioEnvironment, disposeEnvironment } from './environment';
 import { DEFAULT_SCALE, GRID_H, GRID_W, PET_FPS, WINDOW_PAD, scaleFactor, windowSizeForScale, type Scale } from '../../sim/constants';
 import type { Rect, Rng } from '../../sim/types';
 import { requireSpecies } from '../../species';
@@ -434,7 +434,9 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
 
       const scene3 = new Scene();
       const pmrem = new PMREMGenerator(renderer);
-      scene3.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      const envScene = createStudioEnvironment();
+      scene3.environment = pmrem.fromScene(envScene, 0.06).texture;
+      disposeEnvironment(envScene);
       pmrem.dispose();
 
       // Camera: the bowl camera from the .blend, as an OrthographicCamera; the frustum is set per scale.
@@ -502,7 +504,7 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
       glbCamera?.removeFromParent();
 
       // The desk: receives the stand's and bowl's shadow and nothing else, so the desktop shows through it.
-      const desk = new Mesh(new PlaneGeometry(1.4, 1.4), new ShadowMaterial({ opacity: 0.1, color: new Color(0x1c1a2a) }));
+      const desk = new Mesh(new PlaneGeometry(1.4, 1.4), new ShadowMaterial({ opacity: 0.07, color: new Color(0x1c1a2a) }));
       desk.rotation.x = -Math.PI / 2;
       desk.position.y = DESK_Y;
       desk.receiveShadow = true;

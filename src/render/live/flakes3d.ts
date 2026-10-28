@@ -46,8 +46,8 @@ export interface Flakes3D {
 }
 
 function crumbGeometry(): ShapeGeometry {
-  // An irregular seven-sided crumb, 4 grid px across, so six flakes do not read as six dots.
-  const r = 2 * METRES_PER_GRID_PX;
+  // An irregular seven-sided crumb, 6 grid px across, so six flakes do not read as six dots.
+  const r = 3 * METRES_PER_GRID_PX;
   const shape = new Shape();
   for (let i = 0; i < 7; i += 1) {
     const a = (i / 7) * Math.PI * 2;
@@ -63,7 +63,11 @@ function crumbGeometry(): ShapeGeometry {
 
 export function createFlakes3D(water: WaterShape, bounds: MoveBounds): Flakes3D {
   const geometry = crumbGeometry();
-  const material = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.75, metalness: 0, side: 2 });
+  // One warm colour for every crumb, with enough emissive that it reads as food through the water's
+  // cyan tint. Per-instance colours were tried and came out white in the packaged webview (the
+  // program is compiled before the first feed, when there is no instance colour attribute yet), and
+  // six crumbs do not need six oranges.
+  const material = new MeshStandardMaterial({ color: new Color(0.95, 0.52, 0.16), roughness: 0.7, metalness: 0, side: 2, emissive: new Color(0.6, 0.28, 0.06), emissiveIntensity: 0.9 });
   const mesh = new InstancedMesh(geometry, material, MAX_FLAKES);
   mesh.name = 'flakes';
   mesh.count = 0;
@@ -72,9 +76,7 @@ export function createFlakes3D(water: WaterShape, bounds: MoveBounds): Flakes3D 
   const flakes: Flake[] = [];
   const dummy = new Object3D();
   const zero = new Matrix4().makeScale(0, 0, 0);
-  const tint = new Color();
   const camQ = new Quaternion();
-  const up = new Vector3(0, 1, 0);
 
   const halfWidthAt = (y: number): number => {
     const dy = (y - water.cy) / water.ry;
@@ -98,14 +100,7 @@ export function createFlakes3D(water: WaterShape, bounds: MoveBounds): Flakes3D 
   };
 
   const rebuildColors = (): void => {
-    for (let i = 0; i < flakes.length; i += 1) {
-      const f = flakes[i];
-      if (!f) continue;
-      // Warm oranges, each a little different, like the Pixi crumb's palette.
-      tint.setRGB(0.86 + 0.1 * (f.size - 0.9), 0.56 + 0.08 * Math.sin(f.depth * 90), 0.22);
-      mesh.setColorAt(i, tint);
-    }
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    // Nothing per instance any more; kept as the one place to add it back if a palette returns.
   };
 
   return {
@@ -115,7 +110,9 @@ export function createFlakes3D(water: WaterShape, bounds: MoveBounds): Flakes3D 
         const y = bounds.surfaceY + 2;
         const hw = Math.max(12, halfWidthAt(y + 4) * SPAWN_SPREAD);
         const x = water.cx + (rng() * 2 - 1) * hw;
-        const axis = new Vector3(rng() - 0.5, rng() - 0.5, rng() - 0.5).normalize();
+        // Spin mostly about the view axis with a slight wobble off it, so a crumb stays a visible
+        // crumb and never turns edge-on into a line.
+        const axis = new Vector3((rng() - 0.5) * 0.35, (rng() - 0.5) * 0.35, 1).normalize();
         flakes.push({
           x,
           y,
@@ -127,7 +124,7 @@ export function createFlakes3D(water: WaterShape, bounds: MoveBounds): Flakes3D 
           settled: false,
           age: 0,
           tumble: new Quaternion().setFromAxisAngle(axis, rng() * Math.PI),
-          spin: new Quaternion().setFromAxisAngle(axis.clone().cross(up).normalize(), 0.02 + rng() * 0.05),
+          spin: new Quaternion().setFromAxisAngle(axis, 0.02 + rng() * 0.05),
           size: 0.8 + rng() * 0.5,
         });
       }
