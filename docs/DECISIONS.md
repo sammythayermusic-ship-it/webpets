@@ -1143,3 +1143,24 @@ rate-capped: a 90° turn overshoots by ~0.08 rad and settles in two seconds, a r
 at least six ticks, never a snap); and a speed with inertia whose deceleration is slower than its
 acceleration, which is most of what "weight when a pet stops" means. 16 tests. Nothing uses it yet.
 
+
+### the needs model, wired into the store
+
+`src/app` is nobody's but the mainline's during the bake-off, so the store side of step 2 went in
+now. The pet document carries an optional `needs` block (loaded field by field over the defaults, so
+every existing pet wakes rested and settled; no version bump). Every `commit` advances the needs to
+`at` under the regime that held since their anchors; `feed()` reports a meal; two new actions,
+`poke(kind)` for a tap or a bite and `setPresence(present)` for the pointer arriving and leaving;
+and `drives(napping)` is what the scene will hand the behaviour.
+
+- **A long gap is walked hour by hour** (`src/app/needsBridge.ts`), not charged to one regime: night
+  is what the schedule said at each hour, hunger is what the pet actually had then — read off the
+  reconcile's own auto-feed events for the same span — and nobody was present. A pet left over a
+  weekend with a full pantry comes back rested and curious; one left starving comes back drained and
+  uneasy. The first test of this used the pet's anchor hunger for the whole gap and would have drained
+  a pantry-fed pet as if it had starved.
+- **Needs are anchored at boot time for a pet that never had them**, not at its last reconcile: nothing
+  is owed for the time before the model existed.
+- Found by a test, not by reasoning: the default day/night mode is `auto`, and the test fixture's B is
+  an evening in this time zone, so a greeting test with no settings file met an asleep pet. Pinned to
+  day; the asleep-does-not-greet rule itself is right.

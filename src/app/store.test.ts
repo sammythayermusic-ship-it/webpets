@@ -3,6 +3,7 @@ import { createAppStore } from './store';
 import { GRAVEYARD_FILE, PET_FILE, PET_VERSION, SETTINGS_FILE, defaultSettings } from './persistence';
 import { createFakePlatform, type FakePlatform } from './test-platform';
 import { B, H, fresh, mulberry32 } from '../sim/test-helpers';
+import { defaultNeeds as defaultNeedsAt } from '../sim/needs';
 import { SCALE_L, SCALE_S } from '../sim/constants';
 import { DAY_MS } from '../sim/constants';
 import type { GraveyardDoc, PetDoc, SettingsDoc } from './types';
@@ -435,5 +436,63 @@ describe('app store', () => {
     store.getState().actions.tick();
     expect(store.getState().recentEvents.map((e) => e.type)).toEqual(['hungry']);
     expect(store.getState().pet.lastReconciledAt).toBe(B + 20 * H + 30_000);
+  });
+
+  describe('needs', () => {
+    it('a pet saved without needs boots rested and settled, anchored at boot', async () => {
+      const { store } = await bootStore({ [PET_FILE]: petDoc({ pet: fresh(B - 10 * H) }) });
+      const s = store.getState();
+      expect(s.needs.energy).toEqual({ value: 1, at: B });
+      expect(s.present).toBe(false);
+      expect(s.actions.drives(false)).toMatchObject({ nap: false, greet: false, approach: 0 });
+    });
+
+    it('needs persist in the pet document and come back on the next boot', async () => {
+      const { store, platform } = await bootStore();
+      store.getState().actions.poke('tap');
+      const stress = store.getState().needs.stress.value;
+      expect(stress).toBeGreaterThan(0);
+      await store.getState().actions.quit();
+      const saved = platform.files.get(PET_FILE) as PetDoc;
+      expect(saved.needs?.stress.value).toBe(stress);
+      const again = createAppStore(createFakePlatform({ [PET_FILE]: saved }), { rng: mulberry32(2) });
+      await again.getState().actions.boot();
+      expect(again.getState().needs.stress.value).toBeCloseTo(stress, 9);
+    });
+
+    it('a tick advances the needs; a night-long gap asleep restores energy', async () => {
+      const settings: SettingsDoc = { ...defaultSettings(), dayNight: 'night' };
+      const pet = fresh();
+      const doc = petDoc({ pet, needs: { ...defaultNeedsAt(B), energy: { value: 0.1, at: B } } });
+      const { store } = await bootStore({ [PET_FILE]: doc, [SETTINGS_FILE]: settings });
+      expect(store.getState().needs.energy.value).toBe(0.1);
+      vi.setSystemTime(B + 9 * H);
+      store.getState().actions.tick();
+      expect(store.getState().needs.energy).toEqual({ value: 1, at: B + 9 * H });
+    });
+
+    it('the pointer arriving after a long absence arms a greeting; leaving re-anchors as absent', async () => {
+      // Daytime, pinned: under 'auto' B + 3 h is evening in this time zone and an asleep pet does not greet.
+      const { store } = await bootStore({ [SETTINGS_FILE]: { ...defaultSettings(), dayNight: 'day' } });
+      vi.setSystemTime(B + 3 * H);
+      store.getState().actions.setPresence(true);
+      let s = store.getState();
+      expect(s.present).toBe(true);
+      expect(s.needs.greetUntil).toBe(B + 3 * H + 20_000);
+      expect(s.actions.drives(false).greet).toBe(true);
+      expect(s.actions.drives(false).approach).toBeGreaterThan(0);
+      store.getState().actions.setPresence(false);
+      s = store.getState();
+      expect(s.present).toBe(false);
+      expect(s.needs.lastSeenAt).toBe(B + 3 * H);
+      expect(s.actions.drives(false).approach).toBe(0);
+    });
+
+    it('a meal is a stimulus: curiosity is spent on it', async () => {
+      const { store } = await bootStore();
+      const before = store.getState().needs.curiosity.value;
+      store.getState().actions.feed();
+      expect(store.getState().needs.curiosity.value).toBeCloseTo(before - 0.2, 9);
+    });
   });
 });

@@ -3,6 +3,7 @@
 
 import type { StoreApi } from 'zustand/vanilla';
 import type { FeedResult, GraveRecord, Habitat, PetState, SimEvent, Species } from '../sim/types';
+import type { Drives, NeedsState, Stimulus } from '../sim/needs';
 import type { Scale } from '../sim/constants';
 import type { Layering } from '../platform/types';
 
@@ -21,6 +22,11 @@ export interface PetDoc {
   pet: PetState;
   balance: number;
   latches: NotificationLatches;
+  /**
+   * Energy, curiosity, comfort and stress (`src/sim/needs.ts`). Optional on disk: every pet saved
+   * before needs existed loads with the defaults, and no version bump is needed for that.
+   */
+  needs?: NeedsState;
 }
 
 /**
@@ -123,6 +129,12 @@ export interface AppActions {
   setHidden(b: boolean): Promise<void>;
   /** Flushes pending saves, then platform.quit(). */
   quit(): Promise<void>;
+  /** Something happened to the pet: a tap on the glass, a bite. (A meal and the pointer's arrival are reported by feed() and setPresence().) */
+  poke(kind: Stimulus): void;
+  /** The pointer is over the habitat (true) or has left (false). Arrival is a stimulus; both re-anchor the needs. */
+  setPresence(present: boolean): void;
+  /** What the pet wants to do about its needs right now. `napping` is what the behaviour is doing, for the nap hysteresis. */
+  drives(napping: boolean): Drives;
   dev: DevActions;
 }
 
@@ -144,6 +156,10 @@ export interface AppState {
   night: boolean;
   /** Dev panel override; null = follow settings. */
   nightOverride: boolean | null;
+  /** The pet's needs, anchored at the last tick or stimulus. Persisted inside the pet document. */
+  needs: NeedsState;
+  /** Runtime: the pointer is over the habitat. */
+  present: boolean;
   actions: AppActions;
 }
 

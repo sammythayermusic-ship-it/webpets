@@ -14,6 +14,11 @@ import {
   hungerAt,
   newPet as mintPet,
   reconcile,
+  defaultNeeds,
+  drivesOf,
+  normalizeNeeds,
+  stimulate,
+  advanceNeeds,
   toGraveRecord,
   withdrawPantry as simWithdraw,
 } from '../sim/index';
@@ -33,6 +38,8 @@ import { createPersistence, defaultGraveyard, defaultSettings, migratePetDoc, PE
 import { speciesModule } from '../species';
 import { decide } from './notifications';
 import { resolveNight } from './daynight';
+import { advanceNeedsTo, regimeNow } from './needsBridge';
+import type { RegimeSource } from './needsBridge';
 
 /** Reconciles that cover more than this much wall time produce `recentEvents` (the "while you were gone" montage). */
 export const CATCH_UP_SPAN_MS = 60_000;
@@ -77,7 +84,12 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
 
     const petDoc = (): PetDoc => {
       const s = get();
-      return { version: PET_VERSION, pet: s.pet, balance: s.balance, latches: s.latches };
+      return { version: PET_VERSION, pet: s.pet, balance: s.balance, latches: s.latches, needs: s.needs };
+    };
+    /** What the needs model is told about the pet's circumstances. */
+    const regimeSource = (): RegimeSource => {
+      const s = get();
+      return { pet: s.pet, dayNight: s.settings.dayNight, nightOverride: s.nightOverride, present: s.present, hunger: s.hunger };
     };
     const savePet = (): void => persist.savePet(petDoc());
     const saveSettings = (): void => persist.saveSettings(get().settings);
@@ -118,12 +130,16 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
       }
       if (extra.manualFeed === true) lastFeedEvent = { at, kind: 'manual', seq: ++feedSeq };
 
+      // Needs are advanced under the regime that held since their anchors -- read from the state BEFORE
+      // this commit -- and over a long gap walked hour by hour (see needsBridge).
+      const needs = advanceNeedsTo(s.needs, at, regimeSource(), prev, r.events);
       const patch: Partial<AppState> = {
         pet: r.state,
         latches: decision.latches,
         hunger: derivedHunger(r.state, at),
         night: resolveNight(s.settings.dayNight, s.nightOverride, at),
         lastFeedEvent,
+        needs,
       };
       if (extra.balance !== undefined) patch.balance = extra.balance;
       if (span > CATCH_UP_SPAN_MS) patch.recentEvents = r.events;
@@ -134,7 +150,8 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
       const changed =
         r.state !== prev ||
         extra.balance !== undefined ||
-        decision.latches.pantryLowFiredForPantry !== s.latches.pantryLowFiredForPantry;
+        decision.latches.pantryLowFiredForPantry !== s.latches.pantryLowFiredForPantry ||
+        needs !== s.needs;
       if (changed) savePet();
     };
 
@@ -307,6 +324,11 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
           lastFeedEvent: null,
           hunger: derivedHunger(pet, at),
           night: resolveNight(settings.dayNight, get().nightOverride, at),
+          // A pet saved before needs existed wakes rested and settled, anchored at the moment it is
+          // read. Anchoring at `at` rather than at its lastReconciledAt is deliberate: nothing is owed
+          // for the time before the model existed.
+          needs: normalizeNeeds(loadedPet?.needs, at),
+          present: false,
         });
         if (loadedPet === null || petNeedsSave) savePet();
         if (loadedSettings.pendingSkipMs !== 0) saveSettings();
@@ -323,6 +345,7 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
         const ledger = new LocalLedger(s.balance);
         const r = simFeed(s.pet, at, ledger);
         commit(s.pet, { state: r.state, events: r.events }, at, { balance: ledger.toJSON(), manualFeed: r.ok });
+        if (r.ok) set({ needs: stimulate(get().needs, 'feed', at, regimeNow(regimeSource(), at)) });
         return r;
       },
 
@@ -360,6 +383,7 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
           hunger: derivedHunger(pet, at),
           lastFeedEvent: null,
           recentEvents: [],
+          needs: defaultNeeds(at),
         });
         savePet();
       },
@@ -441,6 +465,30 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
         await platform.quit();
       },
 
+      poke(kind) {
+        const at = now();
+        set({ needs: stimulate(get().needs, kind, at, regimeNow(regimeSource(), at)) });
+        savePet();
+      },
+
+      setPresence(present) {
+        const s = get();
+        if (s.present === present) return;
+        const at = now();
+        // Both directions re-anchor under the OLD regime first (stimulate does that internally), so
+        // the span with the pointer around is charged as present and the span without it as absent.
+        const regime = regimeNow(regimeSource(), at);
+        const needs = present ? stimulate(s.needs, 'pointer', at, regime) : advanceNeeds(s.needs, at, regime);
+        set({ needs, present });
+        savePet();
+      },
+
+      drives(napping) {
+        const s = get();
+        const at = now();
+        return drivesOf(s.needs, at, { ...regimeNow(regimeSource(), at), alive: s.pet.alive, napping });
+      },
+
       dev,
     };
 
@@ -457,6 +505,8 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
       hunger: 100,
       night: false,
       nightOverride: null,
+      needs: defaultNeeds(Date.now()),
+      present: false,
       actions,
     };
   });

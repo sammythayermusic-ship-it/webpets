@@ -5,6 +5,8 @@ import type { HarnessContext, HarnessIo, HarnessResult } from './harness';
 import type { AppActions, AppState, DevActions } from '../app/types';
 import { defaultSettings } from '../app/persistence';
 import { fresh } from '../sim/test-helpers';
+import { defaultNeeds } from '../sim/needs';
+import { B } from '../sim/test-helpers';
 import type { HabitatScene } from '../render/types';
 import type { WindowGeometry } from '../platform/types';
 import type { FeedResult } from '../sim/types';
@@ -45,6 +47,9 @@ function fakeActions(): AppActions {
     setLayering: vi.fn(async () => undefined),
     setHidden: vi.fn(async () => undefined),
     quit: vi.fn(async () => undefined),
+    poke: vi.fn(),
+    setPresence: vi.fn(),
+    drives: vi.fn(() => ({ activity: 0, approach: 0, hide: 0, nap: false, greet: false, surface: 0 })),
     dev: fakeDev(),
   };
 }
@@ -62,6 +67,8 @@ function fakeState(actions: AppActions): AppState {
     hunger: 100,
     night: false,
     nightOverride: null,
+    needs: defaultNeeds(B),
+    present: false,
     actions,
   };
 }
