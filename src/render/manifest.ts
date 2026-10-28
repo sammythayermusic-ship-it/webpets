@@ -1,6 +1,6 @@
 // Manifest schema validation + fetch. Pure (no Pixi) so it is testable in node.
 
-import type { FrameSource, LayerName, Manifest, ManifestHabitat, ManifestLayer, ManifestSprite, ManifestSpriteState } from './types';
+import type { EllipseMask, FrameSource, LayerArt, LayerName, LayerNightArt, Manifest, ManifestHabitat, ManifestLayer, ManifestSprite, ManifestSpriteState } from './types';
 import type { Rect } from '../sim/types';
 
 export const MANIFEST_URL = '/manifest.json';
@@ -116,12 +116,105 @@ export function stateFiles(state: ManifestSpriteState): readonly string[] {
   return state.source.kind === 'strip' ? [state.source.file] : state.source.files;
 }
 
+function assetPaths(v: unknown, path: string): string[] {
+  if (!Array.isArray(v) || v.length === 0) throw new ManifestError(path, 'expected a non-empty array of asset paths');
+  return v.map((f, i) => assetPath(f, `${path}[${i}]`));
+}
+
+/**
+ * The art a layer draws, or null for a procedural slot (pet, food, fx, shadow).
+ *
+ * One of three kinds, never more than one: a layer that names both a still and a video has no
+ * sensible meaning, and the loader would otherwise quietly pick one. `frames` needs its own fps;
+ * `video` carries its rate inside the file. Loop defaults to true for both because every animated
+ * layer so far is ambient (water, caustics) and a one-shot is the exception that must be spelled out.
+ */
+export function layerArt(layer: Pick<ManifestLayer, 'file' | 'frames' | 'fps' | 'loop' | 'video'>): LayerArt | null {
+  if (layer.frames !== undefined) return { kind: 'frames', files: layer.frames, fps: layer.fps ?? 24, loop: layer.loop ?? true };
+  if (layer.video !== undefined) return { kind: 'video', file: layer.video, loop: layer.loop ?? true };
+  if (layer.file !== undefined) return { kind: 'image', file: layer.file };
+  return null;
+}
+
+/** The night plate as {@link LayerArt}, inheriting the day art's fps and loop; null when the layer has none. */
+export function layerNightArt(layer: ManifestLayer): LayerArt | null {
+  const n = layer.night;
+  if (!n) return null;
+  return layerArt({ ...n, ...(layer.fps === undefined ? {} : { fps: layer.fps }), ...(layer.loop === undefined ? {} : { loop: layer.loop }) });
+}
+
+/** Every IMAGE path a layer needs preloaded as a texture: the still, or each frame, day and night. Videos load separately. */
+export function layerImageFiles(layer: ManifestLayer): readonly string[] {
+  const out: string[] = [];
+  for (const art of [layerArt(layer), layerNightArt(layer)]) {
+    if (!art) continue;
+    if (art.kind === 'image') out.push(art.file);
+    else if (art.kind === 'frames') out.push(...art.files);
+  }
+  return out;
+}
+
+/** Every VIDEO path a layer needs, day and night. */
+export function layerVideoFiles(layer: ManifestLayer): readonly string[] {
+  const out: string[] = [];
+  for (const art of [layerArt(layer), layerNightArt(layer)]) {
+    if (art && art.kind === 'video') out.push(art.file);
+  }
+  return out;
+}
+
+function nightArt(v: unknown, path: string): LayerNightArt {
+  if (!isRecord(v)) throw new ManifestError(path, 'expected a night-plate object');
+  const out: LayerNightArt = {};
+  if (v['file'] !== undefined) out.file = assetPath(v['file'], `${path}.file`);
+  if (v['frames'] !== undefined) out.frames = assetPaths(v['frames'], `${path}.frames`);
+  if (v['video'] !== undefined) out.video = assetPath(v['video'], `${path}.video`);
+  const kinds = [out.file, out.frames, out.video].filter((k) => k !== undefined).length;
+  if (kinds !== 1) throw new ManifestError(path, 'expected exactly one of file | frames | video');
+  return out;
+}
+
+function ellipse(v: unknown, path: string): EllipseMask {
+  if (!isRecord(v)) throw new ManifestError(path, 'expected an ellipse { cx, cy, rx, ry }');
+  return {
+    cx: num(v['cx'], `${path}.cx`),
+    cy: num(v['cy'], `${path}.cy`),
+    rx: positive(v['rx'], `${path}.rx`),
+    ry: positive(v['ry'], `${path}.ry`),
+  };
+}
+
 function layer(v: unknown, path: string): ManifestLayer {
   if (!isRecord(v)) throw new ManifestError(path, 'expected a layer object');
   const name = str(v['name'], `${path}.name`);
   if (!LAYER_NAMES.has(name)) throw new ManifestError(`${path}.name`, `unknown layer "${name}"`);
   const out: ManifestLayer = { name: name as LayerName, z: num(v['z'], `${path}.z`) };
   if (v['file'] !== undefined) out.file = assetPath(v['file'], `${path}.file`);
+  if (v['frames'] !== undefined) out.frames = assetPaths(v['frames'], `${path}.frames`);
+  if (v['video'] !== undefined) out.video = assetPath(v['video'], `${path}.video`);
+  const kinds = [out.file, out.frames, out.video].filter((k) => k !== undefined).length;
+  if (kinds > 1) throw new ManifestError(path, 'a layer draws one of file | frames | video, not several');
+  if (v['fps'] !== undefined) out.fps = positive(v['fps'], `${path}.fps`);
+  if (v['loop'] !== undefined) out.loop = bool(v['loop'], `${path}.loop`);
+  if ((out.fps !== undefined || out.loop !== undefined) && kinds === 0) {
+    throw new ManifestError(path, 'fps/loop belong to an animated layer, which this is not');
+  }
+  if (v['region'] !== undefined) {
+    out.region = rect(v['region'], `${path}.region`);
+    if (out.region.w <= 0 || out.region.h <= 0) throw new ManifestError(`${path}.region`, 'must have a positive size');
+  }
+  if (v['mask'] !== undefined) out.mask = ellipse(v['mask'], `${path}.mask`);
+  if (v['night'] !== undefined) {
+    out.night = nightArt(v['night'], `${path}.night`);
+    // The crossfade blends two sprites of the same shape; a still fading into a video is not that.
+    const day = layerArt(out);
+    const night = layerNightArt(out);
+    if (!day) throw new ManifestError(`${path}.night`, 'a night plate needs day art to fade from');
+    if (day.kind !== night?.kind) throw new ManifestError(`${path}.night`, `must be the same kind as the day art (${day.kind})`);
+    if (day.kind === 'frames' && night.kind === 'frames' && day.files.length !== night.files.length) {
+      throw new ManifestError(`${path}.night.frames`, `expected ${day.files.length} frames to match the day sequence, got ${night.files.length}`);
+    }
+  }
   if (v['blend'] !== undefined) {
     const b = v['blend'];
     if (b !== 'normal' && b !== 'multiply') throw new ManifestError(`${path}.blend`, 'expected "normal" | "multiply"');

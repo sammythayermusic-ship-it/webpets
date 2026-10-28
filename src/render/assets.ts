@@ -2,7 +2,7 @@
 // (Vite publicDir = assets/, so `habitats/fish/bowl/bg.png` is served at `/habitats/fish/bowl/bg.png`).
 // Manifest parsing lives in ./manifest.ts (pure).
 
-import { ImageSource, Texture, TextureStyle, loadTextures as pixiLoadTextures } from 'pixi.js';
+import { ImageSource, Texture, TextureStyle, VideoSource, loadTextures as pixiLoadTextures } from 'pixi.js';
 
 export { loadManifest, parseManifest, stateFiles, ManifestError, MANIFEST_URL } from './manifest';
 
@@ -105,6 +105,67 @@ export async function loadTextures(files: Iterable<string>, lenient = true): Pro
       } catch (err: unknown) {
         if (!lenient) throw err;
         console.warn(`[render] missing asset ${assetUrl(f)}:`, err);
+      }
+    }),
+  );
+  return map;
+}
+
+/**
+ * A looping video as a texture: fetched whole, handed to a `<video>` as a blob URL, wrapped in Pixi's
+ * `VideoSource`, which re-uploads the frame when the browser decodes a new one
+ * (`requestVideoFrameCallback`) rather than on every rendered frame.
+ *
+ * A blob URL rather than the asset URL on purpose. WebKit's media loader wants byte-range requests
+ * and the packaged app's `tauri://` custom protocol answers them with the whole file at best; a blob
+ * is already in memory and plays on every scheme. The clips are a few MB, which is the point of
+ * shipping video instead of a frame sequence.
+ *
+ * Muted and inline so autoplay needs no gesture; the scene never gets one. Resolves once the first
+ * frame is decodable, or throws so the caller can leave the layer out (a missing water loop is a
+ * still bowl, not a broken app).
+ */
+export async function loadVideoTexture(file: string, loop: boolean): Promise<Texture> {
+  configureAssetPipeline();
+  const url = assetUrl(file);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`[render] ${url}: HTTP ${res.status} ${res.statusText}`);
+  const blob = await res.blob();
+  const video = document.createElement('video');
+  video.muted = true;
+  video.defaultMuted = true;
+  video.loop = loop;
+  video.playsInline = true;
+  video.setAttribute('playsinline', '');
+  video.preload = 'auto';
+  video.src = URL.createObjectURL(blob);
+  const source = new VideoSource({
+    resource: video,
+    autoLoad: true,
+    autoPlay: true,
+    loop,
+    muted: true,
+    playsinline: true,
+    preload: true,
+    alphaMode: 'premultiply-alpha-on-upload',
+    scaleMode: 'linear',
+    autoGenerateMipmaps: true,
+    label: url,
+  });
+  await source.load();
+  return new Texture({ source, label: url });
+}
+
+/** Like {@link loadTextures} for videos: lenient, keyed by manifest path, each loaded in parallel. */
+export async function loadVideoTextures(files: Iterable<string>, loop = true): Promise<Map<string, Texture>> {
+  const unique = Array.from(new Set(files));
+  const map = new Map<string, Texture>();
+  await Promise.all(
+    unique.map(async (f) => {
+      try {
+        map.set(f, await loadVideoTexture(f, loop));
+      } catch (err: unknown) {
+        console.warn(`[render] missing video ${assetUrl(f)}:`, err);
       }
     }),
   );

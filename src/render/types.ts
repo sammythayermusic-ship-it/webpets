@@ -21,10 +21,68 @@ export type LayerName =
   | 'fx'
   | 'night';
 
+/**
+ * What a layer draws, normalised out of the manifest's optional fields by `layerArt()` in manifest.ts.
+ *
+ * `image` is the Phase 0 kind: one still PNG. The other two are ANIMATED layers, added for the
+ * rendered-ceiling bake-off candidate: a `frames` sequence is one PNG per frame played at its own
+ * `fps`, and a `video` is a looping clip the browser decodes. Both play on their own clock, not the
+ * simulation tick, because what they show -- the water surface moving, the caustic light shifting on
+ * the gravel -- is ambient and never has to line up with a behaviour step.
+ */
+export type LayerArt =
+  | { readonly kind: 'image'; readonly file: string }
+  | { readonly kind: 'frames'; readonly files: readonly string[]; readonly fps: number; readonly loop: boolean }
+  | { readonly kind: 'video'; readonly file: string; readonly loop: boolean };
+
+/** The night plate for a layer: the same art, re-rendered under the night light rig. */
+export interface LayerNightArt {
+  file?: string;
+  frames?: string[];
+  video?: string;
+}
+
+/** An ellipse in grid px; the runtime clip for an animated crop (see {@link ManifestLayer.mask}). */
+export interface EllipseMask {
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+}
+
 export interface ManifestLayer {
   name: LayerName;
   /** Path relative to the assets root (served at `/`). Omitted for procedural layers (shadow, pet, food, fx). */
   file?: string;
+  /**
+   * A frame sequence instead of a still: one PNG per frame, played at `fps`, looping when `loop`.
+   * Exactly one of `file`, `frames`, `video` may be set.
+   */
+  frames?: string[];
+  fps?: number;
+  loop?: boolean;
+  /** A looping video clip instead of a still (mp4/mov; the browser decodes it). */
+  video?: string;
+  /**
+   * The grid-px rect this layer's art covers, when it is a CROP of the habitat rather than the whole
+   * grid. A 4 s water loop over the whole 1280x960 plate would be mostly static pixels paid for
+   * every frame; cropping to the inside of the glass is what makes the loop affordable. The art
+   * must still be a whole multiple of this rect, derived from the texture exactly as it is for a
+   * full-grid layer.
+   */
+  region?: Rect;
+  /**
+   * Clip the layer to this ellipse at runtime, grid px. An opaque video crop has corners that fall
+   * outside the bowl's silhouette and would paint over the transparent desktop; the inside of the
+   * glass, projected out of the scene into geometry.json, is the exact shape it should stop at.
+   */
+  mask?: EllipseMask;
+  /**
+   * Night plate, crossfaded in by the scene's night amount. A tint is not a night: the light comes
+   * from somewhere else, the caustics change colour, the glass picks up a different room. Layers
+   * without one still get the old blue tint, so a habitat can migrate one plate at a time.
+   */
+  night?: LayerNightArt;
   /** Sort order within the fixed slot order (ties broken by slot order). */
   z: number;
   blend?: 'normal' | 'multiply';

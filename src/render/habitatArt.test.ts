@@ -333,6 +333,32 @@ describe.each(Object.keys(manifest.habitats))('habitat art: %s', (key) => {
     }).toEqual(hab.opaqueRect);
   });
 
+  it('night plates are the same size as their day art and keep the hit region where it is', () => {
+    // A night plate is the same picture under different light. If its alpha bbox moved, the bowl
+    // would swallow clicks over empty desk after dark, or stop taking them at its own rim.
+    for (const l of layers) {
+      if (!l.night?.file) continue;
+      expect(pngSize(l.night.file), `${l.name}: night plate size`).toEqual(pngSize(l.file as string));
+      if (l.name !== 'bg') continue;
+      const day = alphaBox(load(l.file as string), 0.5);
+      const night = alphaBox(load(l.night.file), 0.5);
+      expect(night, `${l.name}: night alpha bbox`).toEqual(day);
+    }
+  });
+
+  it('an animated crop is a whole multiple of its region, and the region is inside the grid', () => {
+    for (const l of hab.layers) {
+      if (!l.region) continue;
+      expect(l.region.x + l.region.w, `${l.name}: region right edge`).toBeLessThanOrEqual(GRID.w);
+      expect(l.region.y + l.region.h, `${l.name}: region bottom edge`).toBeLessThanOrEqual(GRID.h);
+      const first = l.frames?.[0] ?? l.night?.frames?.[0];
+      if (!first) continue;
+      const [w, h] = pngSize(first);
+      expect(w % l.region.w, `${l.name}: frame width vs region`).toBe(0);
+      expect(w / l.region.w, `${l.name}: frame aspect vs region`).toBe(h / l.region.h);
+    }
+  });
+
   it('has a soft contact shadow, so the habitat does not look pasted onto the desktop', () => {
     // The 0.5 threshold must measure the object and the 0.01 threshold must reach further. Equal boxes
     // mean hard alpha with nothing under it -- which reads as a sticker, and is also what would make

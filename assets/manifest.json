@@ -10,12 +10,36 @@
         {
           "name": "bg",
           "file": "habitats/fish/bowl/bg.png",
-          "z": 0
+          "z": 0,
+          "night": {
+            "file": "habitats/fish/bowl/bg_night.png"
+          }
         },
         {
           "name": "memorial",
           "file": "habitats/fish/bowl/memorial.png",
           "z": 0
+        },
+        {
+          "name": "medium",
+          "z": 0,
+          "video": "habitats/fish/bowl/water_day.mp4",
+          "night": {
+            "video": "habitats/fish/bowl/water_night.mp4"
+          },
+          "loop": true,
+          "region": {
+            "x": 77,
+            "y": 19,
+            "w": 166,
+            "h": 164
+          },
+          "mask": {
+            "cx": 160.0,
+            "cy": 100.9,
+            "rx": 82.0,
+            "ry": 81.0
+          }
         },
         {
           "name": "pet",
@@ -32,12 +56,18 @@
         {
           "name": "decor_front",
           "file": "habitats/fish/bowl/decor_front.png",
-          "z": 0
+          "z": 0,
+          "night": {
+            "file": "habitats/fish/bowl/decor_front_night.png"
+          }
         },
         {
           "name": "glass",
           "file": "habitats/fish/bowl/glass.png",
-          "z": 0
+          "z": 0,
+          "night": {
+            "file": "habitats/fish/bowl/glass_night.png"
+          }
         }
       ],
       "water": {

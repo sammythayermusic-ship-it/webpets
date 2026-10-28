@@ -18,12 +18,12 @@ import { Application, Container, Rectangle, type Ticker } from 'pixi.js';
 import { DEFAULT_SCALE, GRID_H, GRID_W, PET_FPS, WINDOW_PAD, scaleFactor, windowSizeForScale, type Scale } from '../sim/constants';
 import type { Rect, Rng } from '../sim/types';
 import { requireSpecies } from '../species';
-import { configureAssetPipeline, loadTextures } from './assets';
+import { configureAssetPipeline, loadTextures, loadVideoTextures } from './assets';
 import { createBubbles, createSheen, parallaxOffset, type Bubbles, type Sheen } from './fx';
 import { createFlakes, type Flakes } from './food';
 import { buildLayers, type LayerStack } from './layers';
 import { createSpritePlayer, type SpritePlayer } from './spritePlayer';
-import { stateFiles } from './manifest';
+import { layerImageFiles, layerVideoFiles, stateFiles } from './manifest';
 import { makeFloorBounds, makeWaterBounds } from './water';
 import { decayAttention, moodAnim, moodOf, type Mood } from '../sim/mood';
 import { createExpressionGate } from './expression';
@@ -344,9 +344,12 @@ export function createScene(
       // and main.ts paints its visible error box instead.
       const required: string[] = [];
       const optional: string[] = [];
+      const videoFiles: string[] = [];
       for (const l of habitat.layers) {
-        if (l.file === undefined) continue;
-        (l.name === 'bg' ? required : optional).push(l.file);
+        // The bg's own still is the one thing the scene cannot do without; its night plate, every
+        // animated frame and every video are decoration and fall back to the still bowl.
+        for (const f of layerImageFiles(l)) (l.name === 'bg' && f === l.file ? required : optional).push(f);
+        videoFiles.push(...layerVideoFiles(l));
       }
       for (const [state, st] of Object.entries(spriteDef.states)) {
         // Fans out: a strip contributes one path, a rendered sequence one per frame. Every idle frame
@@ -355,13 +358,14 @@ export function createScene(
         const bucket = state === 'idle' ? required : optional;
         for (const f of stateFiles(st)) bucket.push(f);
       }
-      const [requiredTex, optionalTex] = await Promise.all([
+      const [requiredTex, optionalTex, videoTex] = await Promise.all([
         loadTextures(required, false),
         loadTextures(optional, true),
+        loadVideoTextures(videoFiles),
       ]);
       const textures = new Map([...optionalTex, ...requiredTex]);
 
-      const layers = buildLayers(habitat, textures);
+      const layers = buildLayers(habitat, textures, videoTex);
       // The movement domain comes from the SPECIES, not from the habitat's art. A bowl is an ellipse
       // of water; a cage is a line of bedding to walk along. Both satisfy the same MoveBounds contract,
       // which is what lets the tick interpolation, the body-box clamp and every behaviour branch stay

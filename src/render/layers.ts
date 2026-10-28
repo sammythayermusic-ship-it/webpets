@@ -9,8 +9,10 @@
 // a time. Keeping one set of coordinates for art, procedural sprites and hit regions alike is what
 // lets the art's resolution change without touching anything that reasons about position.
 
-import { Container, Graphics, Rectangle, Sprite, Texture } from 'pixi.js';
-import type { LayerName, ManifestHabitat, ManifestLayer, ScenePhase } from './types';
+import { Container, Graphics, Rectangle, Sprite, Texture, VideoSource } from 'pixi.js';
+import { frameAt, wrapMs } from './frameClock';
+import { layerArt, layerNightArt } from './manifest';
+import type { LayerArt, LayerName, ManifestHabitat, ManifestLayer, ScenePhase } from './types';
 import { makeWaterBounds } from './water';
 
 /** Slot order bottom → top. */
@@ -85,7 +87,7 @@ export interface LayerStack {
 }
 
 /** Art px per grid px for one layer texture, or a thrown error naming art that does not fit the grid. */
-function layerArtScale(file: string, tex: Texture, grid: readonly [number, number]): number {
+function layerArtScale(file: string, tex: { width: number; height: number }, grid: readonly [number, number]): number {
   const kx = tex.width / grid[0];
   const ky = tex.height / grid[1];
   // Loud, because the silent version is a squashed bowl that still looks plausible: a 1920x1080 export
@@ -98,22 +100,115 @@ function layerArtScale(file: string, tex: Texture, grid: readonly [number, numbe
   return kx;
 }
 
-function fileSprite(
-  layer: ManifestLayer,
-  textures: ReadonlyMap<string, Texture>,
-  grid: readonly [number, number],
-): { sprite: Sprite; artScale: number } | null {
-  if (layer.file === undefined) return null;
-  const tex = textures.get(layer.file);
-  if (!tex) return null;
-  const artScale = layerArtScale(layer.file, tex, grid);
-  const s = new Sprite({ texture: tex, label: layer.name });
-  s.scale.set(1 / artScale);
-  if (layer.blend === 'multiply') s.blendMode = 'multiply';
-  return { sprite: s, artScale };
+/**
+ * One drawable plate: a still, a frame sequence, or a video. `advance` moves a sequence's clock; a
+ * video keeps its own (the browser's) and `video` is exposed so a night crossfade can pause the one
+ * nobody can see.
+ */
+interface Plate {
+  readonly sprite: Sprite;
+  readonly artScale: number;
+  readonly frames: readonly Texture[] | null;
+  readonly fps: number;
+  readonly loop: boolean;
+  readonly video: HTMLVideoElement | null;
+  elapsedMs: number;
+  frame: number;
 }
 
-export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<string, Texture>): LayerStack {
+const PET_NIGHT_TINT = 0x9ca8dc;
+
+/**
+ * Build the sprite for one piece of layer art. The texture may cover the whole grid or, for a
+ * cropped animated layer, just `region`; either way its scale is DERIVED from the texture against
+ * the rect it covers, and a texture that is not a whole multiple of that rect throws.
+ */
+function buildPlate(
+  layer: ManifestLayer,
+  art: LayerArt,
+  textures: ReadonlyMap<string, Texture>,
+  videos: ReadonlyMap<string, Texture>,
+  grid: readonly [number, number],
+): Plate | null {
+  const covers: readonly [number, number] = layer.region ? [layer.region.w, layer.region.h] : grid;
+  let plate: Plate | null = null;
+  if (art.kind === 'image') {
+    const tex = textures.get(art.file);
+    if (!tex) return null;
+    const artScale = layerArtScale(art.file, tex, covers);
+    plate = { sprite: new Sprite({ texture: tex, label: layer.name }), artScale, frames: null, fps: 0, loop: false, video: null, elapsedMs: 0, frame: 0 };
+  } else if (art.kind === 'frames') {
+    const list: Texture[] = [];
+    for (const f of art.files) {
+      const t = textures.get(f);
+      if (!t) break;
+      list.push(t);
+    }
+    const first = list[0];
+    // All or nothing, as for a sprite state: a sequence with holes is a stutter nobody can place.
+    if (!first || list.length !== art.files.length) return null;
+    const artScale = layerArtScale(art.files[0] ?? layer.name, first, covers);
+    for (const [i, t] of list.entries()) {
+      if (t.width !== first.width || t.height !== first.height) {
+        throw new Error(`[render] ${art.files[i]}: ${t.width}x${t.height} differs from the sequence's first frame`);
+      }
+    }
+    plate = { sprite: new Sprite({ texture: first, label: layer.name }), artScale, frames: list, fps: art.fps, loop: art.loop, video: null, elapsedMs: 0, frame: 0 };
+  } else {
+    const tex = videos.get(art.file);
+    if (!tex) return null;
+    const artScale = layerArtScale(art.file, tex, covers);
+    const src = tex.source;
+    const video = src instanceof VideoSource ? src.resource : null;
+    plate = { sprite: new Sprite({ texture: tex, label: layer.name }), artScale, frames: null, fps: 0, loop: art.loop, video, elapsedMs: 0, frame: 0 };
+  }
+  plate.sprite.scale.set(1 / plate.artScale);
+  if (layer.region) plate.sprite.position.set(layer.region.x, layer.region.y);
+  if (layer.blend === 'multiply') plate.sprite.blendMode = 'multiply';
+  return plate;
+}
+
+/** Advance a frame-sequence plate's own clock and swap its texture when the frame changes. */
+function advancePlate(p: Plate, deltaMS: number): void {
+  if (!p.frames) return;
+  p.elapsedMs = p.loop ? wrapMs(p.elapsedMs + deltaMS, p.frames.length, p.fps) : p.elapsedMs + deltaMS;
+  const f = frameAt(p.elapsedMs, p.frames.length, p.fps, p.loop);
+  if (f !== p.frame) {
+    p.frame = f;
+    const t = p.frames[f];
+    if (t) p.sprite.texture = t;
+  }
+}
+
+/**
+ * Keep a night video and its day twin in step while only ONE of them decodes.
+ *
+ * Both clips are the same loop under different light, so the one that is fully faded out can stop;
+ * when it is needed again it is seeked to its twin's time before it plays, which lands within a
+ * frame of the right phase -- invisible under a two-second crossfade, and it halves the steady-state
+ * decode cost. Called every tick; cheap when nothing changes.
+ */
+function syncVideoPair(day: Plate, night: Plate, nightT: number): void {
+  const d = day.video;
+  const n = night.video;
+  if (!d || !n) return;
+  const want = (v: HTMLVideoElement, twin: HTMLVideoElement, playing: boolean): void => {
+    if (playing && v.paused) {
+      v.currentTime = twin.currentTime;
+      void v.play().catch(() => undefined);
+    } else if (!playing && !v.paused) {
+      v.pause();
+    }
+  };
+  want(n, d, nightT > 0);
+  want(d, n, nightT < 1);
+}
+
+export function buildLayers(
+  habitat: ManifestHabitat,
+  textures: ReadonlyMap<string, Texture>,
+  videos: ReadonlyMap<string, Texture> = new Map(),
+): LayerStack {
   const root = new Container({ label: 'habitat' });
   const slots = Object.fromEntries(SLOT_ORDER.map((n) => [n, new Container({ label: `slot:${n}` })])) as Record<SlotName, Container>;
   for (const n of SLOT_ORDER) root.addChild(slots[n]);
@@ -121,8 +216,15 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
   let bg: Sprite | null = null;
   let memorial: Sprite | null = null;
   let medium: Sprite | null = null;
-  /** Every sprite the world tint applies to: the habitat's own art, whichever variant is showing. */
-  const worldSprites: Sprite[] = [];
+  /**
+   * Every sprite the world tint applies to: the habitat's own art, whichever variant is showing. A
+   * plate with its own night art is exempt from the night half of the tint -- it has a real night.
+   */
+  const worldSprites: Array<{ sprite: Sprite; hasNight: boolean }> = [];
+  /** Day/night pairs to crossfade, and the frame-sequence plates to clock. */
+  const pairs: Array<{ day: Plate; night: Plate | null }> = [];
+  /** True once any layer ships a night plate; then the pet and food are dimmed too, so they belong. */
+  let hasNightPlates = false;
   let pantryFill: Sprite | null = null;
   /** Art px per grid px for the pantry_fill texture; its crop rect addresses TEXELS, not grid px. */
   let pantryArt = 1;
@@ -136,9 +238,15 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
   for (const { l } of sorted) {
     if (l.name === 'shadow') continue;
     const slot = slots[SLOT_OF[l.name]];
-    const built = fileSprite(l, textures, habitat.grid);
+    const dayArt = layerArt(l);
+    if (!dayArt) continue;
+    const built = buildPlate(l, dayArt, textures, videos, habitat.grid);
     if (!built) continue;
     const { sprite, artScale: art } = built;
+    const nightArtDef = layerNightArt(l);
+    const nightPlate = nightArtDef ? buildPlate(l, nightArtDef, textures, videos, habitat.grid) : null;
+    pairs.push({ day: built, night: nightPlate });
+    if (nightPlate) hasNightPlates = true;
     switch (l.name) {
       case 'bg':
         bg = sprite;
@@ -175,10 +283,25 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
       default:
         break;
     }
-    if (l.name === 'bg' || l.name === 'memorial' || l.name === 'decor_back' || l.name === 'decor_front' || l.name === 'glass') {
-      worldSprites.push(sprite);
+    if (l.name === 'bg' || l.name === 'memorial' || l.name === 'decor_back' || l.name === 'decor_front' || l.name === 'glass' || l.name === 'medium') {
+      worldSprites.push({ sprite, hasNight: nightPlate !== null });
     }
     slot.addChild(sprite);
+    if (nightPlate) {
+      // Directly above its day twin, so nothing can slip between them, invisible until night comes.
+      nightPlate.sprite.alpha = 0;
+      nightPlate.sprite.visible = false;
+      slot.addChild(nightPlate.sprite);
+    }
+    if (l.mask) {
+      // A stencil, not an alpha mask: the ellipse is geometry, and a Graphics mask costs nothing per
+      // frame where a texture mask would render the layer through an intermediate target.
+      const clip = new Graphics({ label: `${l.name}:mask` });
+      clip.ellipse(l.mask.cx, l.mask.cy, l.mask.rx, l.mask.ry).fill({ color: 0xffffff, alpha: 1 });
+      slot.addChild(clip);
+      sprite.mask = clip;
+      if (nightPlate) nightPlate.sprite.mask = clip;
+    }
   }
 
   // Programmatic white fog over the water for the dead phase (glass slot, above the glass art).
@@ -247,8 +370,25 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
   };
 
   const applyWorldTint = (): void => {
-    const tint = mixTint(towards(NIGHT_TINT, nightT), towards(STARVING_TINT, starvingT));
-    for (const sp of worldSprites) sp.tint = tint;
+    const starvingTint = towards(STARVING_TINT, starvingT);
+    const tinted = mixTint(towards(NIGHT_TINT, nightT), starvingTint);
+    for (const { sprite: sp, hasNight } of worldSprites) sp.tint = hasNight ? starvingTint : tinted;
+    // The night plates: faded in over their day twins by the same amount, so the light itself
+    // changes rather than the colour of the picture.
+    for (const { day, night: n } of pairs) {
+      if (!n) continue;
+      n.sprite.alpha = nightT;
+      n.sprite.visible = nightT > 0;
+      if (day.video && n.video) syncVideoPair(day, n, nightT);
+    }
+    // The pet, its food and the bubbles are lit by the day render whatever the hour. With real night
+    // plates behind them a full-brightness fish would glow; a mild dim keeps it in the same room.
+    if (hasNightPlates) {
+      const dim = towards(PET_NIGHT_TINT, nightT);
+      slots.pet.tint = dim;
+      slots.food.tint = dim;
+      slots.fx.tint = dim;
+    }
     // A habitat that still ships a painted night overlay keeps working; the bowl no longer has one.
     if (night) {
       night.alpha = nightT;
@@ -318,6 +458,12 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
         nightT = nextNight;
         starvingT = nextStarving;
         applyWorldTint();
+      }
+      // Frame sequences keep their own clocks; a video keeps the browser's. The night twin of a
+      // sequence advances by the same delta so the crossfade blends matching frames.
+      for (const { day, night: n } of pairs) {
+        advancePlate(day, deltaMS);
+        if (n) advancePlate(n, deltaMS);
       }
     },
     destroy() {
