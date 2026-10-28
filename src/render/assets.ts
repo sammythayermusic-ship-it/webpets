@@ -92,6 +92,22 @@ export async function loadTexture(file: string): Promise<Texture> {
 }
 
 /**
+ * Loads one PNG as a STRAIGHT-alpha ImageBitmap, for a consumer that is not Pixi.
+ *
+ * Candidate C's water pass samples the bg plate in a Three.js shader and composites it itself; it
+ * needs the pixels unpremultiplied and must not share Pixi's texture (which is premultiplied on
+ * upload and owned by Pixi's cache). Same fetch path as {@link loadTexture} for the same scheme
+ * reasons.
+ */
+export async function loadBitmap(file: string): Promise<ImageBitmap> {
+  const url = assetUrl(file);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`[render] ${url}: HTTP ${res.status} ${res.statusText}`);
+  const blob = await res.blob();
+  return createImageBitmap(blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+}
+
+/**
  * Loads a set of files in parallel into a map keyed by the manifest path. With `lenient`, a file that fails
  * to load is logged and skipped (layers/sprites fall back), so missing art never blocks the scene.
  */

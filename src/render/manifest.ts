@@ -122,6 +122,10 @@ function layer(v: unknown, path: string): ManifestLayer {
   if (!LAYER_NAMES.has(name)) throw new ManifestError(`${path}.name`, `unknown layer "${name}"`);
   const out: ManifestLayer = { name: name as LayerName, z: num(v['z'], `${path}.z`) };
   if (v['file'] !== undefined) out.file = assetPath(v['file'], `${path}.file`);
+  if (v['night'] !== undefined) {
+    if (out.file === undefined) throw new ManifestError(`${path}.night`, 'a night variant needs a day file');
+    out.night = assetPath(v['night'], `${path}.night`);
+  }
   if (v['blend'] !== undefined) {
     const b = v['blend'];
     if (b !== 'normal' && b !== 'multiply') throw new ManifestError(`${path}.blend`, 'expected "normal" | "multiply"');
@@ -152,7 +156,13 @@ function habitat(v: unknown, path: string): ManifestHabitat {
     ...(v['pantryRect'] === undefined ? {} : { pantryRect: rect(v['pantryRect'], `${path}.pantryRect`) }),
     petAnchor: pair(v['petAnchor'], `${path}.petAnchor`),
     opaqueRect: rect(v['opaqueRect'], `${path}.opaqueRect`),
+    ...(v['live'] === undefined ? {} : { live: liveKind(v['live'], `${path}.live`) }),
   };
+}
+
+function liveKind(v: unknown, path: string): 'fish-bowl' {
+  if (v !== 'fish-bowl') throw new ManifestError(path, 'expected "fish-bowl"');
+  return v;
 }
 
 function spriteState(v: unknown, path: string): ManifestSpriteState {

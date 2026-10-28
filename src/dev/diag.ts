@@ -13,9 +13,19 @@ export interface DiagContext {
   lastPointer(): PointerState | null;
 }
 
+declare global {
+  interface Window {
+    /** Dev-only handle for driving the scene from a browser console or an automation script. */
+    __webpets?: { scene: HabitatScene; store: AppStore };
+  }
+}
+
 export function installDiag(ctx: DiagContext): void {
   const hot = import.meta.hot;
   let lastHandled = '';
+  // The scene and the store, reachable from devtools. Never in a production build: this file is only
+  // imported under `import.meta.env.DEV`.
+  window.__webpets = { scene: ctx.scene, store: ctx.store };
 
   const capture = async (rawName: string): Promise<void> => {
     // The Tauri webview and any browser tab both answer the same request; keep their files apart.

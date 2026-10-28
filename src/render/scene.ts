@@ -28,6 +28,8 @@ import { makeFloorBounds, makeWaterBounds } from './water';
 import { decayAttention, moodAnim, moodOf, type Mood } from '../sim/mood';
 import { createExpressionGate } from './expression';
 import { createPacer, type Pacer } from './pacer';
+import { createLiveLayer, type LiveLayer } from './live/bowlLayer';
+import { loadBitmap } from './assets';
 import type { HabitatScene, Manifest, ManifestHabitat, ManifestSprite, MoveBounds, PetBehavior, SceneEvent, SceneView } from './types';
 import type { Habitat, Species } from '../sim/types';
 
@@ -83,7 +85,21 @@ interface Mounted {
   advance: (dtMs: number) => void;
   tick: (t: Ticker) => void;
   watchdog: Pacer;
+  /**
+   * Candidate C's live layer, when the habitat declares one. Null for plates-and-sprites habitats,
+   * whose frame is one Pixi render exactly as before.
+   */
+  live: LiveLayer | null;
+  /** Draw one frame: one Pixi render, or back plates -> live layer -> front plates. */
+  draw: (dtMs: number) => void;
 }
+
+/**
+ * The live layer's quality tier switches to `lean` when a frame costs more than this, averaged, and
+ * back to `full` when it is comfortably under. Hysteresis so it cannot flap.
+ */
+const TIER_DOWN_MS = 9;
+const TIER_UP_MS = 4;
 
 export function createScene(
   manifest: Manifest,
@@ -169,9 +185,14 @@ export function createScene(
     // The whole transform chain: grid px -> CSS px happens here, CSS px -> device px is the renderer's
     // resolution, and texture px -> grid px is on each leaf. Nothing in between needs to know.
     m.layers.root.position.set(WINDOW_PAD, WINDOW_PAD);
+    m.layers.front.position.set(WINDOW_PAD, WINDOW_PAD);
     // `scale` counts EIGHTHS of the grid, so it has to go through scaleFactor before it multiplies
     // anything. Nothing here type-checks that for us: the scale is a plain number.
     m.layers.root.scale.set(scaleFactor(scale));
+    m.layers.front.scale.set(scaleFactor(scale));
+    // The live layer draws in the same canvas, so it is told the same geometry: CSS size, device
+    // ratio and CSS px per grid px, from which its camera frustum and its pad are derived.
+    m.live?.resize(w, h, m.app.renderer.resolution, scaleFactor(scale));
   };
 
   const applyPointer = (): void => {
@@ -183,6 +204,8 @@ export function createScene(
     m.sheen.setPointer(gx, gy, m.bounds);
     const { dx, dy } = parallaxOffset(habitat.grid, gx, gy, reduced);
     m.layers.setParallax(dx, dy);
+    m.live?.setPointer(gx, gy);
+    m.live?.setParallax(dx);
   };
 
   const applyView = (next: SceneView, prev: SceneView | null): void => {
@@ -190,8 +213,10 @@ export function createScene(
     const alive = next.phase === 'alive';
     if (!prev || prev.phase !== next.phase) {
       m.layers.setPhase(next.phase);
+      m.live?.setPhase(next.phase);
       m.bubbles.setEnabled(alive);
-      m.player.sprite.visible = next.phase !== 'memorial';
+      // With a live layer the Pixi sprite is never shown: the fish is a mesh.
+      m.player.sprite.visible = next.phase !== 'memorial' && m.live === null;
       if (!alive) m.flakes.clear();
       if (alive && prev && prev.phase !== 'alive') {
         // New pet. The behaviour re-inits at the water centre on its next step, but the RENDER-side
@@ -205,6 +230,7 @@ export function createScene(
         acc = 0; // the new pet's first tick is a whole one
         expression.reset();
         m.player.resetPose(ax, ay, 1);
+        m.live?.resetPose(ax, ay, 1);
         lastDrawn = null;
         // `resetPose` moves the sprite but does not touch the sequencer, so the new pet was drawn
         // using whatever state the old one died in — the belly-up `dead` art, which also carries the
@@ -226,6 +252,8 @@ export function createScene(
 
   let steps = 0;
   let stepSkips = 0;
+  /** What the behaviour last decided, for the live layer: it draws the pose rather than a sprite. */
+  let lastFacing: 1 | -1 = 1;
   /** How many times anything advanced, and by how much. The only way to tell which clock is driving. */
   let advances = 0;
   let lastDtMs = 0;
@@ -290,6 +318,7 @@ export function createScene(
     const expressed = simDriving ? expression.hold() : expression.update(moodAnim(mood));
     m.player.play(simDriving ? out.anim : (expressed ?? 'idle'));
     m.player.setFacing(out.facing, out.turning);
+    lastFacing = out.facing;
     // Roll the segment forward INSIDE the step loop. After a catch-up burst that leaves poseFrom and
     // poseTo bracketing only the final tick, so the fish resumes from where it is rather than
     // rubber-banding through every tick it missed.
@@ -318,7 +347,26 @@ export function createScene(
       configureAssetPipeline();
       const app = new Application();
       const { w, h } = windowSize(scale);
+      // A live habitat shares ONE WebGL2 context between Pixi and Three. The canvas and context are
+      // created here so both renderers are handed the same objects; Pixi draws the plates, Three draws
+      // between them, and the harness's recorder and the click-through window see a single surface.
+      const liveKind = habitat.live;
+      const sharedCanvas = liveKind === undefined ? null : document.createElement('canvas');
+      const sharedGl =
+        sharedCanvas === null
+          ? null
+          : sharedCanvas.getContext('webgl2', {
+              alpha: true,
+              premultipliedAlpha: true,
+              antialias: false,
+              depth: true,
+              stencil: true,
+              preserveDrawingBuffer: false,
+              powerPreference: 'high-performance',
+            });
+      if (sharedCanvas !== null && sharedGl === null) throw new Error('[render] WebGL2 is required for the live habitat layer');
       await app.init({
+        ...(sharedCanvas !== null && sharedGl !== null ? { canvas: sharedCanvas, context: sharedGl } : {}),
         width: w,
         height: h,
         resolution: window.devicePixelRatio || 1,
@@ -347,6 +395,7 @@ export function createScene(
       for (const l of habitat.layers) {
         if (l.file === undefined) continue;
         (l.name === 'bg' ? required : optional).push(l.file);
+        if (l.night !== undefined) optional.push(l.night);
       }
       for (const [state, st] of Object.entries(spriteDef.states)) {
         // Fans out: a strip contributes one path, a rendered sequence one per frame. Every idle frame
@@ -355,9 +404,14 @@ export function createScene(
         const bucket = state === 'idle' ? required : optional;
         for (const f of stateFiles(st)) bucket.push(f);
       }
-      const [requiredTex, optionalTex] = await Promise.all([
+      const bgLayer = habitat.layers.find((l) => l.name === 'bg' && l.file !== undefined);
+      const [requiredTex, optionalTex, plateDay, plateNight] = await Promise.all([
         loadTextures(required, false),
         loadTextures(optional, true),
+        // The live water refracts the bg plate, so it needs the pixels as a straight-alpha bitmap of
+        // its own: Pixi's copy is premultiplied on upload and bound to Pixi's texture cache.
+        liveKind !== undefined && bgLayer?.file !== undefined ? loadBitmap(bgLayer.file) : Promise.resolve(null),
+        liveKind !== undefined && bgLayer?.night !== undefined ? loadBitmap(bgLayer.night).catch(() => null) : Promise.resolve(null),
       ]);
       const textures = new Map([...optionalTex, ...requiredTex]);
 
@@ -404,6 +458,35 @@ export function createScene(
 
       const stage: Container = app.stage;
       stage.addChild(layers.root);
+      stage.addChild(layers.front);
+
+      let live: LiveLayer | null = null;
+      if (liveKind === 'fish-bowl' && sharedCanvas !== null && sharedGl !== null && plateDay !== null) {
+        live = createLiveLayer({ gl: sharedGl, canvas: sharedCanvas, habitat, plates: { day: plateDay, night: plateNight }, rng });
+        live.resetPose(habitat.petAnchor[0], habitat.petAnchor[1], 1);
+        player.sprite.visible = false;
+        // The fish mesh arrives asynchronously; the water draws from the first frame. A load failure
+        // is loud: a bowl with water and no fish is the same lie an empty bowl was.
+        live.ready.catch((err: unknown) => {
+          console.error('[render] live fish failed to load', err);
+        });
+      }
+
+      /** One frame. The live path renders the two halves of the stack around the live layer. */
+      const draw = (dtMs: number): void => {
+        if (!m) return;
+        if (m.live === null) {
+          m.app.render();
+          return;
+        }
+        const r = m.app.renderer;
+        r.resetState();
+        r.render({ container: m.layers.root, clear: true });
+        m.live.setNight(m.layers.nightT());
+        m.live.render(dtMs);
+        r.resetState();
+        r.render({ container: m.layers.front, clear: false });
+      };
 
       /** Advance and redraw by `dtMs`, from whichever clock is driving us. */
       const advance = (dtMs: number): void => {
@@ -439,12 +522,19 @@ export function createScene(
         lastDrawn = { x: drawnX, y: drawnY };
         m.player.setPosition(drawnX, drawnY);
         m.player.advance(dtMs, travelled);
+        m.live?.setPose(drawnX, drawnY, lastFacing, m.player.state());
         m.flakes.interpolate(t, dtMs);
         m.bubbles.update(dtMs, rng);
         m.layers.update(dtMs);
         const t0 = performance.now();
-        m.app.render();
+        m.draw(dtMs);
         costMs = costMs === 0 ? performance.now() - t0 : costMs * 0.9 + (performance.now() - t0) * 0.1;
+        // The tier switch: measured, not guessed. A Large window on a slow GPU drops the fish target
+        // to half resolution rather than dropping frames.
+        if (m.live) {
+          if (m.live.tier() === 'full' && costMs > TIER_DOWN_MS && advances > 120) m.live.setTier('lean');
+          else if (m.live.tier() === 'lean' && costMs < TIER_UP_MS) m.live.setTier('full');
+        }
       };
 
       const tick = (t: Ticker): void => {
@@ -483,7 +573,7 @@ export function createScene(
         advance(Math.min(MAX_ACC_MS, now - lastAdvanceAt));
       });
 
-      m = { app, layers, player, behavior: species.createBehavior(), bounds, flakes, bubbles, sheen, advance, tick, watchdog };
+      m = { app, layers, player, behavior: species.createBehavior(), bounds, flakes, bubbles, sheen, advance, tick, watchdog, live, draw };
       layoutHabitat();
       if (view) applyView(view, null);
       applyPointer();
@@ -497,7 +587,7 @@ export function createScene(
       // `advance` is the one path both clocks share, so it keeps the render and the plugin loses it.
       app.ticker.remove(app.render, app);
       // Draw once before the first ticker callback so the window never shows an empty frame.
-      app.render();
+      draw(0);
       app.ticker.add(tick);
     },
 
@@ -511,6 +601,7 @@ export function createScene(
       if (!m) return;
       const { w, h } = windowSize(scale);
       m.app.renderer.resize(w, h, dpr > 0 ? dpr : 1);
+      m.live?.resize(w, h, dpr > 0 ? dpr : 1, scaleFactor(scale));
     },
 
     setView(next) {
@@ -604,6 +695,7 @@ export function createScene(
           : null,
         attention: Number(attention.toFixed(3)),
         expression: expression.current(),
+        ...(m.live ? { live: { tier: m.live.tier(), spine: { ...m.live.spineState() } as Record<string, number> } } : {}),
       };
     },
 
@@ -613,8 +705,11 @@ export function createScene(
       // to have run. Drive one whole tick first, or a capture of a backgrounded page shows a pet that
       // has never been placed and looks like a rendering bug.
       if (!placed) m.advance(STEP_MS);
-      m.app.render();
+      m.draw(0);
       const { w, h } = windowSize(scale);
+      // The live layer draws straight into the canvas, so the canvas IS the picture. Read it back in
+      // the same task as the draw: the drawing buffer is valid until the compositor takes it.
+      if (m.live !== null) return m.app.canvas.toDataURL('image/png');
       // Framed explicitly to the canvas. Without this the extract frames the STAGE's bounds, which are
       // now the union of the layer sprites rather than one habitat sprite: the transparent pad would be
       // cropped away and anything overhanging the canvas would be included, so captures would silently
@@ -632,6 +727,7 @@ export function createScene(
       cur.bubbles.destroy();
       cur.sheen.destroy();
       cur.player.destroy();
+      cur.live?.destroy();
       cur.layers.destroy();
       cur.app.destroy({ removeView: true }, { children: true });
       listeners.bite.clear();
