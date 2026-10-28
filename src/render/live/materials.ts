@@ -194,29 +194,32 @@ export interface WaterLook {
   color: Color;
 }
 
+/** Transmission thickness of the water volume, metres. See createWaterMaterial. */
+export const WATER_THICKNESS = 0.03;
+
 /** The water as it looks alive by day; death, starvation and the memorial are blends away from this. */
 export const WATER_ALIVE: WaterLook = {
   color: new Color(0.84, 0.95, 0.98),
   attenuationColor: new Color(0.22, 0.66, 0.82),
-  attenuationDistance: 0.34,
+  attenuationDistance: 0.085,
   roughness: 0.03,
 };
 export const WATER_STARVING: WaterLook = {
   color: new Color(0.84, 0.94, 0.86),
   attenuationColor: new Color(0.3, 0.62, 0.42),
-  attenuationDistance: 0.26,
+  attenuationDistance: 0.065,
   roughness: 0.06,
 };
 export const WATER_DEAD: WaterLook = {
   color: new Color(0.9, 0.92, 0.92),
   attenuationColor: new Color(0.62, 0.68, 0.7),
-  attenuationDistance: 0.09,
+  attenuationDistance: 0.0225,
   roughness: 0.42,
 };
 export const WATER_MEMORIAL: WaterLook = {
   color: new Color(0.86, 0.9, 0.92),
   attenuationColor: new Color(0.4, 0.55, 0.58),
-  attenuationDistance: 0.3,
+  attenuationDistance: 0.075,
   roughness: 0.04,
 };
 
@@ -250,7 +253,10 @@ export function createWaterMaterial(world: WorldUniforms, tier: 'full' | 'lite')
   applyWaterLook(m, WATER_ALIVE);
   if (tier === 'full') {
     m.transmission = 1;
-    m.thickness = 0.12;
+    // Thin on purpose. three.js offsets the refracted sample by the refraction vector times this
+    // thickness, and at the bowl's curved sides 0.12 m smeared the fish into a double image; 0.03
+    // keeps a visible bend without the ghost. The attenuation distances are scaled to match.
+    m.thickness = WATER_THICKNESS;
   } else {
     m.transparent = true;
     m.opacity = 0.42;
@@ -267,17 +273,30 @@ export function createWaterMaterial(world: WorldUniforms, tier: 'full' | 'lite')
   return m;
 }
 
-/** The far wall of the bowl: what the water refracts when nothing else is behind the fish. */
-export function createGlassBackMaterial(): MeshPhysicalMaterial {
-  return new MeshPhysicalMaterial({
-    color: new Color(0.8, 0.88, 0.93),
-    roughness: 0.18,
+/**
+ * The far wall of the bowl BELOW the waterline: the opaque backdrop the water refracts when nothing
+ * else is behind the fish. It is what makes the water read as a body of water rather than a tint on
+ * the desktop, so it is a deep teal that darkens toward the gravel. ABOVE the waterline it is
+ * discarded: the empty glass must show the desktop through it, with only the near glass's reflection
+ * on top, or the bowl reads as a painted ball.
+ */
+export function createGlassBackMaterial(world: WorldUniforms): MeshPhysicalMaterial {
+  const m = new MeshPhysicalMaterial({
+    color: new Color(0.2, 0.56, 0.68),
+    roughness: 0.55,
     metalness: 0,
-    clearcoat: 0.5,
-    clearcoatRoughness: 0.08,
-    envMapIntensity: 0.7,
+    envMapIntensity: 0.25,
     side: BackSide,
   });
+  m.onBeforeCompile = (shader) => {
+    addWorldVarying(shader);
+    addWorldUniforms(shader, world);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (vWpWorld.y > uWaterTop + 0.002) discard;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= mix(0.45, 1.1, smoothstep(0.03, 0.17, vWpWorld.y));');
+  };
+  m.customProgramCacheKey = () => 'wp-glass-back';
+  return m;
 }
 
 /**

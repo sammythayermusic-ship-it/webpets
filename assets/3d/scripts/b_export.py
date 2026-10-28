@@ -291,7 +291,7 @@ def bake_gravel(gravel):
     c = c.reshape(-1, 4)
     a = a.reshape(-1, 4)
     occ = np.clip(a[:, :1], 0.0, 1.0) ** 0.8
-    c[:, :3] *= 0.35 + 0.65 * occ
+    c[:, :3] *= 0.72 + 0.28 * occ
     color.pixels.foreach_set(c.ravel())
     color.save()
     live = bpy.data.materials.new("WP_gravel_live")

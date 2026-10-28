@@ -74,13 +74,13 @@ export function lightRig(hour: number, night: number): LightRig {
   // A low sun is dimmer and comes in flatter: nudge the key toward the horizon in the warm hours.
   const keyDir = norm([KEY_DIR[0] * (1 + 0.5 * w), KEY_DIR[1] * (1 - 0.35 * w), KEY_DIR[2]]);
   return {
-    key: { color: mix3(dayKey, NIGHT_KEY, n), intensity: mix(mix(3.2, 2.6, w), 0.55, n), direction: norm(mix3(keyDir, KEY_DIR, n)) },
-    fill: { color: mix3(DAY_FILL, NIGHT_FILL, n), intensity: mix(0.9, 0.22, n), direction: FILL_DIR },
-    rim: { color: mix3(DAY_RIM, NIGHT_RIM, n), intensity: mix(1.4, 0.7, n), direction: RIM_DIR },
+    key: { color: mix3(dayKey, NIGHT_KEY, n), intensity: mix(mix(1.9, 1.6, w), 0.55, n), direction: norm(mix3(keyDir, KEY_DIR, n)) },
+    fill: { color: mix3(DAY_FILL, NIGHT_FILL, n), intensity: mix(0.55, 0.22, n), direction: FILL_DIR },
+    rim: { color: mix3(DAY_RIM, NIGHT_RIM, n), intensity: mix(0.9, 0.7, n), direction: RIM_DIR },
     skyColor: mix3([0.75, 0.82, 0.95], [0.18, 0.22, 0.42], n),
     groundColor: mix3([0.35, 0.3, 0.26], [0.06, 0.06, 0.1], n),
-    hemiIntensity: mix(0.9, 0.35, n),
-    envIntensity: mix(1.0, 0.3, n),
+    hemiIntensity: mix(0.5, 0.35, n),
+    envIntensity: mix(0.7, 0.3, n),
     caustic: mix(1.0, 0.45, n),
     exposure: mix(1.0, 0.8, n),
   };

@@ -19,7 +19,7 @@ import {
   MeshStandardMaterial,
   Object3D,
   OrthographicCamera,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   PlaneGeometry,
   PMREMGenerator,
   PointLight,
@@ -87,6 +87,11 @@ const DEPTH_MARGIN = 0.032;
 const DESK_Y = -0.0489;
 /** Evaluate the auto tier after this many visible advances. */
 const TIER_PROBE_FRAMES = 240;
+/**
+ * Ignore the first seconds after mount before probing. The first frames compile shaders and upload
+ * textures, and a 240-frame average that starts there reads a 120 Hz machine as a 40 Hz one.
+ */
+const TIER_WARMUP_MS = 3000;
 /** Below this many advances per second while visible, drop to the lite tier. */
 const TIER_MIN_RATE = 50;
 
@@ -199,6 +204,7 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
   let tierLocked = tierFromEnv() !== 'auto';
   let probeFrames = 0;
   let probeMs = 0;
+  let mountedAt = 0;
   const lookScratch: WaterLook = {
     color: new Color(),
     attenuationColor: new Color(),
@@ -341,7 +347,7 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
     m.lights.key.shadow.mapSize.set(size, size);
     m.lights.key.shadow.map?.dispose();
     m.lights.key.shadow.map = null;
-    m.renderer.shadowMap.type = PCFSoftShadowMap;
+    m.renderer.shadowMap.type = PCFShadowMap;
     m.renderer.shadowMap.needsUpdate = true;
   };
 
@@ -362,7 +368,7 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
       renderer.toneMappingExposure = 1;
       renderer.outputColorSpace = SRGBColorSpace;
       renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = PCFSoftShadowMap;
+      renderer.shadowMap.type = PCFShadowMap;
       const canvas = renderer.domElement;
       canvas.id = 'habitat-canvas';
       canvas.style.display = 'block';
@@ -397,7 +403,7 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
 
       const glassBack = requireMesh(root, 'ENV_bowl_glass');
       (glassBack.material as Material).dispose();
-      glassBack.material = createGlassBackMaterial();
+      glassBack.material = createGlassBackMaterial(world);
       glassBack.castShadow = false;
       glassBack.receiveShadow = false;
       const glassFront = new Mesh(glassBack.geometry, createGlassFrontMaterial());
@@ -587,7 +593,7 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
         // Auto quality tier: after a few seconds of real frames, if the window cannot hold its rate, drop
         // the transmission and the big shadow map. Measured on advances the ticker drove (rAF alive),
         // never on the watchdog's hidden-window pace.
-        if (!tierLocked && Date.now() - lastRafAt < WATCHDOG_STALL_MS && document.visibilityState === 'visible') {
+        if (!tierLocked && Date.now() - mountedAt > TIER_WARMUP_MS && Date.now() - lastRafAt < WATCHDOG_STALL_MS && document.visibilityState === 'visible') {
           probeFrames += 1;
           probeMs += dtMs;
           if (probeFrames >= TIER_PROBE_FRAMES) {
@@ -640,8 +646,15 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
       };
       layoutHabitat();
       if (view) applyView(view, null);
+      // Compile every program before the first frame so the first seconds are frames, not stalls.
+      try {
+        await renderer.compileAsync(scene3, camera);
+      } catch (e) {
+        console.warn('[live] compileAsync failed', e);
+      }
       lastAdvanceAt = Date.now();
       lastRafAt = lastAdvanceAt;
+      mountedAt = lastAdvanceAt;
       // Place the fish at its anchor and draw once so the window never shows an empty frame.
       advance(0);
       m.rafId = requestAnimationFrame(loop);
