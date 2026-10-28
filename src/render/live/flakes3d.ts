@@ -46,8 +46,9 @@ export interface Flakes3D {
 }
 
 function crumbGeometry(): ShapeGeometry {
-  // An irregular seven-sided crumb, 6 grid px across, so six flakes do not read as six dots.
-  const r = 3 * METRES_PER_GRID_PX;
+  // An irregular seven-sided crumb, 8 grid px across: the fish clears a feed in about a second, so
+  // the crumbs have to be seen in the moment they exist.
+  const r = 4 * METRES_PER_GRID_PX;
   const shape = new Shape();
   for (let i = 0; i < 7; i += 1) {
     const a = (i / 7) * Math.PI * 2;
@@ -67,7 +68,7 @@ export function createFlakes3D(water: WaterShape, bounds: MoveBounds): Flakes3D 
   // cyan tint. Per-instance colours were tried and came out white in the packaged webview (the
   // program is compiled before the first feed, when there is no instance colour attribute yet), and
   // six crumbs do not need six oranges.
-  const material = new MeshStandardMaterial({ color: new Color(0.95, 0.52, 0.16), roughness: 0.7, metalness: 0, side: 2, emissive: new Color(0.6, 0.28, 0.06), emissiveIntensity: 0.9 });
+  const material = new MeshStandardMaterial({ color: new Color(0.95, 0.52, 0.16), roughness: 0.7, metalness: 0, side: 2, emissive: new Color(0.7, 0.3, 0.05), emissiveIntensity: 1.3 });
   const mesh = new InstancedMesh(geometry, material, MAX_FLAKES);
   mesh.name = 'flakes';
   mesh.count = 0;

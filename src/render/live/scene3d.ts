@@ -96,6 +96,10 @@ const TIER_PROBE_FRAMES = 600;
 const TIER_WARMUP_MS = 3000;
 /** Below this many advances per second while visible, drop to the lite tier. */
 const TIER_MIN_RATE = 45;
+/** In the lite tier, a window at or above this rate earns another try at full. */
+const TIER_PROMOTE_RATE = 58;
+/** At least this long between a drop and the next try at full, so a slow machine is not re-probed every ten seconds. */
+const TIER_RETRY_MS = 60_000;
 /**
  * Widest the transmission backbuffer gets, in device px. The refracted view is read through a
  * rough-ish surface and blurred by its mip chain anyway, so above this width the extra pixels cost
@@ -243,10 +247,12 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
   let costMs = 0;
   let fpsEstimate = 0;
   let tier: QualityTier = tierFromEnv() === 'lite' ? 'lite' : 'full';
-  let tierLocked = tierFromEnv() !== 'auto';
+  /** A build-time tier is never re-evaluated; an auto tier is probed for its whole life (see advance). */
+  const tierLocked = tierFromEnv() !== 'auto';
   let probeFrames = 0;
   let probeMs = 0;
   let mountedAt = 0;
+  let lastDropAt = 0;
   /** Shader compile/link failures, kept for debugState: the packaged webview has no console to read. */
   const shaderErrors: string[] = [];
   const lookScratch: WaterLook = {
@@ -648,16 +654,26 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
         const cost = performance.now() - t0;
         costMs = costMs === 0 ? cost : costMs * 0.9 + cost * 0.1;
 
-        // Auto quality tier: after a few seconds of real frames, if the window cannot hold its rate, drop
-        // the transmission and the big shadow map. Measured on advances the ticker drove (rAF alive),
-        // never on the watchdog's hidden-window pace.
+        // Auto quality tier, probed for the whole session in ten-second windows of real frames (rAF
+        // alive, document visible; never the watchdog's hidden-window pace). A window under
+        // TIER_MIN_RATE drops the transmission and the big shadow map; a lite window at the display
+        // rate, at least a minute after the drop, earns full another try. The first probe used to be
+        // the only one, which meant that one busy launch -- a build finishing, a recording starting,
+        // another process on the GPU -- chose the look for the rest of the day.
         if (!tierLocked && Date.now() - mountedAt > TIER_WARMUP_MS && Date.now() - lastRafAt < WATCHDOG_STALL_MS && document.visibilityState === 'visible') {
           probeFrames += 1;
           probeMs += dtMs;
           if (probeFrames >= TIER_PROBE_FRAMES) {
             const rate = (probeFrames / Math.max(1, probeMs)) * 1000;
-            if (rate < TIER_MIN_RATE) applyTier('lite');
-            tierLocked = true;
+            const now = Date.now();
+            if (tier === 'full' && rate < TIER_MIN_RATE) {
+              applyTier('lite');
+              lastDropAt = now;
+            } else if (tier === 'lite' && rate >= TIER_PROMOTE_RATE && now - lastDropAt >= TIER_RETRY_MS) {
+              applyTier('full');
+            }
+            probeFrames = 0;
+            probeMs = 0;
           }
         }
       };
