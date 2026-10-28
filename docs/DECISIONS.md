@@ -1130,3 +1130,16 @@ and hamster behaviours is the step-2 work proper, after the merge.
 - Stored under a new optional `needs` block in the pet document, normalised field by field over the
   defaults so every existing pet wakes rested and settled; no version bump (see the settings note on
   why a bump discards preferences). 25 tests, including a day in the life.
+
+### motion primitives, for every species
+
+`src/sim/motion.ts` is the other renderer-independent half of step 2: the pieces a behaviour needs
+so that motion stops being "position sliding between canned loops". Seeded two-octave value noise
+(`noise1`) so a wander never repeats and never jitters -- the test checks both, and that it is not a
+sine; quadratic arcs sampled by arc length so a curved swim keeps the speed the behaviour asked for;
+a dart profile (instant attack, exponential bleed) because a startle or a lunge is a burst, and the
+renderer's spine bend will read the SPEED to show it; a heading with angular momentum (spring-damper,
+rate-capped: a 90° turn overshoots by ~0.08 rad and settles in two seconds, a reversal is a sweep of
+at least six ticks, never a snap); and a speed with inertia whose deceleration is slower than its
+acceleration, which is most of what "weight when a pet stops" means. 16 tests. Nothing uses it yet.
+

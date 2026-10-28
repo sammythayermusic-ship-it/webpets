@@ -60,6 +60,23 @@ export {
   stressAt,
 } from './needs';
 export type { Drives, DrivesContext, NeedAnchor, NeedsRegime, NeedsState, Stimulus } from './needs';
+export {
+  DEFAULT_SPEED,
+  DEFAULT_TURN,
+  alongArc,
+  angleDiff,
+  approachSpeed,
+  arc,
+  arcHeading,
+  dartSpeed,
+  facingOf,
+  headingVec,
+  noise1,
+  stoppingDistance,
+  ticksToSlow,
+  turn,
+} from './motion';
+export type { Arc, Heading, SpeedTuning, TurnTuning, Vec } from './motion';
 export type { Mood, MoodInput, MoodLabel } from './mood';
 export { reconcile } from './reconcile';
 export { depositPantry, feed, withdrawPantry } from './feed';
