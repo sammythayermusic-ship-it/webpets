@@ -87,15 +87,15 @@ const DEPTH_MAX = 0.05;
 const DEPTH_MARGIN = 0.032;
 /** Height of the desk the stand rests on (the shadow catcher in the .blend). */
 const DESK_Y = -0.0489;
-/** Evaluate the auto tier after this many visible advances. */
-const TIER_PROBE_FRAMES = 240;
+/** Evaluate the auto tier after this many visible advances: ten seconds at 60, so one busy second does not decide it. */
+const TIER_PROBE_FRAMES = 600;
 /**
  * Ignore the first seconds after mount before probing. The first frames compile shaders and upload
  * textures, and a 240-frame average that starts there reads a 120 Hz machine as a 40 Hz one.
  */
 const TIER_WARMUP_MS = 3000;
 /** Below this many advances per second while visible, drop to the lite tier. */
-const TIER_MIN_RATE = 50;
+const TIER_MIN_RATE = 45;
 /**
  * Widest the transmission backbuffer gets, in device px. The refracted view is read through a
  * rough-ish surface and blurred by its mip chain anyway, so above this width the extra pixels cost
@@ -784,6 +784,7 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
         depth: Number(depth.toFixed(4)),
         shaderErrors: shaderErrors.slice(0, 8),
         transmissionScale: m ? Number(m.renderer.transmissionResolutionScale.toFixed(3)) : 0,
+        flakes: m ? m.flakes.count() : 0,
       };
       if (!m) {
         return { ...base, petVisible: false, petAnim: '(unmounted)', petPos: { x: 0, y: 0 }, drawnPos: { x: 0, y: 0 }, pacer: 'timer' as const };

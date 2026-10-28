@@ -253,7 +253,11 @@ export function mixWaterLook(a: WaterLook, b: WaterLook, t: number, out: WaterLo
 }
 
 export function applyWaterLook(m: MeshPhysicalMaterial, look: WaterLook): void {
-  m.color.copy(look.color);
+  // The lite tier has no volume to attenuate through, so its surface colour IS the tint: a sheet of
+  // the attenuation colour at 30% over the teal wall, rather than the near-white volume colour,
+  // which made everything behind it milky.
+  if (m.userData['lite'] === true) m.color.copy(look.attenuationColor).lerp(look.color, 0.25);
+  else m.color.copy(look.color);
   m.attenuationColor.copy(look.attenuationColor);
   m.attenuationDistance = look.attenuationDistance;
   m.roughness = look.roughness;
@@ -273,7 +277,6 @@ export function createWaterMaterial(world: WorldUniforms, tier: 'full' | 'lite')
     envMapIntensity: 0.6,
     side: FrontSide,
   });
-  applyWaterLook(m, WATER_ALIVE);
   if (tier === 'full') {
     m.transmission = 1;
     // Thin on purpose. three.js offsets the refracted sample by the refraction vector times this
@@ -281,8 +284,9 @@ export function createWaterMaterial(world: WorldUniforms, tier: 'full' | 'lite')
     // keeps a visible bend without the ghost. The attenuation distances are scaled to match.
     m.thickness = WATER_THICKNESS;
   } else {
+    m.userData['lite'] = true;
     m.transparent = true;
-    m.opacity = 0.42;
+    m.opacity = 0.3;
     m.depthWrite = false;
   }
   m.onBeforeCompile = (shader) => {
@@ -294,6 +298,7 @@ export function createWaterMaterial(world: WorldUniforms, tier: 'full' | 'lite')
       .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>\n${GLSL_WATER_SPECULAR}`);
   };
   m.customProgramCacheKey = () => `wp-water-${tier}`;
+  applyWaterLook(m, WATER_ALIVE);
   return m;
 }
 
