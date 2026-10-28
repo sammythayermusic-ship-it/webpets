@@ -1098,3 +1098,49 @@ shared script; each reports with its evidence folder under `docs/reports/bakeoff
 stage runs the same measurement script against each installed build in turn (one at a time: they
 share the bundle id). The lead scores the recordings and stills, writes the table and the decision
 here, and continues on the winner's branch. The two others are kept.
+
+## 2026-10-28 — bake-off candidate B: plan
+
+The bowl and the fish leave Blender as geometry and are rendered live with Three.js, for the fish
+bowl only; the hamster habitats keep the Pixi scene behind the same `HabitatScene` interface, chosen
+by `createScene` per habitat.
+
+### what is exported, and what is not
+- `assets/3d/scripts/b_export.py` writes `assets/3d/export/bowl_fish.glb` from `wp_scene.blend`
+  (saved as a copy, never in place). Modifiers are frozen in the script rather than at export so the
+  mesh can be edited after: the glass keeps only its OUTER surface (the solidified inner shell is
+  deleted by face normal) so one mesh can be drawn twice, back faces as the pale far wall and front
+  faces as the reflecting near glass; the 134 pebbles, 7 plant blades, the 4 legs + ring and the
+  memorial are each joined into one mesh with vertex colours, because 150 draw calls for a still
+  bowl is where idle CPU goes. The gravel's procedural Voronoi colour and bump are BAKED (diffuse
+  colour, tangent normal, AO multiplied into the colour) to 1024² WebP in the GLB; the fish body's
+  belly gradient is baked to vertex colours from the ramp's own stops. The fish stays dense.
+- No animations, no skins: the states are parameters of a procedural spine, not clips.
+- The Blender camera is exported too, as a check on the hand-built orthographic camera; the grid
+  mapping is derived from `CAM_bowl`'s numbers (ortho 0.43 m over 1280 px, 81° tilt) and verified
+  against `geometry.json`'s waterline row (267.2) in a unit test.
+
+### glass and water: one of them cannot be `transmission`
+Three's transmission pass renders only OPAQUE objects into the backbuffer that transmissive
+materials refract, so two nested transmissive shells do not see each other: a transmissive glass
+would refract the gravel and the fish but never the water. The water is the one that must refract
+(it is what distorts the fish and the gravel), so the water volume is the `MeshPhysicalMaterial`
+with transmission + thickness + ior 1.33 + attenuation, and the glass is a Fresnel reflection
+surface: black base, roughness 0.03, environment reflections, drawn last with ONE /
+ONE_MINUS_SRC_ALPHA blending so the reflection adds and only a few percent of what is behind is
+dimmed. That is what Cycles' `glass_front` layer was in the shipped art, and a thin shell refracts
+almost nothing anyway. Everything INSIDE the water (fish, fins, flakes, bubbles) has to be opaque or
+alpha-tested for the same reason, or it vanishes when seen through the water.
+
+### the rest of the plan
+- Pure, tested: `mapping.ts` (grid px + depth → world on the camera ray; depth budget inside the
+  inner sphere), `spine.ts` (speed/turn/state → amplitude, frequency, wavelength, fin rate, pitch),
+  `daynight.ts` (hour + night amount → light rig).
+- Spine via `onBeforeCompile` on every fish material in ROOT space (a per-mesh `toRoot` matrix), so
+  the fins and tail bend with the body and the tail empty adds a lagging secondary swing; the same
+  injection goes into a custom depth material so the shadow bends too.
+- Caustics: a procedural animated term injected into the gravel, pebble and plant shaders, faded by
+  night. Water surface: animated normals in the water's fragment shader above the waterline height.
+- Quality tiers: `full` (transmission, PCF-soft 1024 shadow) and `lite` (no transmission: water as a
+  tinted Fresnel surface, 512 shadow, no caustic animation); auto-dropped when the first seconds
+  measure under ~50 advances/s, forced by `VITE_WEBPETS_LIVE_TIER` at build time for measurement.
