@@ -1031,3 +1031,70 @@ Verified in the packaged harness build: `MediaRecorder` in WKWebView gives H.264
 '{"identifier":"com.sammythayer.webpets.harness","productName":"WebPets Harness"}'`) so it never
 collides with the user's `/Applications/WebPets.app`; the same trick is what lets three bake-off
 candidates be installed side by side.
+
+## 2026-10-28 — Next phase, step 1: the bake-off
+
+Three renderings of the same fish bowl, judged against `docs/PHASE-NEXT.md`'s bar. Same simulation,
+same window, same harness, same 20-second script. Each candidate lives on its own branch cut from the
+step-0 commit, built by its own agent in its own worktree, and ships an installed `.app` plus the
+evidence listed below. The lead judges; the numbers are collected by one script so no candidate can
+measure itself kindly.
+
+### what is fixed for all three
+- `src/sim`, `src/app`, `src-tauri`, the window geometry, the HUD, the tray, the dev panel, the
+  harness. A candidate changes `src/render`, `src/species/fish`, `assets/`, `assets/3d`, and may add
+  a dependency only if its brief names it.
+- The script, `tools/bakeoff/script.json`, run through `tools/harness.mjs script`: 0 s idle with no
+  pointer; 3 s pointer arrives at the glass; 5 s feed; 10 s force hungry; 14 s night on; 18 s pointer
+  leaves; 20 s end. Recorded from the canvas at the Medium size; still frames at Small, Medium and
+  Large taken with the harness `snapshot` and with `screencapture -l` of the real window.
+- The numbers, in one table: harness `stats` (advances/s, fps, render ms) at each size; `ps` CPU of
+  the three processes shown and hidden; RSS; bundle size; Blender render minutes spent.
+- The scorecard, by eye, 1–5 each: looks alive; water looks like water; the fish looks like a fish;
+  reacts to me; I would show this to someone. Plus a paragraph: what it takes to add the hamster,
+  the frog and the chicken on this pipeline.
+
+### A — rendered ceiling (`claude/bakeoff-a-rendered`)
+Everything canned, Blender pushed as far as it goes, the current code almost unchanged.
+- Glass: real IOR, thickness, dispersion off; Cycles MNEE caustics on the gravel from the water and
+  the key light (`caustics_light` on the key, `caustics_receiver` on gravel, `caustics_caster` on the
+  water and glass). Water with a real surface (displacement noise), absorption volume for depth.
+- Fish: body with a subsurface/translucent fin material, a scale normal map built procedurally, an eye
+  with a wet coat. Every state re-rendered at 24 fps.
+- The thing that is new in code: an **animated layer**. The manifest gains a layer kind that is a
+  frame sequence (or a looping video) played at its own fps — the water surface and the caustic light
+  on the gravel, rendered as a loop over the bg plate and masked to the water. One frame of the full
+  bowl costs ~9 s on this GPU at 32 samples with denoising (visually equal to 220 samples, which cost 142 s), so the loop length is bounded by render hours, not
+  by taste; a 4 s loop at 24 fps is 96 frames.
+- Risk to measure: bundle size (a frame sequence at 1280×960 is tens of MB; a video texture is a few
+  MB but must keep its alpha or be masked) and decode cost at 60 fps.
+
+### B — live 3D (`claude/bakeoff-b-live3d`)
+Export the bowl and the fish from `wp_scene.blend` to glTF and render them in real time with
+Three.js, replacing the Pixi scene for this habitat. Real glass (physical transmission), a water
+surface with moving normals and refraction, caustics projected on the gravel, a time-of-day light rig,
+camera lean toward the cursor, a procedural spine (a travelling bend along the body driven by the
+behaviour's speed and turn), fins with secondary motion.
+- The behaviour stays 2D and unchanged: its grid position in the water ellipse maps to a point in the
+  bowl's front plane plus a slow depth wander, so every test and every constant still holds.
+- Risk to measure: can the packaged WKWebView hold 60 fps at Large with transmission and shadows, and
+  what does it cost in CPU/GPU when idle — the brief's "must prove" clause. A fallback quality tier
+  (no transmission, baked AO) is part of the deliverable so the number has a floor.
+- Dependency: `three` (+ `@types/three`), the only new one.
+
+### C — hybrid (`claude/bakeoff-c-hybrid`)
+A's plates for what holds still (stand, bowl body, gravel, plant, front glass), B's live layer for
+what moves (fish, water surface, caustics, bubbles, light). The live layer is a transparent WebGL
+canvas between the back plate and the front-glass plate; the front glass is drawn above it and keeps
+its parallax. Realism where stillness is fine, life where it matters.
+- Risk to measure: two renderers in one window — stacking order, resize, the per-frame cost of a
+  second context, and whether the live fish reads as being *inside* the rendered bowl (the plates'
+  refraction is baked for an empty bowl; the fish behind the glass must be refracted by the live
+  layer or it will look pasted on).
+
+### how it is run
+A workflow launches the three builders in parallel, each with the brief above, the harness, and the
+shared script; each reports with its evidence folder under `docs/reports/bakeoff/<a|b|c>/`. A second
+stage runs the same measurement script against each installed build in turn (one at a time: they
+share the bundle id). The lead scores the recordings and stills, writes the table and the decision
+here, and continues on the winner's branch. The two others are kept.
