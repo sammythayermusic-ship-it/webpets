@@ -22,8 +22,7 @@ the app makes money, whether food costs anything, whether a pet can die for good
 6. `docs/NEEDS-SAMMY.md` — things only the user can do. Add to it, do not wait on it.
 7. `assets/3d/README.md` — the Blender source and its rules.
 8. `WEBPETS-BLUEPRINT.md` — the original spec. Superseded where PHASE-NEXT disagrees; its chain phases are shelved.
-`docs/SIM-TESTS.md` is the sim test list; `README.md` is user-facing and partly stale (it still describes the
-fish-only pixel-art Phase 0).
+`docs/SIM-TESTS.md` is the sim test list; `README.md` is the user-facing guide (refreshed 2026-10-28).
 
 ## Rules of the road
 - TypeScript strict, no `any`. `src/sim` is pure: zero imports from outside `src/sim` (`purity.test.ts` enforces it). Write its tests first.

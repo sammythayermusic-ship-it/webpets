@@ -1,16 +1,22 @@
 # WebPets
 
-A pixel-art desktop pet for macOS. A fish bowl floats in the corner of your screen, always on
-top and transparent around the glass. The fish gets hungry on a clock that never pauses, eats when
-you feed it, and dies if it is neglected long enough. Built with Tauri 2, Vite, TypeScript and PixiJS 8.
+A desktop pet for macOS. A small habitat floats in the corner of your screen, always on top and
+transparent around the glass: a fish in a bowl, or a hamster in a cage or a glass terrarium. The pet
+gets hungry on a clock that never pauses, eats when you feed it, and dies if it is neglected long
+enough. Built with Tauri 2, Vite, TypeScript and PixiJS 8; the art is soft 3D rendered from a Blender
+scene that lives in the repo.
+
+There is no cryptocurrency, token, wallet or blockchain in WebPets, and there will not be one. The
+food is a number in a file.
 
 ## Prerequisites
 
-- macOS 12 or newer
+- macOS 12 or newer (built and tested on Apple Silicon)
 - Node 22 (`node -v`)
 - Rust stable via [rustup](https://rustup.rs) (`rustc --version`)
 - Xcode Command Line Tools (`xcode-select --install`)
-- Python 3 with Pillow, only if you want to regenerate placeholder art (`pip3 install pillow`)
+- Blender 5.x at `/Applications/Blender.app`, only to re-render the art
+- Python 3 with Pillow, only to regenerate placeholder art
 
 ## Running
 
@@ -19,98 +25,89 @@ npm install
 npm run tauri dev        # builds the Rust shell, starts Vite, opens the floating window
 ```
 
-The first `tauri dev` compiles the Rust side and takes a few minutes; later runs are quick. There is no
-Dock icon: the app lives in the menu bar tray.
+The first `tauri dev` compiles the Rust side and takes a few minutes; later runs are quick. There is
+no Dock icon: the app lives in the menu bar.
 
 `npm run dev` on its own serves the frontend in a normal browser against a mock platform (no Tauri).
 Useful for UI work; the tray becomes a small canvas in the corner of the page.
 
-## Building the .app
+## Building and installing the .app
 
 ```sh
-npm run tauri build
+npm run install:app
 ```
 
-The bundle lands under `src-tauri/target/release/bundle/macos/WebPets.app` (a `.dmg` is written next to
-it under `bundle/dmg/`). It is unsigned, so the first launch may need a right-click, Open.
+This builds the bundle, quits any running copy, replaces the one canonical `/Applications/WebPets.app`
+and launches it. Use it rather than copying the bundle around: every build shares the bundle id, so
+macOS routes a double-click of a new copy to whichever copy is already running, and you would be
+looking at the old build without knowing it. `npm run tauri build` alone leaves the bundle under
+`src-tauri/target/release/bundle/macos/`. The app is unsigned; the first launch may need a
+right-click, Open.
 
 ## Tests
 
 ```sh
-npm test                 # Vitest: pure sim tests plus app/ui unit tests
-npm run test:watch       # same, watch mode
+npm test                 # Vitest: the pure simulation plus app, render, species and ui units
 npm run typecheck        # tsc --noEmit
-npm run test:e2e         # Playwright, browser mode against the mock platform
+cd src-tauri && cargo test
+npm run test:e2e         # builds, then Playwright in a browser against the mock platform
 ```
 
-The e2e suite runs the frontend in a browser with the mock platform (`src/platform/browser.ts`), so no
-Tauri build is needed. Recorded videos and traces are written under `test-results/`.
+To drive the installed app from a script (screenshots, a 20-second clip, state dumps) build it with
+`npm run build:harness` and use `tools/harness.mjs`; see `docs/HARNESS.md`. That build is for
+verification only.
 
 ## Using the pet
 
-- Hover the bowl for the HUD (name, hunger, pantry). Click Feed to spend $FEED from the pantry.
-- Drag the bowl to move it; it snaps to the nearest corner and remembers its spot per monitor.
-- Tray icon: left-click toggles the window, right-click opens the menu (feed, pantry, size,
-  mute, notifications, day/night, launch at login, dev panel, new pet, show/hide, quit).
-- `⌘=` / `⌘−` change the window size while the window has focus. Three integer pixel scales over the
-  320x240 habitat grid, each plus 24 px of transparent padding on every side:
-
-  | Size | Scale | Window |
-  |---|---|---|
-  | Small | 1x | 368 x 288 |
-  | Medium (default) | 2x | 688 x 528 |
-  | Large | 3x | 1008 x 768 |
-
-  The same three are in the tray menu under **Size**; a size that does not fit the current monitor's
-  work area is greyed out there.
-- `⌥⌘D` opens the dev panel (macOS claims this chord for "Turn Dock Hiding On/Off"; if nothing happens,
-  use `⇧⌥⌘D` or the tray menu's **Dev panel** item, which do the same thing): advance time (+1h / +12h / +3d), set hunger, pantry and balance,
-  force a state, toggle day/night, simulate a long absence, reset the clock.
-- `Cmd+Shift+P` is a global shortcut that shows or hides the pet from any app.
+- Hover the habitat for the bar: hunger ring, name, Feed, size buttons, minimize. The caption below
+  shows the pantry (food stored in the habitat that feeds the pet while you are away) and how many days
+  it covers.
+- Drag the habitat to move it; it snaps to screen edges and remembers its spot per monitor. Resize from
+  the handle at its top-left corner, the `+`/`−` buttons, the tray's Size menu, or `⌘=` / `⌘−`.
+  The size is continuous between 0.5× and 4× of the habitat's logical 320×240 grid; Small, Medium and
+  Large in the menu are 0.75×, 2× and 3×.
+- Menu bar icon: the pet with its hunger ring. Left-click shows or hides the window; right-click opens
+  the menu (Feed, Pantry, Size, Mute, Notifications, Day/Night, Visible on, Launch at login, Dev panel,
+  New pet, Minimize, Quit). `⌘⇧P` shows or hides the pet from any app.
+- Day and night follow the clock (night from 19:00 to 07:00) unless you pin one in the menu.
+- The dev panel (tray menu, or `⌥⌘D` when the window has focus; `⇧⌥⌘D` if macOS claims the first):
+  skip time, set hunger, pantry and balance, force a state, switch species and habitat, see the frame
+  rate and the pet's needs, simulate a ten-day absence, reset the clock.
 
 ## Where data lives
 
 ```
 ~/Library/Application Support/com.sammythayer.webpets/
-  pet.json         the living pet (hunger, pantry, last-fed times)
-  settings.json    scale, mute, notifications, day/night, window positions
-  graveyard.json   pets that have died
+  pet.json           the living pet (hunger anchor, pantry, needs, last-fed times)
+  settings.json      size, mute, notifications, day/night, layering, window positions
+  graveyard.json     pets that have died
+  boot-report.json   what the last launch measured: build, layering, frame rate, visibility
 ```
 
-To reset everything, quit the app and delete that folder. To start a fresh pet but keep settings and the
-graveyard, delete only `pet.json`, or use New pet from the tray menu. In browser mode the same three files
+To reset everything, quit the app and delete that folder. To start a fresh pet but keep settings and
+the graveyard, delete only `pet.json`, or use New pet from the menu. In browser mode the same files
 are `localStorage` keys named `webpets:<file>`.
 
-## Art
+## Art and the Blender source
 
-The bowl background and the fish are real art, derived from the project's own concept render
-(`assets/reference/habitats-hires/fish-bowl.png`, 1168x880) and quantized to the 38 colours the Phase 0
-160x120 art uses, so the result is the same art with four times the detail. Hamster, frog and chicken are
-still to come, and so are the remaining bowl layers (plants, glass, feeder, night tint), which are generated
-placeholders:
+Every layer and sprite the app loads is rendered from `assets/3d/wp_scene.blend` by the scripts under
+`assets/3d/scripts/` (see `assets/3d/README.md`). The scene is built from primitives and code; nothing
+in it comes from paid generation. Habitat layers are integer multiples of the 320×240 logical grid
+(currently 4×) and sprites one PNG per frame, indexed by `assets/manifest.json`. The 160×120 concept
+art and the earlier sprite rounds are kept under `assets/` for reference and are not shipped.
 
-```sh
-python3 tools/gen_bg.py            # assets/habitats/fish/bowl/bg.png + the geometry measurement report
-python3 tools/gen_fish.py          # assets/sprites/fish/*.png (strips + emotes)
-npm run gen:placeholders           # the synthetic layers: assets/habitats/fish/bowl/*.png
-```
+## Documents
 
-Every placeholder is stamped PLACEHOLDER; the real art carries no stamp, and the tests assert both halves.
-`tools/gen_bg.py --report-only` reprints the measurements behind `assets/manifest.json` without writing
-anything. To drop in real art, replace the PNG files listed in
-`assets/manifest.json` at the sizes that file declares (habitat layers are 320x240; sprite strips are
-160x160 per frame, frames side by side) and keep the manifest's frame counts and layer names in sync. Layer
-geometry (`water`, `pantryRect`, `petAnchor`) must also match `src/species/fish/layout.ts`.
+- `docs/PHASE-NEXT.md` — the current brief and the quality bar.
+- `docs/ARCHITECTURE.md` — the module contract.
+- `docs/DECISIONS.md` — the decision log, newest at the bottom.
+- `docs/reports/` — checkpoint reports with numbers, screenshots and recordings.
+- `docs/HARNESS.md` — scripting the installed app.
+- `WEBPETS-BLUEPRINT.md` — the original spec, superseded where the brief disagrees.
 
 ## Notifications during `tauri dev`
 
 While running from `npm run tauri dev`, macOS attributes notifications to the process that launched
-them, so they are posted under the Terminal identity. If you do not see hunger or death alerts, open
-System Settings, Notifications and allow notifications for Terminal (or your terminal app). Only the
-bundled `.app` posts as `com.sammythayer.webpets`.
-
-## Phase 0 scope
-
-Everything is local. `$FEED` is a number in `pet.json`, not a token; there is no wallet, no chain and no
-network access. Blockchain integration is a later phase and is deliberately absent from this build.
-See `WEBPETS-BLUEPRINT.md` for the full spec and `docs/DECISIONS.md` for the decision log.
+them, so they are posted under the Terminal identity. If you do not see hunger or death alerts, allow
+notifications for Terminal (or your terminal app) in System Settings. Only the bundled `.app` posts as
+`com.sammythayer.webpets`.
