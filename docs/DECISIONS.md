@@ -1098,3 +1098,73 @@ shared script; each reports with its evidence folder under `docs/reports/bakeoff
 stage runs the same measurement script against each installed build in turn (one at a time: they
 share the bundle id). The lead scores the recordings and stills, writes the table and the decision
 here, and continues on the winner's branch. The two others are kept.
+
+## 2026-10-28 — bake-off candidate A: resuming, and what the first builder left
+
+The first builder was cut off with everything uncommitted. On disk: the animated-layer runtime
+(`src/render/types.ts`, `manifest.ts`, `layers.ts`, `assets.ts`, `frameClock.ts` + tests), the look-dev
+scripts (`assets/3d/scripts/a_*.py`), `wp_scene-a-look.blend`, three night plates, and two "water loops"
+that turned out to be 3-frame encode tests (52 KB, day and night byte-identical). The fish was still the
+12 fps set while `manifest.test.ts` already asserted 24. Checkpointed as-is in `ff8b0ab` with the test
+telling the truth (12 until re-rendered), `*.blend1` and `__pycache__` ignored, then resumed from the
+look, not from the runtime: the runtime was plausible, the pictures were not yet at the bar.
+
+## 2026-10-28 — bake-off candidate A: the look, nine preview rounds
+
+Every round: regenerate `wp_scene-a-look.blend` from the untouched `wp_scene.blend` with `a_look.py`,
+render day/night/fish previews with `a_preview.py` at 24–32 samples (~20 s a bowl frame while the
+other candidates share the GPU), look, list what is wrong, change one thing per flaw. What was measured
+and what it changed:
+
+- **Milky water.** Absorption density 7 read as milk in a 22 cm bowl. 2.6, colour 0.82/0.95/0.97: clear
+  with a faint blue-green over the full depth. Water base colour neutral (the old 0.93/0.985/1.0 and the
+  meniscus 0.88/0.96/1.0 together made a cyan hoop at the waterline).
+- **Fish scales read as corduroy.** Voronoi at scale 520 is 2 mm cells, 4 px at the 320 px delivery:
+  the eye reads it as cloth. 230 (4.3 mm, ~9 px) with randomness 0.22 reads as scales. Fin rays 34 → 24.
+- **MNEE (Cycles shadow caustics) measured and shelved.** `a_diag_caustic.py` renders the gravel with the
+  key as a caustic light and without, at 48 samples: mean difference 0.02–0.03, the same as two renders of
+  identical settings differ by denoiser noise. The floor sits behind two refractive interfaces and the key
+  reaches it mostly through the open top. Kept behind `USE_MNEE = False` so it can be re-measured.
+- **Instead, shadow-transparent dielectrics + a projected web.** Glass, water and meniscus pass shadow
+  rays (Light Path → Is Shadow Ray → Transparent BSDF) so the lamps light the inside the way a lit tank
+  is lit, and the caustic pattern is a spot light carrying two Voronoi distance-to-edge layers. Proven
+  on the plane test (`sh_glass_mix` = `sh_glass_transparent` brightness; plain glass is 0.14 vs 0.37).
+  Each layer drifts round a closed circle over the 96 frames and a 4D `W` runs a sine over the loop, so
+  frame 96 meets frame 0 with no seam. Three things silently killed the web, each found with an isolated
+  render rather than by guessing, and each worth knowing for the hamster's cage light later:
+  1. the Voronoi node's own `Scale` (5.0) stacked on the Mapping scale, 5x too fine (`a_diag` calibration
+     with a checker: one projection unit is the lamp-to-floor distance, as designed);
+  2. a spot in Blender 4+/5 is a sphere of radius `shadow_soft_size`, and the lamp shader's `Normal` is
+     the normal at the sampled point on that sphere, so any radius makes the projected coordinate
+     per-sample noise: 6 cm erased the web, 4 mm dithered it, exactly 0 projects it clean;
+  3. overhead, the web landed on the dished gravel top, of which the 9°-above-the-water camera sees a
+     sliver between pebbles. From the front-above it rakes across the blades, the pebble faces and the
+     near band of gravel.
+  Then light-linked (`light_linking.receiver_collection`) to gravel, pebbles and plants: the first render
+  put the web on the wooden stand, where no caustic has ever been.
+- **Cycles' own caustic paths off.** With shadow rays passing the dielectrics the direct light already gets
+  in; the caustic paths added 20% brightness as sparkle that the denoiser turns into a glow that differs
+  frame to frame. A 96-frame loop must not flicker.
+- **Interior over-lit by ~2.5x** once the shadow rays passed: a 0.15-albedo leaf rendered at 0.43 under
+  the key alone (per-light solo renders on the plant crop, 8 samples). Key 125 → 26 W for the bowl (the
+  fish is rendered alone and composited, it keeps 90; `a_common.rig(night, fish)`), rim 42 → 18, fill
+  20 → 12. A plain dark-green diffuse override rendered lime too, which is how the material was ruled out
+  before the lights.
+- **Plants glowed lime under any light from above**: subsurface on a blade one cell thick comes straight
+  out the far side. Subsurface 0, base colour ×0.55, a stretched noise bump for veins. Pebbles 25% toward
+  their own luminance, rougher, a wet coat: river stones, not sweets.
+- **Ripple invisible** at ±1.1 mm from a camera 9° above the surface: ±2.1 mm at 4.5 cm wavelength, the
+  drive circle 0.06. Loop frames 0 and 48 now differ across the surface band (art rows 240–300) and the
+  gravel web (520–600).
+- **Night rig.** The desk lamp seen through two walls of glass hung in the water as a disc at any lamp
+  size (it is its mirror image in the concave back wall); `visible_transmission = False` did not remove
+  it, `visible_glossy = False` did. The moon (behind, high, 1.4 m disc) is what the glass reflects. Lamp
+  and moon energies halved after the shadow-ray change for the same reason as the day key.
+- **Loop frames render only the water region** (a border with a 16 px margin, ~40% of the pixels), and
+  `a_finish.py` takes the full clean plate from `_bg_clean.png`, rendered at the loop's first frame.
+
+Not done, by choice: the gravel is still a crazy-paving lathe and the pebbles are still smarties in shape;
+the fish is the same toy body. Geometry is the next lever and it is not a shader change.
+
+The render stage for this session is under the session scratchpad
+(`.../scratchpad/stage/`, `render.log`); it is rebuildable from the scripts and is not in the repo.
