@@ -8,6 +8,7 @@
 // tests drive it with fakes and never touch Tauri.
 
 import type { AppStore, ForcedState } from '../app/types';
+import type { Stimulus } from '../sim/needs';
 import type { WindowApi } from '../platform/types';
 import type { HabitatScene } from '../render/types';
 import type { Habitat, Species } from '../sim/types';
@@ -155,7 +156,18 @@ async function opState(ctx: HarnessContext): Promise<unknown> {
     pet: s.pet,
     settings: s.settings,
     geometry,
+    needs: s.needs,
+    present: s.present,
+    drives: s.actions.drives(false),
   };
+}
+
+const STIMULI: ReadonlySet<string> = new Set(['pointer', 'tap', 'feed', 'bite']);
+
+function stimulus(cmd: HarnessCommand): Stimulus {
+  const v = str(cmd, 'kind');
+  if (!STIMULI.has(v)) throw new Error(`${cmd.op}: "kind" must be one of ${[...STIMULI].join(', ')}`);
+  return v as Stimulus;
 }
 
 async function opStats(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo): Promise<unknown> {
@@ -333,6 +345,16 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
       const y = x === null ? null : num(cmd, 'y');
       ctx.scene.setPointer(x, y);
       return { x, y };
+    }
+    case 'poke': {
+      const kind = stimulus(cmd);
+      actions.poke(kind);
+      return { kind, needs: ctx.store.getState().needs };
+    }
+    case 'presence': {
+      const present = bool(cmd, 'present');
+      actions.setPresence(present);
+      return { present, needs: ctx.store.getState().needs };
     }
     case 'snapshot':
       return opSnapshot(cmd, ctx, io);

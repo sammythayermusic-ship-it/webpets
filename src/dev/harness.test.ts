@@ -153,7 +153,7 @@ describe('harness runCommand', () => {
     expect(r.at).toBe(new Date(h.io.now()).toISOString());
     const data = r.data as Record<string, unknown>;
     expect(Object.keys(data).sort()).toEqual(
-      ['balance', 'fps', 'geometry', 'hasFocus', 'hidden', 'hunger', 'night', 'pet', 'scene', 'settings', 'visibility'].sort(),
+      ['balance', 'drives', 'fps', 'geometry', 'hasFocus', 'hidden', 'hunger', 'needs', 'night', 'pet', 'present', 'scene', 'settings', 'visibility'].sort(),
     );
     expect(data['visibility']).toBe('no-document'); // vitest runs in node here
     expect(data['fps']).toBe(60);
@@ -161,6 +161,20 @@ describe('harness runCommand', () => {
     expect(data['hunger']).toBe(100);
     expect(data['balance']).toBe(1000);
     expect((data['scene'] as DebugState).petAnim).toBe('idle');
+  });
+
+  it('poke validates the stimulus and forwards it; presence forwards the flag', async () => {
+    const h = makeHarness();
+    const bad = await runCommand({ op: 'poke', kind: 'kick' }, h.ctx, h.io);
+    expect(bad.ok).toBe(false);
+    expect(bad.error).toMatch(/kind/);
+    const ok = await runCommand({ op: 'poke', kind: 'tap' }, h.ctx, h.io);
+    expect(ok.ok).toBe(true);
+    expect(h.actions.poke).toHaveBeenCalledWith('tap');
+    const p = await runCommand({ op: 'presence', present: true }, h.ctx, h.io);
+    expect(p.ok).toBe(true);
+    expect(h.actions.setPresence).toHaveBeenCalledWith(true);
+    expect((await runCommand({ op: 'presence', present: 'yes' }, h.ctx, h.io)).ok).toBe(false);
   });
 
   it('feed calls the store action and returns its result', async () => {

@@ -55,7 +55,7 @@ its own so the next command lands inside the clip.
 
 | op | args | does |
 |---|---|---|
-| `state` | – | `{ visibility, hasFocus, fps, scene: debugState(), hunger, night, hidden, balance, pet, settings, geometry }` |
+| `state` | – | `{ visibility, hasFocus, fps, scene: debugState(), hunger, night, hidden, balance, pet, settings, geometry, needs, present, drives }` |
 | `feed` | – | `actions.feed()`; data is the `FeedResult` |
 | `skip` | `{ ms }` | `dev.skip(ms)`: moves the pet's clock forward |
 | `setHunger` | `{ n }` | `dev.setHunger(n)` |
@@ -69,6 +69,8 @@ its own so the next command lands inside the clip.
 | `devPanel` | `{ open }` | opens or closes the dev panel; data has its rect |
 | `resetClock` | – | `dev.resetClock()` |
 | `pointer` | `{ x, y }` or `{ x: null }` | `scene.setPointer` in window-local CSS px, without moving the real mouse |
+| `poke` | `{ kind }` | a needs stimulus: `tap` (a knock on the glass), `bite`, `feed`, `pointer`; data has the needs after |
+| `presence` | `{ present }` | `actions.setPresence`: the pointer arrived (a stimulus; a greeting after a long absence) or left |
 | `snapshot` | `{ name }` | `scene.snapshot()` → `out/<name>.png`; data `{ file, bytes }` |
 | `stats` | `{ seconds }` | samples `debugState().advances/.steps` across the window: `{ advancesPerSec, stepsPerSec, fps, visibility, renderMs, elapsedMs }` |
 | `record` | `{ name, seconds, fps? }` | `canvas.captureStream(fps ?? 60)` + `MediaRecorder` → `out/<name>.mp4` or `.webm`; data `{ file, mime, bytes, seconds, fps }`. Detached. |
