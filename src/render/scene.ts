@@ -205,7 +205,7 @@ export function createScene(
     const { dx, dy } = parallaxOffset(habitat.grid, gx, gy, reduced);
     m.layers.setParallax(dx, dy);
     m.live?.setPointer(gx, gy);
-    m.live?.setParallax(dx);
+    m.live?.setParallax(dx, dy);
   };
 
   const applyView = (next: SceneView, prev: SceneView | null): void => {
@@ -350,8 +350,8 @@ export function createScene(
       // A live habitat shares ONE WebGL2 context between Pixi and Three. The canvas and context are
       // created here so both renderers are handed the same objects; Pixi draws the plates, Three draws
       // between them, and the harness's recorder and the click-through window see a single surface.
-      const liveKind = habitat.live;
-      const sharedCanvas = liveKind === undefined ? null : document.createElement('canvas');
+      const liveSpec = habitat.live;
+      const sharedCanvas = liveSpec === undefined ? null : document.createElement('canvas');
       const sharedGl =
         sharedCanvas === null
           ? null
@@ -405,13 +405,21 @@ export function createScene(
         for (const f of stateFiles(st)) bucket.push(f);
       }
       const bgLayer = habitat.layers.find((l) => l.name === 'bg' && l.file !== undefined);
-      const [requiredTex, optionalTex, plateDay, plateNight] = await Promise.all([
+      const decorLayer = habitat.layers.find((l) => l.name === 'decor_front' && l.file !== undefined);
+      const none = Promise.resolve(null);
+      const bitmap = (file: string | undefined, lenient: boolean): Promise<ImageBitmap | null> =>
+        liveSpec === undefined || file === undefined ? none : lenient ? loadBitmap(file).catch(() => null) : loadBitmap(file);
+      const [requiredTex, optionalTex, plateDay, plateNight, decorDay, decorNight, contents] = await Promise.all([
         loadTextures(required, false),
         loadTextures(optional, true),
-        // The live water refracts the bg plate, so it needs the pixels as a straight-alpha bitmap of
-        // its own: Pixi's copy is premultiplied on upload and bound to Pixi's texture cache.
-        liveKind !== undefined && bgLayer?.file !== undefined ? loadBitmap(bgLayer.file) : Promise.resolve(null),
-        liveKind !== undefined && bgLayer?.night !== undefined ? loadBitmap(bgLayer.night).catch(() => null) : Promise.resolve(null),
+        // The live water refracts the bg plate AND the near decor, so it needs their pixels as
+        // straight-alpha bitmaps of its own: Pixi's copies are premultiplied on upload and bound to
+        // Pixi's texture cache. The contents mask is the live layer's alone.
+        bitmap(bgLayer?.file, false),
+        bitmap(bgLayer?.night, true),
+        bitmap(decorLayer?.file, true),
+        bitmap(decorLayer?.night, true),
+        bitmap(liveSpec?.contents, true),
       ]);
       const textures = new Map([...optionalTex, ...requiredTex]);
 
@@ -461,10 +469,20 @@ export function createScene(
       stage.addChild(layers.front);
 
       let live: LiveLayer | null = null;
-      if (liveKind === 'fish-bowl' && sharedCanvas !== null && sharedGl !== null && plateDay !== null) {
-        live = createLiveLayer({ gl: sharedGl, canvas: sharedCanvas, habitat, plates: { day: plateDay, night: plateNight }, rng });
+      if (liveSpec?.kind === 'fish-bowl' && sharedCanvas !== null && sharedGl !== null && plateDay !== null) {
+        live = createLiveLayer({
+          gl: sharedGl,
+          canvas: sharedCanvas,
+          habitat,
+          plates: { day: plateDay, night: plateNight, decorDay, decorNight, contents },
+          rng,
+        });
         live.resetPose(habitat.petAnchor[0], habitat.petAnchor[1], 1);
         player.sprite.visible = false;
+        // The near decor (plants' near halves, the front pebbles) is INSIDE the water, so the live
+        // pass draws it, refracted with everything else, over the fish. Pixi's copy would sit on top
+        // undistorted and ghost against the refracted plate behind it.
+        if (decorDay !== null) layers.slots.decor_front.visible = false;
         // The fish mesh arrives asynchronously; the water draws from the first frame. A load failure
         // is loud: a bowl with water and no fish is the same lie an empty bowl was.
         live.ready.catch((err: unknown) => {

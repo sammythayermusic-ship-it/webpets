@@ -84,7 +84,19 @@ export interface ManifestHabitat {
    * plates and sprites only. `fish-bowl` is candidate C's water-and-fish layer, drawn between the
    * back plates and the front glass in the same WebGL context as the plates.
    */
-  live?: 'fish-bowl';
+  live?: LiveSpec;
+}
+
+/** A habitat's live layer: which one, and the extra plates it needs that no Pixi layer draws. */
+export interface LiveSpec {
+  kind: 'fish-bowl';
+  /**
+   * A grey mask, 4x the grid like the plates: 1 where the bg plate shows a thing (gravel, pebbles,
+   * plants, stand), 0 where it shows the back wall of the empty glass. The plate's own alpha cannot
+   * tell those apart (the glass is opaque to the film), and the water must: a thing is seen through
+   * the water, a bare back wall IS water.
+   */
+  contents?: string;
 }
 
 /**

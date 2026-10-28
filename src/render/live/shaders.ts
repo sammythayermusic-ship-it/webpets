@@ -78,15 +78,15 @@ export const FISH_BODY_COLOR = /* glsl */ `
   float belly = smoothstep(0.002, -0.024, vRootPos.y);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.98, 0.66, 0.34), belly * 0.42);
   // staggered rows of overlapping rounds, finer toward the tail
-  vec2 sp = vec2(vRootPos.x * 760.0, vRootPos.y * 820.0);
+  vec2 sp = vec2(vRootPos.x * 520.0, vRootPos.y * 560.0);
   float row = floor(sp.y);
   sp.x += 0.5 * mod(row, 2.0);
   vec2 f = fract(sp) - 0.5;
   float d = length(vec2(f.x, f.y * 1.1));
-  float sc = smoothstep(0.55, 0.38, d);
+  float sc = smoothstep(0.55, 0.3, d);
   float head = smoothstep(0.03, 0.045, vRootPos.x);
   sc = mix(sc, 0.5, head);
-  diffuseColor.rgb *= 0.955 + 0.06 * sc;
+  diffuseColor.rgb *= 0.975 + 0.035 * sc;
   // a cooler, darker back
   float back = smoothstep(0.0, 0.02, vRootPos.y);
   diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.78, 0.7, 0.8), back * 0.35);
@@ -96,12 +96,22 @@ export const FISH_BODY_COLOR = /* glsl */ `
 export const FISH_BODY_ROUGHNESS = /* glsl */ `
 #include <roughnessmap_fragment>
 {
-  vec2 sp = vec2(vRootPos.x * 760.0, vRootPos.y * 820.0);
+  vec2 sp = vec2(vRootPos.x * 520.0, vRootPos.y * 560.0);
   float row = floor(sp.y);
   sp.x += 0.5 * mod(row, 2.0);
   vec2 f = fract(sp) - 0.5;
   float d = length(vec2(f.x, f.y * 1.1));
-  roughnessFactor *= 0.82 + 0.3 * smoothstep(0.38, 0.55, d);
+  roughnessFactor *= 0.88 + 0.2 * smoothstep(0.3, 0.55, d);
+}
+`;
+
+/** Body: a warm rim where the body turns away, so the silhouette lifts off the water. */
+export const FISH_BODY_EMISSIVE = /* glsl */ `
+#include <emissivemap_fragment>
+{
+  float facing = abs(dot(normalize(vNormal), normalize(vViewPosition)));
+  float graze = pow(1.0 - facing, 3.0);
+  totalEmissiveRadiance += vec3(1.0, 0.55, 0.25) * graze * 0.22;
 }
 `;
 
@@ -112,8 +122,8 @@ export const FISH_FIN_COLOR = /* glsl */ `
   float rays = 0.5 + 0.5 * sin(vRootPos.y * 1100.0 + vRootPos.x * 420.0 + vRootPos.z * 900.0);
   float facing = abs(dot(normalize(vNormal), normalize(vViewPosition)));
   float graze = 1.0 - facing;
-  diffuseColor.a *= (0.42 + 0.5 * graze) * (0.8 + 0.2 * rays);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.62, 0.22), 0.35 * rays + 0.2 * graze);
+  diffuseColor.a *= (0.66 + 0.3 * graze) * (0.88 + 0.12 * rays);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.66, 0.26), 0.3 * rays + 0.25 * graze);
 }
 `;
 
@@ -135,6 +145,9 @@ export const WATER_FRAGMENT = /* glsl */ `
 precision highp float;
 uniform sampler2D uBg;
 uniform sampler2D uBgNight;
+uniform sampler2D uDecor;      // the near decor plate, drawn OVER the fish, refracted the same way
+uniform sampler2D uDecorNight;
+uniform sampler2D uContents;   // grey: 1 where the bg plate shows a thing, 0 where it shows back wall
 uniform sampler2D uFish;
 uniform vec2 uCanvasCss;     // CSS px
 uniform float uDpr;
@@ -150,7 +163,7 @@ uniform float uTier;         // 1 full, 0 lean
 uniform float uRipple;       // ripple strength, grid px
 uniform float uPhase;        // 'alive' 1, 'dead' 0.35: dead water goes still
 uniform vec2 uPointer;       // grid px, or (-1e4, -1e4)
-uniform float uParallax;     // grid px, the front plates' x slide (the water tracks a third of it)
+uniform vec2 uParallax;      // grid px, the front plates' slide; the bg follows a third of it
 
 // --- value noise (cheap, smooth) -----------------------------------------------------------------
 float wpHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -209,8 +222,12 @@ void main() {
   float body = smoothstep(botEdge - 1.0, botEdge + 1.0, g.y);
 
   vec4 fishHere = texture2D(uFish, fishUv);
+  // Outside the water the near decor is still drawn by this pass (Pixi's copy is hidden), at its
+  // plain parallax position, over whatever fin brushed the glass.
   if (mask < 0.002) {
-    gl_FragColor = fishHere;
+    vec2 dUv0 = (g + uParallax) / uGrid;
+    vec4 dOut = mix(texture2D(uDecor, dUv0), texture2D(uDecorNight, dUv0), uNight);
+    gl_FragColor = vec4(dOut.rgb * dOut.a + fishHere.rgb * (1.0 - dOut.a), dOut.a + fishHere.a * (1.0 - dOut.a));
     return;
   }
 
@@ -220,53 +237,72 @@ void main() {
   vec2 toPtr = g - uPointer;
   float ptrD = length(toPtr);
   n += normalize(toPtr + 1e-4) * (1.0 - smoothstep(4.0, 22.0, ptrD)) * 0.9 * sin(ptrD * 0.9 - uTime * 6.0);
-  float mag = 1.0 + 0.19 * (1.0 - clamp(e, 0.0, 1.0)) * body;
+  // A water-filled sphere is a lens; an empty shell is not. The plates were rendered empty, so the
+  // lens the water adds is applied here, to the plate, the decor and the fish alike, growing toward
+  // the centre and vanishing at the glass so nothing tears at the rim.
+  float mag = 1.0 + 0.14 * (1.0 - clamp(e, 0.0, 1.0)) * body;
   vec2 q = uInner.xy + (g - uInner.xy) / mag + n * (0.6 + 0.4 * body);
-  // the plates slide with the pointer parallax; the refracted plate follows a third of it so the
+  // the plates slide with the pointer parallax; the refracted bg follows a third of it so the
   // water reads as a thick thing between front and back glass rather than a flat sheet
-  vec2 qPlate = q + vec2(uParallax * 0.33, 0.0);
-  vec2 bgUv = qPlate / uGrid;
-  vec4 bgDay = texture2D(uBg, bgUv);
-  vec4 bgNight = texture2D(uBgNight, bgUv);
-  vec4 bg = mix(bgDay, bgNight, uNight);
-  vec3 bgP = bg.rgb * bg.a;
+  vec2 bgUv = (q + uParallax * 0.33) / uGrid;
+  vec4 bg = mix(texture2D(uBg, bgUv), texture2D(uBgNight, bgUv), uNight);
+  vec2 dUv = (q + uParallax) / uGrid;
+  vec4 decor = mix(texture2D(uDecor, dUv), texture2D(uDecorNight, dUv), uNight);
   vec2 fishQ = (vec2(uPad) + q * uCssPerGrid);
   vec2 fishUvQ = vec2(fishQ.x, uCanvasCss.y - fishQ.y) / uCanvasCss;
   vec4 fish = texture2D(uFish, fishUvQ);
+  // The contents mask, ERODED by a grid px. The plate's things were anti-aliased against the dark
+  // back wall, so their outermost pixels are a dark fringe; cutting a hair inside the silhouette
+  // hands that fringe to the water instead of drawing it as an outline.
+  vec2 mpx = vec2(0.8) / uGrid;
+  float cm = texture2D(uContents, bgUv).r;
+  cm = min(cm, texture2D(uContents, bgUv + vec2(mpx.x, 0.0)).r);
+  cm = min(cm, texture2D(uContents, bgUv - vec2(mpx.x, 0.0)).r);
+  cm = min(cm, texture2D(uContents, bgUv + vec2(0.0, mpx.y)).r);
+  cm = min(cm, texture2D(uContents, bgUv - vec2(0.0, mpx.y)).r);
+  float plateW = smoothstep(0.35, 0.85, cm) * bg.a;
 
-  // --- the water body: depth tint, absorption, a lit far wall ---------------------------------------
+  // --- the water body: depth tint, absorption, a lit back wall --------------------------------------
   float depth = clamp((g.y - botEdge) / max(uFloorY + 22.0 - botEdge, 1.0), 0.0, 1.0);
   float toEdge = clamp(e, 0.0, 1.0);
-  vec3 dayDeep = vec3(0.05, 0.27, 0.40);
-  vec3 dayShallow = vec3(0.30, 0.70, 0.82);
-  vec3 nightDeep = vec3(0.02, 0.06, 0.16);
-  vec3 nightShallow = vec3(0.10, 0.22, 0.42);
+  vec3 dayDeep = vec3(0.12, 0.42, 0.56);
+  vec3 dayShallow = vec3(0.42, 0.76, 0.86);
+  vec3 nightDeep = vec3(0.02, 0.07, 0.18);
+  vec3 nightShallow = vec3(0.10, 0.24, 0.44);
   vec3 deep = mix(dayDeep, nightDeep, uNight);
   vec3 shallow = mix(dayShallow, nightShallow, uNight);
-  vec3 waterCol = mix(shallow, deep, depth * 0.75 + toEdge * 0.25);
-  // transmittance of the water column in front of the plate: reds go first
-  vec3 absorb = exp(-vec3(1.9, 0.75, 0.35) * (0.22 + 0.65 * depth + 0.25 * toEdge));
-  // The empty plate's back glass carries faint, dark, low-alpha reflections of the gravel. Through
-  // water they would read as murk, so the plate's weight is its alpha SQUARED: solid gravel and
-  // plants come through, the ghostly back-glass reflections mostly give way to the water body.
-  float plateW = bg.a * bg.a;
-  vec3 col = mix(waterCol * 1.05, bg.rgb * absorb, plateW);
+  vec3 waterCol = mix(shallow, deep, depth * 0.7 + toEdge * 0.3);
+  // transmittance of the water column in front of a thing: reds go first, but a bowl is small
+  vec3 absorb = exp(-vec3(0.8, 0.32, 0.1) * (0.1 + 0.4 * depth + 0.25 * toEdge));
+  // The back wall: water lit from above, brighter where the light enters, with the faint ghost of
+  // the gravel the inside of the glass still reflects (weakly now: glass against water, not air).
+  float lum = dot(bg.rgb, vec3(0.3, 0.5, 0.2));
+  vec3 wall = waterCol * (1.1 + 0.35 * (1.0 - depth) * (1.0 - toEdge)) + bg.rgb * 0.10 * bg.a;
+  wall += vec3(0.9, 1.0, 1.0) * lum * 0.05;
+  vec3 col = mix(wall, bg.rgb * absorb, plateW);
   // in-scatter: the water itself glows where light enters at the top
-  col += waterCol * (0.10 + 0.30 * (1.0 - depth)) * (1.0 - 0.6 * uNight);
+  col += waterCol * (0.06 + 0.22 * (1.0 - depth)) * (1.0 - 0.6 * uNight) * (1.0 - 0.5 * plateW);
   // light shafts, slow, only in the upper body
   float shaft = wpNoise(vec2(g.x * 0.09 + uTime * 0.05, g.y * 0.012 - uTime * 0.02));
   shaft = smoothstep(0.55, 0.85, shaft) * (1.0 - depth) * body;
-  col += vec3(0.55, 0.75, 0.85) * shaft * 0.11 * (1.0 - 0.75 * uNight) * uTier;
+  col += vec3(0.55, 0.75, 0.85) * shaft * 0.10 * (1.0 - 0.75 * uNight) * uTier;
 
   // --- caustics on the gravel -----------------------------------------------------------------------
-  float gravel = smoothstep(uFloorY - 22.0, uFloorY - 2.0, g.y) * inner * plateW;
+  // Only on the BED: the band from the back of the gravel down to just past its near lip. Below
+  // that the plate is the outside of the dish, which no light from the surface reaches.
+  float gravelBand = smoothstep(uFloorY - 24.0, uFloorY - 6.0, g.y) * (1.0 - smoothstep(uFloorY + 4.0, uFloorY + 16.0, g.y)) * inner;
   float caus = wpCaustic(q, uTime * uPhase + 11.0);
   vec3 causCol = mix(vec3(0.95, 1.0, 0.85), vec3(0.45, 0.6, 1.0), uNight);
-  col += causCol * caus * gravel * mix(0.75, 0.22, uNight) * (0.5 + 0.5 * uTier);
+  vec3 causAdd = causCol * caus * gravelBand * mix(0.22, 0.09, uNight) * (0.5 + 0.5 * uTier);
+  col += causAdd * plateW;
 
   // --- the fish, inside the water: refracted with the plate, tinted by its depth --------------------
-  vec3 fishTint = mix(vec3(1.0), absorb * 1.6 + 0.3, 0.35);
+  vec3 fishTint = mix(vec3(1.0), absorb * 1.4 + 0.4, 0.3);
   col = fish.rgb * fishTint + col * (1.0 - fish.a);
+
+  // --- the near decor, in front of the fish, with less water in front of it --------------------------
+  vec3 absorbNear = exp(-vec3(0.9, 0.36, 0.12) * (0.06 + 0.25 * depth));
+  col = (decor.rgb * absorbNear + causAdd * 0.6) * decor.a + col * (1.0 - decor.a);
 
   // --- the glass/water edge: a Fresnel-bright rim, and the surface band ------------------------------
   float rim = smoothstep(0.80, 1.0, e) * 0.14 * (1.0 - 0.5 * uNight);
@@ -281,7 +317,7 @@ void main() {
   vec3 skyCol = mix(vec3(0.80, 0.90, 0.97), vec3(0.18, 0.24, 0.42), uNight);
   float bandT = clamp((g.y - topEdge) / max(botEdge - topEdge, 1.0), 0.0, 1.0);
   // the room reflected in the surface, strongest at the far edge, with ripple-broken glints
-  float fres = 0.25 + 0.35 * (1.0 - bandT);
+  float fres = 0.12 + 0.28 * (1.0 - bandT);
   col = mix(col, skyCol, band * fres);
   col += vec3(1.0, 0.98, 0.92) * spec * band * mix(1.1, 0.5, uNight);
   // the meniscus: a bright line where the water meets the front glass, a thin shadow under it
@@ -290,7 +326,7 @@ void main() {
   float underline = exp(-pow((g.y - botEdge - 1.4) / 0.7, 2.0)) * inner * smoothstep(0.05, 0.4, sArg);
   col *= 1.0 - 0.22 * underline;
   float farLine = exp(-pow((g.y - topEdge) / 0.7, 2.0)) * inner;
-  col += skyCol * farLine * 0.5;
+  col += skyCol * farLine * 0.3;
 
   vec4 water = vec4(col, 1.0);
   gl_FragColor = mix(fishHere, water, mask);

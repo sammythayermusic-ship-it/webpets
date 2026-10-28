@@ -67,7 +67,10 @@
         "w": 172,
         "h": 203
       },
-      "live": "fish-bowl"
+      "live": {
+        "kind": "fish-bowl",
+        "contents": "habitats/fish/bowl/contents.png"
+      }
     },
     "hamster/cage": {
       "grid": [

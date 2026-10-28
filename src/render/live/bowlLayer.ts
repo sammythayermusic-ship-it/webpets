@@ -21,6 +21,7 @@ import { cameraFrustum, cameraPose, depthWander, fishScale, gridToWorld } from '
 import { createSpine, type FacingSign, type Spine, type SpineState } from './spine';
 import {
   FISH_BODY_COLOR,
+  FISH_BODY_EMISSIVE,
   FISH_BODY_ROUGHNESS,
   FISH_FIN_COLOR,
   FISH_NORMAL_BEGIN,
@@ -40,8 +41,13 @@ export interface LiveLayerOptions {
   gl: WebGL2RenderingContext;
   canvas: HTMLCanvasElement;
   habitat: ManifestHabitat;
-  /** The day and night bg plates, straight alpha, for the water to refract. */
-  plates: { day: ImageBitmap; night: ImageBitmap | null };
+  /**
+   * The plates the water pass samples, straight alpha: the bg plate (day, night), the near decor
+   * (day, night) drawn over the fish, and the contents mask (see LiveSpec.contents). A missing night
+   * falls back to day; a missing decor means Pixi keeps drawing it; a missing mask means the whole
+   * plate is treated as a thing.
+   */
+  plates: { day: ImageBitmap; night: ImageBitmap | null; decorDay: ImageBitmap | null; decorNight: ImageBitmap | null; contents: ImageBitmap | null };
   rng: () => number;
 }
 
@@ -56,7 +62,7 @@ export interface LiveLayer {
   setPhase(phase: ScenePhase): void;
   setNight(t: number): void;
   setPointer(gx: number | null, gy: number | null): void;
-  setParallax(dx: number): void;
+  setParallax(dx: number, dy: number): void;
   setTier(tier: LiveTier): void;
   tier(): LiveTier;
   /** Advance the clocks by `dtMs` and draw. The caller has already drawn the back plates. */
@@ -117,6 +123,10 @@ function linear(r: number, g: number, b: number): THREE.Color {
 
 export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
   const { gl, canvas, habitat } = opts;
+  // Pixi leaves the unpack flags set for its own uploads; Three assumes the defaults when it creates
+  // its empty 3D placeholder textures, which WebGL refuses with those flags on.
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   const renderer = new THREE.WebGLRenderer({ canvas, context: gl, alpha: true, premultipliedAlpha: true, antialias: false });
   renderer.autoClear = false;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -179,7 +189,8 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       if (kind === 'body') {
         shader.fragmentShader = shader.fragmentShader
           .replace('#include <color_fragment>', FISH_BODY_COLOR)
-          .replace('#include <roughnessmap_fragment>', FISH_BODY_ROUGHNESS);
+          .replace('#include <roughnessmap_fragment>', FISH_BODY_ROUGHNESS)
+          .replace('#include <emissivemap_fragment>', FISH_BODY_EMISSIVE);
       } else if (kind === 'fin') {
         shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', FISH_FIN_COLOR);
       }
@@ -192,18 +203,23 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
 
   const materialFor = (name: string): { mat: THREE.MeshPhysicalMaterial; flutter: FlutterMode; kind: 'body' | 'fin' | 'other' } => {
     if (name.includes('fin_dorsal') || name.includes('fin_anal') || name.includes('tail') || name.includes('fin_pec')) {
+      // Fins: a lighter, warmer orange than the body, lit from behind (a sheen lobe and a touch of
+      // emission stand in for the subsurface glow of a thin membrane) so they never go muddy
+      // against the water.
       const mat = new THREE.MeshPhysicalMaterial({
-        color: linear(0.96, 0.36, 0.1),
-        roughness: 0.42,
+        color: linear(1.0, 0.46, 0.16),
+        roughness: 0.5,
         transparent: true,
-        opacity: 0.9,
+        opacity: 0.93,
         depthWrite: false,
         side: THREE.DoubleSide,
-        sheen: 0.6,
-        sheenColor: linear(1.0, 0.6, 0.3),
-        sheenRoughness: 0.5,
-        clearcoat: 0.3,
-        clearcoatRoughness: 0.4,
+        sheen: 0.9,
+        sheenColor: linear(1.0, 0.62, 0.3),
+        sheenRoughness: 0.6,
+        emissive: linear(1.0, 0.36, 0.1),
+        emissiveIntensity: 0.16,
+        clearcoat: 0.2,
+        clearcoatRoughness: 0.5,
       });
       const flutter: FlutterMode = name.includes('tail') ? 3 : name.includes('fin_pec') ? 2 : 1;
       return { mat, flutter, kind: 'fin' };
@@ -222,17 +238,20 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       return { mat, flutter: 0, kind: 'other' };
     }
     if (name.includes('mouth')) {
-      const mat = new THREE.MeshPhysicalMaterial({ color: linear(0.5, 0.07, 0.025), roughness: 0.45 });
+      // The mouth is the body's colour a shade darker, not a red tag on the nose.
+      const mat = new THREE.MeshPhysicalMaterial({ color: linear(0.78, 0.2, 0.05), roughness: 0.5, clearcoat: 0.4 });
       return { mat, flutter: 0, kind: 'other' };
     }
     const mat = new THREE.MeshPhysicalMaterial({
-      color: linear(0.913, 0.25, 0.045),
-      roughness: 0.38,
-      clearcoat: 0.55,
-      clearcoatRoughness: 0.22,
-      sheen: 0.35,
-      sheenColor: linear(1.0, 0.75, 0.4),
+      color: linear(0.95, 0.27, 0.05),
+      roughness: 0.4,
+      clearcoat: 0.6,
+      clearcoatRoughness: 0.25,
+      sheen: 0.5,
+      sheenColor: linear(1.0, 0.7, 0.35),
       sheenRoughness: 0.6,
+      emissive: linear(1.0, 0.3, 0.08),
+      emissiveIntensity: 0.05,
     });
     return { mat, flutter: 0, kind: 'body' };
   };
@@ -281,6 +300,15 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
   };
   const bgDay = plateTexture(opts.plates.day);
   const bgNight = opts.plates.night ? plateTexture(opts.plates.night) : bgDay;
+  // No decor plate: a 1x1 clear texture, so the shader's composite is a no-op and Pixi draws it.
+  const clear = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1);
+  clear.needsUpdate = true;
+  const decorDay = opts.plates.decorDay ? plateTexture(opts.plates.decorDay) : clear;
+  const decorNight = opts.plates.decorNight ? plateTexture(opts.plates.decorNight) : decorDay;
+  // No mask: a 1x1 white texture, every plate pixel is a thing.
+  const solid = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  solid.needsUpdate = true;
+  const contents = opts.plates.contents ? plateTexture(opts.plates.contents) : solid;
 
   const ws = habitat.waterShape;
   // The waterline ellipse: its near edge is `surfaceY` (the row the behaviour clamps to) and its
@@ -301,6 +329,9 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
   const waterUniforms = {
     uBg: { value: bgDay },
     uBgNight: { value: bgNight },
+    uDecor: { value: decorDay },
+    uDecorNight: { value: decorNight },
+    uContents: { value: contents },
     uFish: { value: rt.texture },
     uCanvasCss: { value: new THREE.Vector2(1, 1) },
     uDpr: { value: 1 },
@@ -316,7 +347,7 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
     uRipple: { value: 1.1 },
     uPhase: { value: 1 },
     uPointer: { value: new THREE.Vector2(-1e4, -1e4) },
-    uParallax: { value: 0 },
+    uParallax: { value: new THREE.Vector2(0, 0) },
   };
   const waterMat = new THREE.ShaderMaterial({
     vertexShader: WATER_VERTEX,
@@ -424,8 +455,8 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       if (gx === null || gy === null) waterUniforms.uPointer.value.set(-1e4, -1e4);
       else waterUniforms.uPointer.value.set(gx, gy);
     },
-    setParallax(dx) {
-      waterUniforms.uParallax.value = dx;
+    setParallax(dx, dy) {
+      waterUniforms.uParallax.value.set(dx, dy);
     },
     setTier(t) {
       if (t === tier) return;
@@ -490,6 +521,11 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       rt.dispose();
       bgDay.dispose();
       if (bgNight !== bgDay) bgNight.dispose();
+      decorDay.dispose();
+      if (decorNight !== decorDay) decorNight.dispose();
+      contents.dispose();
+      clear.dispose();
+      solid.dispose();
       envTex.dispose();
       waterMat.dispose();
       waterQuad.geometry.dispose();

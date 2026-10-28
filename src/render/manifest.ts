@@ -1,6 +1,6 @@
 // Manifest schema validation + fetch. Pure (no Pixi) so it is testable in node.
 
-import type { FrameSource, LayerName, Manifest, ManifestHabitat, ManifestLayer, ManifestSprite, ManifestSpriteState } from './types';
+import type { FrameSource, LayerName, LiveSpec, Manifest, ManifestHabitat, ManifestLayer, ManifestSprite, ManifestSpriteState } from './types';
 import type { Rect } from '../sim/types';
 
 export const MANIFEST_URL = '/manifest.json';
@@ -160,9 +160,13 @@ function habitat(v: unknown, path: string): ManifestHabitat {
   };
 }
 
-function liveKind(v: unknown, path: string): 'fish-bowl' {
-  if (v !== 'fish-bowl') throw new ManifestError(path, 'expected "fish-bowl"');
-  return v;
+function liveKind(v: unknown, path: string): LiveSpec {
+  if (!isRecord(v)) throw new ManifestError(path, 'expected a live layer object');
+  if (v['kind'] !== 'fish-bowl') throw new ManifestError(`${path}.kind`, 'expected "fish-bowl"');
+  return {
+    kind: 'fish-bowl',
+    ...(v['contents'] === undefined ? {} : { contents: assetPath(v['contents'], `${path}.contents`) }),
+  };
 }
 
 function spriteState(v: unknown, path: string): ManifestSpriteState {
