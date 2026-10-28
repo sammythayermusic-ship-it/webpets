@@ -1144,3 +1144,42 @@ alpha-tested for the same reason, or it vanishes when seen through the water.
 - Quality tiers: `full` (transmission, PCF-soft 1024 shadow) and `lite` (no transmission: water as a
   tinted Fresnel surface, 512 shadow, no caustic animation); auto-dropped when the first seconds
   measure under ~50 advances/s, forced by `VITE_WEBPETS_LIVE_TIER` at build time for measurement.
+
+## 2026-10-28 — bake-off candidate B: resumed, first looks in the packaged app
+
+Resumed from a cut-off session: the export script, the GLB, `src/render/live/*` and the `createScene`
+switch were on disk uncommitted, green under `tsc` and vitest, and had never been seen in the app.
+Committed as a checkpoint first; `*.blend1` and `__pycache__/` added to `.gitignore`.
+
+### what the first packaged build showed
+- The auto quality probe counted the first 240 frames from mount, which include shader compilation,
+  so a machine that renders at 120 Hz measured ~40 and dropped itself to the lite tier. Fixed by
+  `renderer.compileAsync` before the first frame and a 3 s warm-up before the probe starts.
+- `PCFSoftShadowMap` no longer exists in three 0.186 (it logs and falls back); `PCFShadowMap` with a
+  radius is what is used.
+- DAY was blown to white and NIGHT looked right. The night rig is a fraction of the day one, and the
+  day one (key 3.2, fill 0.9, rim 1.4, hemisphere 0.9, env 1.0, all onto a pale back wall seen through
+  the water) saturated everything inside the glass. The day rig is roughly halved and the far wall is
+  a deep teal that darkens toward the gravel. The teal wall is also what makes the water read as
+  water: a transmissive volume only ever shows what is behind it, and a pale wall gives pale water.
+- The far wall is discarded ABOVE the waterline, so the empty glass shows the desktop through it and
+  only the near glass's Fresnel reflection sits on top. Before this the whole bowl silhouette was an
+  opaque grey ball above the water. Measured in the window capture: air pixels inside the bowl were
+  (176,184,191,255); they are now alpha 0.
+- Transmission thickness 0.12 m smeared the fish into a double image at the curved sides; 0.03 m
+  keeps the bend and loses the ghost. Attenuation distances were scaled by the same factor so the
+  tint is unchanged.
+- The gravel bake had the AO multiplied in at 0.35 + 0.65·occ, which made the bed a dark blotchy
+  brown under the pebbles. Re-exported at 0.72 + 0.28·occ (one Blender run, ~4 min of bake).
+- Three directional lights at specularIntensity 1 burned white discs into the water's SIDE faces,
+  which sit against the glass and have no air interface of their own. The water's specular is cut
+  to a quarter everywhere except the top face, which also gets a 0.14 roughness floor so its
+  highlight is a streak rather than a lamp.
+- Large (2016×1536 device px) ran at 43 advances/s with the transmission backbuffer at full size,
+  while the render call itself cost under 2 ms of CPU: the cost is the extra full-screen pass plus
+  its mip chain. The backbuffer is capped at 1000 device px wide (floored, whole pixels); Small and
+  Medium are unaffected.
+- The desk shadow is a soft radial contact blob (a canvas gradient on a plane) plus a faint light-cast
+  shadow, instead of a hard 1024-texel blob of four legs.
+- Measuring while other agents run Blender on the Metal GPU gives numbers that are not this
+  renderer's; the stats in the report say what else was running.

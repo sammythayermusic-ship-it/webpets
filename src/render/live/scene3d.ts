@@ -171,7 +171,7 @@ function createContactShadow(): Mesh {
   const tex = new CanvasTexture(c);
   tex.colorSpace = SRGBColorSpace;
   const mat = new MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false });
-  const mesh = new Mesh(new PlaneGeometry(0.3, 0.3), mat);
+  const mesh = new Mesh(new PlaneGeometry(0.26, 0.26), mat);
   mesh.name = 'contact-shadow';
   mesh.rotation.x = -Math.PI / 2;
   // A hair above the desk so it never z-fights with the shadow catcher, and nudged the way the key
@@ -247,6 +247,8 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
   let probeFrames = 0;
   let probeMs = 0;
   let mountedAt = 0;
+  /** Shader compile/link failures, kept for debugState: the packaged webview has no console to read. */
+  const shaderErrors: string[] = [];
   const lookScratch: WaterLook = {
     color: new Color(),
     attenuationColor: new Color(),
@@ -271,7 +273,9 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
     if (!m) return;
     const { w, h } = windowSize(scale);
     m.renderer.setSize(w, h, false);
-    m.renderer.transmissionResolutionScale = Math.min(1, TRANSMISSION_MAX_PX / (w * m.renderer.getPixelRatio()));
+    // Floored to a whole number of device px: a fractional render-target size is undefined territory.
+    const devW = w * m.renderer.getPixelRatio();
+    m.renderer.transmissionResolutionScale = Math.min(1, Math.floor(Math.min(devW, TRANSMISSION_MAX_PX)) / devW);
     const canvas = m.renderer.domElement;
     canvas.style.width = `${w}px`;
     canvas.style.height = `${h}px`;
@@ -405,6 +409,14 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
       if (m) throw new Error('scene already mounted');
       scale = s;
       const renderer = new WebGLRenderer({ antialias: true, alpha: true, premultipliedAlpha: true, powerPreference: 'high-performance' });
+      renderer.debug.onShaderError = (gl, program, vs, fs) => {
+        const log = (gl.getProgramInfoLog(program) ?? '').trim();
+        const vsLog = (gl.getShaderInfoLog(vs) ?? '').trim();
+        const fsLog = (gl.getShaderInfoLog(fs) ?? '').trim();
+        const msg = `program: ${log} | vs: ${vsLog} | fs: ${fsLog}`.slice(0, 2000);
+        shaderErrors.push(msg);
+        console.error('[live] shader error', msg);
+      };
       renderer.setPixelRatio(window.devicePixelRatio || 1);
       renderer.setClearColor(0x000000, 0);
       renderer.toneMapping = ACESFilmicToneMapping;
@@ -490,7 +502,7 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
       glbCamera?.removeFromParent();
 
       // The desk: receives the stand's and bowl's shadow and nothing else, so the desktop shows through it.
-      const desk = new Mesh(new PlaneGeometry(1.4, 1.4), new ShadowMaterial({ opacity: 0.14, color: new Color(0x1c1a2a) }));
+      const desk = new Mesh(new PlaneGeometry(1.4, 1.4), new ShadowMaterial({ opacity: 0.1, color: new Color(0x1c1a2a) }));
       desk.rotation.x = -Math.PI / 2;
       desk.position.y = DESK_Y;
       desk.receiveShadow = true;
@@ -768,6 +780,8 @@ export function createLiveScene(manifest: Manifest, subject: SceneSubject, rng: 
         renderer: 'three' as const,
         tier,
         depth: Number(depth.toFixed(4)),
+        shaderErrors: shaderErrors.slice(0, 8),
+        transmissionScale: m ? Number(m.renderer.transmissionResolutionScale.toFixed(3)) : 0,
       };
       if (!m) {
         return { ...base, petVisible: false, petAnim: '(unmounted)', petPos: { x: 0, y: 0 }, drawnPos: { x: 0, y: 0 }, pacer: 'timer' as const };

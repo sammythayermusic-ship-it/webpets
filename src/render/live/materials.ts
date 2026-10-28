@@ -100,6 +100,22 @@ if (vWpWorld.y > uWaterTop - 0.004) {
 `;
 
 /**
+ * Only the TOP face is an air/water interface. The sides sit against the glass, so their specular
+ * belongs to the glass (drawn on top): the volume's own highlight there is cut to a quarter, or the
+ * three lights burn white discs into the water a hand's width below the surface. The top face is
+ * also a touch rougher, so its highlight is a soft streak rather than a mirror of the lamp.
+ */
+const GLSL_WATER_SPECULAR = /* glsl */ `
+{
+  float wpTop = step(uWaterTop - 0.004, vWpWorld.y);
+  float wpS = mix(0.25, 1.0, wpTop);
+  material.specularColor *= wpS;
+  material.specularF90 *= wpS;
+  material.roughness = max(material.roughness, wpTop * 0.14);
+}
+`;
+
+/**
  * The spine. Root space is the fish's own: +x nose, +y dorsal, +z the fish's left side. Vertices
  * ahead of `uHeadX` are rigid with the head; behind it the body follows a travelling sine whose
  * amplitude grows toward the tail, and every vertex is rotated with the local tangent so a fin or
@@ -269,7 +285,8 @@ export function createWaterMaterial(world: WorldUniforms, tier: 'full' | 'lite')
     addWorldUniforms(shader, world);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${GLSL_WATER_SLOPE}`)
-      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${GLSL_WATER_NORMAL}`);
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${GLSL_WATER_NORMAL}`)
+      .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>\n${GLSL_WATER_SPECULAR}`);
   };
   m.customProgramCacheKey = () => `wp-water-${tier}`;
   return m;
