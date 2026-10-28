@@ -1,0 +1,98 @@
+{
+ "small": {
+  "advancesPerSec": 60,
+  "stepsPerSec": 8,
+  "fps": 56,
+  "visibility": "visible",
+  "renderMs": 0.6,
+  "elapsedMs": 5001
+ },
+ "medium": {
+  "advancesPerSec": 60,
+  "stepsPerSec": 8,
+  "fps": 63,
+  "visibility": "visible",
+  "renderMs": 0.6,
+  "elapsedMs": 5001
+ },
+ "large": {
+  "advancesPerSec": 60,
+  "stepsPerSec": 8,
+  "fps": 56,
+  "visibility": "visible",
+  "renderMs": 0.8,
+  "elapsedMs": 5000
+ },
+ "cpu": {
+  "shown": {
+   "perProcess": {
+    "58349": {
+     "cpu": 4.9,
+     "rssMB": 83.8
+    },
+    "58352": {
+     "cpu": 7.1,
+     "rssMB": 67.1
+    },
+    "58354": {
+     "cpu": 10.0,
+     "rssMB": 124.1
+    }
+   },
+   "cpuTotal": 22.0,
+   "rssTotalMB": 275.0,
+   "samples": 3
+  },
+  "hidden": {
+   "perProcess": {
+    "58349": {
+     "cpu": 0.6,
+     "rssMB": 84.7
+    },
+    "58352": {
+     "cpu": 0.3,
+     "rssMB": 67.2
+    },
+    "58354": {
+     "cpu": 0.9,
+     "rssMB": 124.5
+    }
+   },
+   "cpuTotal": 1.8,
+   "rssTotalMB": 276.4,
+   "samples": 3
+  },
+  "processes": {
+   "58349": "/Applications/WebPets C.app/Contents/MacOS/webpets",
+   "58352": "/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.Web",
+   "58354": "/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.Web"
+  },
+  "method": "ps pcpu is the lifetime average of each process (the baseline's method); top is the share of one core over 2 s intervals, three intervals averaged",
+  "topShown": {
+   "perProcess": {
+    "58354": 7.1,
+    "58352": 5.3,
+    "58349": 4.0
+   },
+   "cpuTotal": 16.4,
+   "samples": 3
+  },
+  "topHidden": {
+   "perProcess": {
+    "58354": 1.3,
+    "58349": 1.1,
+    "58352": 0.8
+   },
+   "cpuTotal": 3.2,
+   "samples": 3
+  }
+ },
+ "rssMB": 275.0,
+ "bundleMB": 26,
+ "renderMinutes": 2.0,
+ "tier": "full at all three sizes (the lean tier never engaged)",
+ "clip": {
+  "recorded": "1376x1056 H.264, 20.0 s, 10.4 MB from the harness",
+  "shipped": "re-encoded 688 px wide, crf 26"
+ }
+}

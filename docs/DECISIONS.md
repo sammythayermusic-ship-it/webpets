@@ -1147,3 +1147,15 @@ the key kept some warmth and was raised so the goldfish stays orange under the m
 Quality tier: `scene.ts` measures the frame cost (EMA of the draw) and drops the live layer to
 `lean` (fish target at half resolution, shafts and caustics dimmed) above 9 ms, back to `full`
 under 4 ms. The stills and clip report which tier was active.
+
+## 2026-10-28 — bake-off candidate C: measured
+
+Packaged `WebPets C.app` (bundle id `com.sammythayer.webpets.bakeoff-c`), driven by the harness,
+Blender finished, the two other candidates building on the same machine: 60 advances/s at Small,
+Medium and Large with 0.6–0.8 ms of draw cost and the `full` tier throughout, so the tier switch is
+a safety net that never fired here. CPU shown at Medium: 22% of a core by the baseline's `ps`
+method (lifetime average), 16% by `top` over 2 s intervals; hidden 2–3%. RSS 275 MB, bundle 26 MB.
+Against checkpoint 0 (21% / 5% / 200 MB / 23 MB): the same CPU, more memory (three plate bitmaps
+and a 4× MSAA target), 3 MB more bundle. The cost sits between a plates-only app and a full
+real-time scene because the only per-pixel work is one water pass and a small fish; nothing
+transmissive, no shadow maps. Report and evidence in `docs/reports/bakeoff/c/`.
