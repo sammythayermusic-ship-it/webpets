@@ -30,6 +30,7 @@ import { createExpressionGate } from './expression';
 import { createPacer, type Pacer } from './pacer';
 import type { HabitatScene, Manifest, ManifestHabitat, ManifestSprite, MoveBounds, PetBehavior, SceneEvent, SceneView } from './types';
 import type { Habitat, Species } from '../sim/types';
+import { createLiveScene } from './live/scene3d';
 
 const STEP_MS = 1000 / PET_FPS;
 /** Cap the accumulator so a background tab does not replay minutes of steps at once. */
@@ -85,7 +86,21 @@ interface Mounted {
   watchdog: Pacer;
 }
 
+/**
+ * The scene for a species in a habitat. Bake-off candidate B: the fish bowl is drawn live in 3D by
+ * `./live/scene3d.ts`; every other habitat keeps the Pixi layer stack below. Both satisfy the same
+ * `HabitatScene`, so main.ts, the HUD and the harness cannot tell which is running.
+ */
 export function createScene(
+  manifest: Manifest,
+  subject: SceneSubject = DEFAULT_SUBJECT,
+  rng: Rng = Math.random,
+): HabitatScene {
+  if (subject.species === 'fish' && subject.habitat === 'bowl') return createLiveScene(manifest, subject, rng);
+  return createPixiScene(manifest, subject, rng);
+}
+
+export function createPixiScene(
   manifest: Manifest,
   subject: SceneSubject = DEFAULT_SUBJECT,
   rng: Rng = Math.random,

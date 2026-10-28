@@ -8,3 +8,5 @@ test-results/
 playwright-report/
 tests/recordings/
 .diag/
+*.blend1
+__pycache__/
