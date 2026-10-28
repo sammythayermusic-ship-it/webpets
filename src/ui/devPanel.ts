@@ -8,6 +8,8 @@ import { button, el, relRect, stopDrag } from './dom';
 import { eventLine, formatDate, formatOffset } from './format';
 import { labelFor } from './model';
 import { speciesModule } from '../species';
+import { needsAt } from '../sim/needs';
+import { regimeNow } from '../app/needsBridge';
 
 export interface DevPanelHandleExt extends DevPanelHandle {
   open(): void;
@@ -43,6 +45,19 @@ const SPECIES_OPTIONS: readonly SpeciesOption[] = (
     { species: 'chicken', habitat: 'coop' },
   ] as const
 ).map((o) => ({ ...o, enabled: speciesModule(o.species)?.layouts[o.habitat] !== undefined }));
+
+/** Energy, curiosity, comfort and stress at `now`, and what the pet wants to do about them. */
+function needsLine(s: AppState, now: number): string {
+  const regime = regimeNow(
+    { pet: s.pet, dayNight: s.settings.dayNight, nightOverride: s.nightOverride, present: s.present, hunger: s.hunger },
+    now,
+  );
+  const n = needsAt(s.needs, now, regime);
+  const d = s.actions.drives(false);
+  const pct = (v: number): string => `${Math.round(v * 100)}%`;
+  const wants = [d.nap ? 'nap' : '', d.greet ? 'greet' : '', d.hide > 0.3 ? 'hide' : '', d.approach > 0.5 ? 'approach' : ''].filter(Boolean).join(' ');
+  return `energy ${pct(n.energy)} · curiosity ${pct(n.curiosity)} · comfort ${pct(n.comfort)} · stress ${pct(n.stress)} · ${s.present ? 'watched' : 'alone'} · activity ${pct(d.activity)}${wants ? ' · wants ' + wants : ''}`;
+}
 
 function formatClock(ts: number): string {
   const d = new Date(ts);
@@ -269,6 +284,7 @@ export function mountDevPanel(root: HTMLElement, deps: UiDeps): DevPanelHandleEx
       `${pet.name} ${pet.id} · ${pet.alive ? 'alive' : 'dead'} · ${pet.personality} · ${pet.rarity}`,
       `hunger ${hunger.toFixed(1)}% ${labelFor(hunger)} · pantry ${pet.pantry} · balance ${s.balance} · meals ${pet.meals}`,
       `night ${s.night ? 'on' : 'off'} (override ${s.nightOverride === null ? 'none' : s.nightOverride ? 'night' : 'day'}) · scale ${s.settings.scale}x · ${s.hidden ? 'hidden' : 'shown'}`,
+      needsLine(s, now),
     ];
     status.textContent = parts.join('\n');
     nightSelect.value = s.nightOverride === null ? 'follow' : s.nightOverride ? 'night' : 'day';
