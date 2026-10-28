@@ -207,19 +207,22 @@ void main() {
   vec2 fishUv = vec2(gl_FragCoord.x, gl_FragCoord.y) / (uCanvasCss * uDpr);
 
   // --- coverage ------------------------------------------------------------------------------------
-  vec2 dIn = (g - uInner.xy) / uInner.zw;
+  // The water is clipped by the FRONT glass, which slides with the pointer parallax; so does every
+  // edge computed here (rim, waterline, meniscus), or a sliver of water shows past the glass.
+  vec2 gm = g - uParallax;
+  vec2 dIn = (gm - uInner.xy) / uInner.zw;
   float e = dot(dIn, dIn);
   float inner = 1.0 - smoothstep(0.962, 1.0, e);
-  float sx = (g.x - uSurface.x) / uSurface.z;
+  float sx = (gm.x - uSurface.x) / uSurface.z;
   float sArg = clamp(1.0 - sx * sx, 0.0, 1.0);
   float halfH = uSurface.w * sqrt(sArg);
   float topEdge = uSurface.y - halfH;     // far edge of the surface, higher on screen
   float botEdge = uSurface.y + halfH;     // near edge, the waterline against the front glass
-  float belowTop = smoothstep(topEdge - 0.6, topEdge + 0.6, g.y);
+  float belowTop = smoothstep(topEdge - 0.6, topEdge + 0.6, gm.y);
   float mask = inner * belowTop;
   // in the surface band we look across the water surface; below it through the side glass
-  float band = smoothstep(topEdge - 0.5, topEdge + 1.5, g.y) * (1.0 - smoothstep(botEdge - 1.5, botEdge + 0.5, g.y));
-  float body = smoothstep(botEdge - 1.0, botEdge + 1.0, g.y);
+  float band = smoothstep(topEdge - 0.5, topEdge + 1.5, gm.y) * (1.0 - smoothstep(botEdge - 1.5, botEdge + 0.5, gm.y));
+  float body = smoothstep(botEdge - 1.0, botEdge + 1.0, gm.y);
 
   vec4 fishHere = texture2D(uFish, fishUv);
   // Outside the water the near decor is still drawn by this pass (Pixi's copy is hidden), at its
@@ -241,7 +244,7 @@ void main() {
   // lens the water adds is applied here, to the plate, the decor and the fish alike, growing toward
   // the centre and vanishing at the glass so nothing tears at the rim.
   float mag = 1.0 + 0.14 * (1.0 - clamp(e, 0.0, 1.0)) * body;
-  vec2 q = uInner.xy + (g - uInner.xy) / mag + n * (0.6 + 0.4 * body);
+  vec2 q = uInner.xy + uParallax + (gm - uInner.xy) / mag + n * (0.6 + 0.4 * body);
   // the plates slide with the pointer parallax; the refracted bg follows a third of it so the
   // water reads as a thick thing between front and back glass rather than a flat sheet
   vec2 bgUv = (q + uParallax * 0.33) / uGrid;
@@ -263,12 +266,12 @@ void main() {
   float plateW = smoothstep(0.35, 0.85, cm) * bg.a;
 
   // --- the water body: depth tint, absorption, a lit back wall --------------------------------------
-  float depth = clamp((g.y - botEdge) / max(uFloorY + 22.0 - botEdge, 1.0), 0.0, 1.0);
+  float depth = clamp((gm.y - botEdge) / max(uFloorY + 22.0 - botEdge, 1.0), 0.0, 1.0);
   float toEdge = clamp(e, 0.0, 1.0);
   vec3 dayDeep = vec3(0.12, 0.42, 0.56);
   vec3 dayShallow = vec3(0.42, 0.76, 0.86);
-  vec3 nightDeep = vec3(0.02, 0.07, 0.18);
-  vec3 nightShallow = vec3(0.10, 0.24, 0.44);
+  vec3 nightDeep = vec3(0.04, 0.10, 0.24);
+  vec3 nightShallow = vec3(0.14, 0.30, 0.52);
   vec3 deep = mix(dayDeep, nightDeep, uNight);
   vec3 shallow = mix(dayShallow, nightShallow, uNight);
   vec3 waterCol = mix(shallow, deep, depth * 0.7 + toEdge * 0.3);
@@ -290,7 +293,7 @@ void main() {
   // --- caustics on the gravel -----------------------------------------------------------------------
   // Only on the BED: the band from the back of the gravel down to just past its near lip. Below
   // that the plate is the outside of the dish, which no light from the surface reaches.
-  float gravelBand = smoothstep(uFloorY - 24.0, uFloorY - 6.0, g.y) * (1.0 - smoothstep(uFloorY + 4.0, uFloorY + 16.0, g.y)) * inner;
+  float gravelBand = smoothstep(uFloorY - 24.0, uFloorY - 6.0, gm.y) * (1.0 - smoothstep(uFloorY + 4.0, uFloorY + 16.0, gm.y)) * inner;
   float caus = wpCaustic(q, uTime * uPhase + 11.0);
   vec3 causCol = mix(vec3(0.95, 1.0, 0.85), vec3(0.45, 0.6, 1.0), uNight);
   vec3 causAdd = causCol * caus * gravelBand * mix(0.22, 0.09, uNight) * (0.5 + 0.5 * uTier);
@@ -315,17 +318,17 @@ void main() {
   vec3 H = normalize(L + V);
   float spec = pow(max(dot(N, H), 0.0), 70.0) + 0.5 * pow(max(dot(N, H), 0.0), 12.0);
   vec3 skyCol = mix(vec3(0.80, 0.90, 0.97), vec3(0.18, 0.24, 0.42), uNight);
-  float bandT = clamp((g.y - topEdge) / max(botEdge - topEdge, 1.0), 0.0, 1.0);
+  float bandT = clamp((gm.y - topEdge) / max(botEdge - topEdge, 1.0), 0.0, 1.0);
   // the room reflected in the surface, strongest at the far edge, with ripple-broken glints
   float fres = 0.12 + 0.28 * (1.0 - bandT);
   col = mix(col, skyCol, band * fres);
   col += vec3(1.0, 0.98, 0.92) * spec * band * mix(1.1, 0.5, uNight);
   // the meniscus: a bright line where the water meets the front glass, a thin shadow under it
-  float meniscus = exp(-pow((g.y - botEdge) / 0.75, 2.0)) * inner * smoothstep(0.05, 0.4, sArg);
+  float meniscus = exp(-pow((gm.y - botEdge) / 0.75, 2.0)) * inner * smoothstep(0.05, 0.4, sArg);
   col += mix(vec3(0.92, 0.98, 1.0), vec3(0.45, 0.6, 0.9), uNight) * meniscus * 0.8;
-  float underline = exp(-pow((g.y - botEdge - 1.4) / 0.7, 2.0)) * inner * smoothstep(0.05, 0.4, sArg);
+  float underline = exp(-pow((gm.y - botEdge - 1.4) / 0.7, 2.0)) * inner * smoothstep(0.05, 0.4, sArg);
   col *= 1.0 - 0.22 * underline;
-  float farLine = exp(-pow((g.y - topEdge) / 0.7, 2.0)) * inner;
+  float farLine = exp(-pow((gm.y - topEdge) / 0.7, 2.0)) * inner;
   col += skyCol * farLine * 0.3;
 
   vec4 water = vec4(col, 1.0);

@@ -1098,3 +1098,52 @@ shared script; each reports with its evidence folder under `docs/reports/bakeoff
 stage runs the same measurement script against each installed build in turn (one at a time: they
 share the bundle id). The lead scores the recordings and stills, writes the table and the decision
 here, and continues on the winner's branch. The two others are kept.
+
+## 2026-10-28 — bake-off candidate C: composition, one WebGL2 context
+
+Tried first, kept: Pixi and Three share one WebGL2 context on one canvas. The scene creates the
+canvas and the context itself, hands both to `Application.init({ canvas, context })` and to
+`THREE.WebGLRenderer({ canvas, context })`, and draws a frame as Pixi (back half of the layer stack,
+clear) → `renderer.resetState()` → Three (fish into an MSAA render target, then one full-canvas
+water pass into the default framebuffer) → Pixi `resetState()` → Pixi (front half, no clear). The
+layer stack was split into `root` (bg, medium, decor_back) and `front` (the rest) with the same
+transform, so a habitat without a live layer draws both halves back to back and is pixel-identical
+to before. Verified in the packaged WKWebView build: the harness `record`/`snapshot` see the whole
+picture, the window stays one transparent surface, click-through and the hit regions are untouched.
+The stacked-canvases fallback was not needed and was not built. One wrinkle: Pixi leaves the unpack
+pixel-store flags set, which makes Three's first empty 3D-texture upload warn; the flags are reset
+before Three starts.
+
+## 2026-10-28 — bake-off candidate C: the fish inside the bowl
+
+The plates were rendered for an empty bowl, so the live pass owns everything the water does to what
+is behind the front glass. Measured, then rejected: weighting the bg plate by its alpha squared to
+hide the back wall of the glass. The empty-bowl plate is alpha 1.0 everywhere inside the glass (the
+film treats glass as opaque), so that weight was 1 and the back wall came through as a dark,
+smeared reflection of the gravel: murk. Kept: `c_contents.py` renders a mask of the bowl's things
+(gravel, pebbles, plants, stand) with the glass hidden; the water pass weights the plate by that
+mask (eroded a grid px so the plate's dark anti-aliased fringes go to the water, not to an outline)
+and draws lit water where there is only wall. 20 s of render.
+
+Rejected: leaving `decor_front` to Pixi. It is cut from the same pixels as the bg plate, so any lens
+or ripple the water applied to the plate made the near pebbles and leaves ghost against their own
+refracted copies. Kept: the live pass samples `decor_front` (day and night) itself, at the same lens
+and ripple and at the full front parallax, and composites it over the fish; Pixi's copy is hidden
+when the live layer is active. The lens is a mild magnification toward the centre (1.14) that
+vanishes at the glass, applied to plate, decor and fish alike; a stronger lens (1.19) tore at the
+rim and was rejected.
+
+Caustics: the first version lit the whole dish wall and read as cracked glass. Confined to the bed
+(floorY − 24 .. floorY + 16 grid px) and cut to about a third of the strength.
+
+Parallax bug found on the hover still: the front glass slides with the pointer, the water's clip
+ellipse did not, and a sliver of water showed past the rim. Every edge the water computes (rim,
+waterline, meniscus) now follows the glass offset.
+
+Night: a plate crossfade (bg, decor_front, glass each have a `_night` render under a moonlit rig)
+plus the Three light rig interpolated by the same night amount. First rig made the fish brown-red;
+the key kept some warmth and was raised so the goldfish stays orange under the moon.
+
+Quality tier: `scene.ts` measures the frame cost (EMA of the draw) and drops the live layer to
+`lean` (fish target at half resolution, shafts and caustics dimmed) above 9 ms, back to `full`
+under 4 ms. The stills and clip report which tier was active.

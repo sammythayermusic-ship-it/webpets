@@ -103,14 +103,16 @@ const DAY: RigColours = {
   env: 0.55,
 };
 
+// Moonlight, but the fish must still read as a goldfish: the key keeps a little warmth and enough
+// strength that the orange survives, the rim does the cold blue work.
 const NIGHT: RigColours = {
-  key: [new THREE.Color(0.62, 0.72, 1.0), 0.55],
-  fill: [new THREE.Color(0.4, 0.42, 0.95), 0.25],
-  rim: [new THREE.Color(0.45, 0.78, 1.0), 1.0],
-  hemiSky: new THREE.Color(0.18, 0.26, 0.5),
-  hemiGround: new THREE.Color(0.06, 0.07, 0.12),
-  hemi: 0.3,
-  env: 0.12,
+  key: [new THREE.Color(0.8, 0.84, 1.0), 1.1],
+  fill: [new THREE.Color(0.45, 0.5, 1.0), 0.35],
+  rim: [new THREE.Color(0.5, 0.8, 1.0), 1.4],
+  hemiSky: new THREE.Color(0.25, 0.34, 0.6),
+  hemiGround: new THREE.Color(0.1, 0.09, 0.14),
+  hemi: 0.45,
+  env: 0.22,
 };
 
 function lerpColor(out: THREE.Color, a: THREE.Color, b: THREE.Color, t: number): THREE.Color {
