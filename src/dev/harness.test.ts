@@ -24,6 +24,7 @@ function fakeDev(): DevActions {
     simulateAbsence: vi.fn(() => []),
     resetClock: vi.fn(),
     setNightOverride: vi.fn(),
+    setNeeds: vi.fn(),
     setSpecies: vi.fn(async () => undefined),
   };
 }
@@ -175,6 +176,14 @@ describe('harness runCommand', () => {
     expect(p.ok).toBe(true);
     expect(h.actions.setPresence).toHaveBeenCalledWith(true);
     expect((await runCommand({ op: 'presence', present: 'yes' }, h.ctx, h.io)).ok).toBe(false);
+  });
+
+  it('setNeeds forwards only the numbers given', async () => {
+    const h = makeHarness();
+    const r = await runCommand({ op: 'setNeeds', energy: 0.1, stress: 0.9 }, h.ctx, h.io);
+    expect(r.ok).toBe(true);
+    expect(h.actions.dev.setNeeds).toHaveBeenCalledWith({ energy: 0.1, stress: 0.9 });
+    expect((await runCommand({ op: 'setNeeds', energy: 'low' }, h.ctx, h.io)).ok).toBe(false);
   });
 
   it('feed calls the store action and returns its result', async () => {

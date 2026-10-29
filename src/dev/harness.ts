@@ -351,6 +351,15 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
       actions.poke(kind);
       return { kind, needs: ctx.store.getState().needs };
     }
+    case 'setNeeds': {
+      const values: Partial<Record<'energy' | 'curiosity' | 'comfort' | 'stress', number>> = {};
+      for (const k of ['energy', 'curiosity', 'comfort', 'stress'] as const) {
+        const v = optNum(cmd, k);
+        if (v !== undefined) values[k] = v;
+      }
+      actions.dev.setNeeds(values);
+      return { needs: ctx.store.getState().needs };
+    }
     case 'presence': {
       const present = bool(cmd, 'present');
       actions.setPresence(present);

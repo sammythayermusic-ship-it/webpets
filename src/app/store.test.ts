@@ -488,6 +488,16 @@ describe('app store', () => {
       expect(s.actions.drives(false).approach).toBe(0);
     });
 
+    it('dev.setNeeds re-anchors only the needs given', async () => {
+      const { store } = await bootStore();
+      store.getState().actions.dev.setNeeds({ energy: 0.05, stress: 2 });
+      const n = store.getState().needs;
+      expect(n.energy).toEqual({ value: 0.05, at: B });
+      expect(n.stress).toEqual({ value: 1, at: B });
+      expect(n.curiosity.value).toBe(0.5);
+      expect(store.getState().actions.drives(false).nap).toBe(false); // not quiet for five minutes yet
+    });
+
     it('a meal is a stimulus: curiosity is spent on it', async () => {
       const { store } = await bootStore();
       const before = store.getState().needs.curiosity.value;

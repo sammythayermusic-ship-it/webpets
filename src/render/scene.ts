@@ -32,6 +32,7 @@ import { createLiveLayer, type LiveLayer } from './live/bowlLayer';
 import { loadBitmap } from './assets';
 import type { HabitatScene, Manifest, ManifestHabitat, ManifestSprite, MoveBounds, PetBehavior, SceneEvent, SceneView } from './types';
 import type { Habitat, Species } from '../sim/types';
+import type { Drives } from '../sim/needs';
 
 const STEP_MS = 1000 / PET_FPS;
 /** Cap the accumulator so a background tab does not replay minutes of steps at once. */
@@ -170,6 +171,12 @@ export function createScene(
   const expression = createExpressionGate(MOOD_HOLD_TICKS);
   /** False until the behavior has positioned the pet once; the sprite stays hidden so it never flashes at (0, 0). */
   let placed = false;
+  /** The app's needs model, when wired; asked once per tick. */
+  let drivesSource: ((napping: boolean) => Drives) | null = null;
+  /** The behaviour is asleep in daylight: a nap, reported back so the drives keep their hysteresis. */
+  let napping = false;
+  /** A tap on the glass waiting for the next step, grid px. */
+  let pendingTap: { x: number; y: number } | null = null;
   const listeners: Record<SceneEvent, Set<() => void>> = { bite: new Set(), 'flakes-gone': new Set() };
   /** Unbanked `speciesData` increments since the last drain. See `drainSpeciesDelta`. */
   let speciesAccum: Record<string, number> = {};
@@ -301,7 +308,12 @@ export function createScene(
       pantryFraction: view.pantryFraction,
       attract,
       rng,
+      personality: view.personality,
+      ...(drivesSource ? { drives: drivesSource(napping) } : {}),
+      ...(pendingTap ? { tap: pendingTap } : {}),
     });
+    pendingTap = null;
+    napping = out.anim === 'sleep' && !view.asleep;
     let ate = false;
     if (out.biteFlakeIndex !== null) {
       m.flakes.remove(out.biteFlakeIndex);
@@ -340,6 +352,14 @@ export function createScene(
       const out = speciesAccum;
       speciesAccum = {};
       return out;
+    },
+    setDrivesSource(src) {
+      drivesSource = src;
+    },
+    tap(cssX, cssY) {
+      const f = scaleFactor(scale);
+      pendingTap = { x: (cssX - WINDOW_PAD) / f, y: (cssY - WINDOW_PAD) / f };
+      lastInteractionAt = Date.now();
     },
     async mount(el, s) {
       if (m) throw new Error('scene already mounted');

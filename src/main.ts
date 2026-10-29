@@ -25,6 +25,8 @@ import { hungerLabel } from './sim';
 
 /** HUD stays visible this long after the pointer leaves the hit regions (contract rule 3). */
 const HUD_GRACE_MS = 400;
+/** A press that moves less than this before release is a tap on the glass, not the start of a drag. */
+const TAP_SLOP_PX = 4;
 /**
  * macOS window collection-behaviour bits, for decoding the layering read-back into something readable.
  *
@@ -197,6 +199,9 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   const audio = initAudio();
   const reducedMotion = prefersReducedMotion();
   scene.setView(toSceneView(initial, reducedMotion));
+  // The needs model feeds the behaviour: asked once per tick with whether the pet is napping.
+  scene.setDrivesSource((napping) => store.getState().actions.drives(napping));
+  scene.on('bite', () => store.getState().actions.poke('bite'));
 
   // 3. UI components and wiring.
   let hud: HudHandle | null = null;
@@ -259,8 +264,15 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   // Pointer: HUD visible while inside (400 ms grace before hiding); the scene gets window-local CSS px.
   let grace: ReturnType<typeof setTimeout> | null = null;
   let lastPointer: PointerState | null = null;
+  let wasInside = false;
   platform.window.onPointer((p: PointerState) => {
     lastPointer = p;
+    // Presence is an attention event: arriving spends curiosity and may earn a greeting; leaving
+    // re-anchors the needs as "alone". Edge-triggered, because the poller repeats while inside.
+    if (p.inside !== wasInside) {
+      wasInside = p.inside;
+      store.getState().actions.setPresence(p.inside);
+    }
     if (p.inside) {
       if (grace !== null) {
         clearTimeout(grace);
@@ -284,11 +296,32 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   platform.window.onMoved((g) => scene.setResolution(g.scaleFactor));
 
   // Drag from the canvas only (rule 4); #ui children stop propagation of their own mousedown.
+  //
+  // The drag starts on the first MOVEMENT past a few px, not on the press. A press-and-release with
+  // no movement is a TAP ON THE GLASS, which the pet reacts to (a jolt of stress, a startle), and a
+  // drag handed to the window server on mousedown swallowed the mouseup, so a tap could never be
+  // told from the start of a drag.
   const canvas = app.querySelector<HTMLCanvasElement>('canvas');
+  let press: { x: number; y: number } | null = null;
   canvas?.addEventListener('mousedown', (e: MouseEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
+    press = { x: e.clientX, y: e.clientY };
+  });
+  window.addEventListener('mousemove', (e: MouseEvent) => {
+    if (press === null) return;
+    if (Math.hypot(e.clientX - press.x, e.clientY - press.y) < TAP_SLOP_PX) return;
+    press = null;
     platform.window.startDrag().catch(logRejected('startDrag'));
+  });
+  window.addEventListener('mouseup', (e: MouseEvent) => {
+    if (press === null || e.button !== 0) return;
+    press = null;
+    store.getState().actions.poke('tap');
+    scene.tap(e.clientX, e.clientY);
+  });
+  window.addEventListener('blur', () => {
+    press = null;
   });
   app.addEventListener('contextmenu', (e: Event) => {
     e.preventDefault();

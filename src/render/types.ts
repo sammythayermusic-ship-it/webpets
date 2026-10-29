@@ -1,6 +1,7 @@
 // Render contract types. Implementation in ./scene.ts etc. (owner: render builder).
 
 import type { Habitat, HungerLabel, Personality, Rect, Rng, Species } from '../sim/types';
+import type { Drives } from '../sim/needs';
 import type { Scale, TrayChipSize } from '../sim/constants';
 
 export type { Rect };
@@ -217,6 +218,14 @@ export interface HabitatScene {
   setPointer(x: number | null, y: number | null): void;
   on(event: SceneEvent, cb: () => void): () => void;
   /**
+   * Where the behaviour's drives come from, asked once per simulation tick with whether the pet is
+   * currently napping (for the nap hysteresis). Null means no needs model: the behaviour falls back
+   * to its pre-needs defaults.
+   */
+  setDrivesSource(src: ((napping: boolean) => Drives) | null): void;
+  /** A tap on the glass at window-local CSS px: handed to the behaviour on its next step. */
+  tap(cssX: number, cssY: number): void;
+  /**
    * Take the `speciesData` counters earned since the last call, and reset them.
    *
    * A drain rather than an event because these tick at 8 Hz in fractions — the hamster banks about a
@@ -324,6 +333,16 @@ export interface PetInput {
    */
   attract: { x: number; y: number; strength: number } | null;
   rng: Rng;
+  /**
+   * What the pet wants to do about its needs (`src/sim/needs.ts`): how much to move, whether to come
+   * to the glass, hide, nap, greet, or visit the surface. Optional so a caller with no needs model
+   * (the older tests, a bare scene) gets the pre-needs behaviour; the scene always supplies it.
+   */
+  drives?: Drives;
+  /** Shows in how the pet moves, not only in what it says. Defaults to 'zen' when absent. */
+  personality?: Personality;
+  /** A tap on the glass since the last tick, grid px. One-shot: present on exactly one step. */
+  tap?: { x: number; y: number };
 }
 
 export interface PetOutput {

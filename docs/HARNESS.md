@@ -70,6 +70,7 @@ its own so the next command lands inside the clip.
 | `resetClock` | – | `dev.resetClock()` |
 | `pointer` | `{ x, y }` or `{ x: null }` | `scene.setPointer` in window-local CSS px, without moving the real mouse |
 | `poke` | `{ kind }` | a needs stimulus: `tap` (a knock on the glass), `bite`, `feed`, `pointer`; data has the needs after |
+| `setNeeds` | `{ energy?, curiosity?, comfort?, stress? }` | `dev.setNeeds`: re-anchor any of the four needs (0..1) at now, for scripting a tired, bored, rattled or settled pet |
 | `presence` | `{ present }` | `actions.setPresence`: the pointer arrived (a stimulus; a greeting after a long absence) or left |
 | `snapshot` | `{ name }` | `scene.snapshot()` → `out/<name>.png`; data `{ file, bytes }` |
 | `stats` | `{ seconds }` | samples `debugState().advances/.steps` across the window: `{ advancesPerSec, stepsPerSec, fps, visibility, renderMs, elapsedMs }` |

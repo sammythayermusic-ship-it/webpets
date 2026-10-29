@@ -249,6 +249,17 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
         saveSettings();
         tick();
       },
+      setNeeds(values) {
+        const s = get();
+        const at = now();
+        const n = advanceNeeds(s.needs, at, regimeNow(regimeSource(), at));
+        const pick = (k: 'energy' | 'curiosity' | 'comfort' | 'stress') => {
+          const v = values[k];
+          return v === undefined || !Number.isFinite(v) ? n[k] : { value: Math.max(0, Math.min(1, v)), at };
+        };
+        set({ needs: { ...n, energy: pick('energy'), curiosity: pick('curiosity'), comfort: pick('comfort'), stress: pick('stress') } });
+        savePet();
+      },
       setNightOverride(night) {
         const s = get();
         set({ nightOverride: night, night: resolveNight(s.settings.dayNight, night, now()) });
