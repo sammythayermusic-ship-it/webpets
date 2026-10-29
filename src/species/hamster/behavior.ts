@@ -12,7 +12,9 @@
 // this site, then do the thing that happens there".
 
 import type { MoveBounds, PetAnim, PetBehavior, PetInput, PetOutput } from '../../render/types';
-import type { HungerLabel } from '../../sim/types';
+import type { HungerLabel, Personality } from '../../sim/types';
+import type { Drives } from '../../sim/needs';
+import { dartSpeed } from '../../sim/motion';
 import { CAGE_SITES, siteX } from './layout';
 
 /** Ticks the eat animation is held after a bite. */
@@ -37,7 +39,8 @@ const ARRIVE_EPS = 2;
  * `available` is what stops a hamster miming at an empty hopper or running on an empty stomach.
  */
 interface Errand {
-  readonly site: string;
+  /** Where it happens; null means right where the hamster stands (a groom). */
+  readonly site: string | null;
   readonly minTicks: number;
   readonly maxTicks: number;
   /** Chance per tick of choosing this one while idle. */
@@ -82,7 +85,37 @@ const ERRANDS: readonly Errand[] = [
     // consumed seed while miming would break the economy. It mimes.
     available: (i) => i.pantryFraction > 0,
   },
+  {
+    // A groom, wherever it happens to be standing: the same head-down one-shot as a drink, held a
+    // little longer. It is what a hamster does between everything else, and it is the one errand
+    // that needs no site, which is why `site` became nullable.
+    site: null,
+    minTicks: 12,
+    maxTicks: 28,
+    urge: 0.004,
+    anim: 'eat',
+    available: () => true,
+  },
 ];
+
+/** With no needs model wired: a rested, settled hamster. */
+const DEFAULT_DRIVES: Drives = { activity: 0.65, approach: 1, hide: 0, nap: false, greet: false, surface: 0 };
+
+/** Pace and restlessness per personality; the rest of a personality's effect on motion comes through the drives. */
+const PACE: Readonly<Record<Personality, { pace: number; hang: number }>> = {
+  zen: { pace: 0.85, hang: 1.3 },
+  sarcastic: { pace: 1.0, hang: 1.0 },
+  anxious: { pace: 1.1, hang: 0.8 },
+  degen: { pace: 1.2, hang: 0.5 },
+};
+
+/** How far toward something interesting a wander target can be pulled, at full strength. */
+const ATTRACT_MAX = 0.55;
+/** A startle: peak speed and the ticks it takes to bleed. */
+const STARTLE_PEAK = 4.5;
+const STARTLE_TICKS = 8;
+/** A greeting dash's speed. */
+const GREET_SPEED = 3.6;
 
 /** Ticks the hamster potters after any errand before it may want another. */
 const ERRAND_COOLDOWN = 40;
@@ -174,6 +207,11 @@ export function createHamsterBehavior(): PetBehavior {
   let errandCooldown = 0;
   let wanderTo = 0;
   let wanderTicks = 0;
+  /** A startle in progress: which way it runs and how many ticks it has been running. */
+  let startle: { dir: 1 | -1; tick: number } | null = null;
+  /** A greeting dash in progress, toward this x. */
+  let greetTo: number | null = null;
+  let greeted = false;
 
   const reset = (): void => {
     inited = false;
@@ -190,6 +228,9 @@ export function createHamsterBehavior(): PetBehavior {
     speed = 0;
     pauseTicks = 0;
     tripScale = 1;
+    startle = null;
+    greetTo = null;
+    greeted = false;
   };
 
   const init = (bounds: MoveBounds, halfW: number, halfH: number): void => {
@@ -212,6 +253,11 @@ export function createHamsterBehavior(): PetBehavior {
     const halfW = body.w / 2;
     const halfH = body.h / 2;
     if (!inited) init(bounds, halfW, halfH);
+    const drives = input.drives ?? DEFAULT_DRIVES;
+    const pers = PACE[input.personality ?? 'zen'];
+    const attract = input.attract && input.attract.strength > 0 ? input.attract : null;
+    /** The pace this hamster walks at right now: hunger, how rested it is, and who it is. */
+    const pace = (label: HungerLabel): number => walkSpeed(label) * (0.55 + 0.6 * drives.activity) * pers.pace;
     if (turnCooldown > 0) turnCooldown -= 1;
     if (eatTicks > 0) eatTicks -= 1;
     if (errandCooldown > 0) errandCooldown -= 1;
@@ -259,9 +305,11 @@ export function createHamsterBehavior(): PetBehavior {
         }
       }
       anim = input.label === 'hungry' || input.label === 'starving' ? 'hungry' : 'idle';
-    } else if (input.asleep) {
-      // ---- asleep: nap in the bedding pile
+    } else if (input.asleep || drives.nap) {
+      // ---- asleep at night, or napping in daylight when worn out: the bedding pile
       stopErrand();
+      startle = null;
+      greetTo = null;
       nx = moveTowardX(x, siteX(CAGE_SITES.bed ?? bounds.rect), 1.2);
       anim = 'sleep';
       lockFacing = true;
@@ -279,9 +327,33 @@ export function createHamsterBehavior(): PetBehavior {
       // Facing the camera is not expressible in a left/right facing, so the sprite's `hungry` state
       // carries the front-on pose and the facing is simply held rather than flipped at the hopper.
       if (Math.abs(nx - hopper) <= ARRIVE_EPS) lockFacing = true;
+    } else if (input.tap || startle !== null) {
+      // ---- a tap on the glass: a startled run away from it, then a stop to collect itself
+      stopErrand();
+      greetTo = null;
+      if (input.tap && startle === null) startle = { dir: x >= input.tap.x ? 1 : -1, tick: 0 };
+      if (startle !== null) {
+        const burst = dartSpeed(startle.tick, STARTLE_PEAK, STARTLE_TICKS);
+        startle.tick += 1;
+        speed = burst;
+        nx = moveTowardX(x, x + startle.dir * 80, burst);
+        if (startle.tick > STARTLE_TICKS * 1.5) {
+          startle = null;
+          pauseTicks = PAUSE_MAX_TICKS;
+        }
+      }
+    } else if (greetTo !== null) {
+      // ---- a greeting: a dash to the bars where the pointer is
+      stopErrand();
+      speed = ramp(speed, GREET_SPEED * pers.pace);
+      nx = moveTowardX(x, greetTo, speed);
+      if (Math.abs(nx - greetTo) <= ARRIVE_EPS) {
+        greetTo = null;
+        pauseTicks = PAUSE_MIN_TICKS;
+      }
     } else if (errand !== null) {
       // ---- on an errand: walking to it, then doing it for a while
-      const target = siteX(CAGE_SITES[errand.site] ?? bounds.rect);
+      const target = errand.site === null ? x : siteX(CAGE_SITES[errand.site] ?? bounds.rect);
       if (!errand.available(input)) {
         // Checked every tick, not only on arrival: the hopper can empty and a belly can empty while
         // the hamster is halfway there, and standing at an empty hopper miming a mouthful is worse
@@ -295,7 +367,7 @@ export function createHamsterBehavior(): PetBehavior {
         if (errand.site === 'wheel') ranThisTick = WHEEL_KM_PER_TICK * wheelRate(input.hunger);
         if (errandTicks === 0) stopErrand();
       } else {
-        speed = ramp(speed, walkSpeed(input.label));
+        speed = ramp(speed, pace(input.label));
         nx = moveTowardX(x, target, speed);
         if (Math.abs(nx - target) <= ARRIVE_EPS) {
           errandTicks = errand.minTicks + Math.floor(rng() * (errand.maxTicks - errand.minTicks));
@@ -303,9 +375,18 @@ export function createHamsterBehavior(): PetBehavior {
       }
     } else {
       // ---- content: potter about on the bedding, and now and then go and do something
+      if (drives.greet && !greeted && attract) {
+        greeted = true;
+        greetTo = attract.x;
+      }
+      if (!drives.greet) greeted = false;
+      // Errands come more often to a lively animal; the hopper calls louder the more it wants the
+      // surface-equivalent (a peckish hamster checks its food), and a hiding one does nothing but hide.
+      const urgeOf = (e: Errand): number =>
+        e.urge * (0.5 + drives.activity) * (e.site === 'hopper' ? 1 + 2 * drives.surface : 1) * (drives.hide > 0.3 ? 0 : 1);
       const wanted =
-        errandCooldown === 0
-          ? (ERRANDS.find((e) => e.available(input) && rng() < e.urge) ?? null)
+        errandCooldown === 0 && greetTo === null
+          ? (ERRANDS.find((e) => e.available(input) && rng() < urgeOf(e)) ?? null)
           : null;
       if (wanted) {
         errand = wanted;
@@ -319,16 +400,25 @@ export function createHamsterBehavior(): PetBehavior {
           wanderTo = bounds.rect.x + rng() * bounds.rect.w;
           // Re-rolled per trip, so successive crossings of the same bedding are not identical.
           tripScale = 0.75 + rng() * 0.45;
+          // A hiding hamster keeps to the bedding pile; a curious one bends its wander toward the
+          // pointer at the bars, never straight to it.
+          if (drives.hide > 0.3) {
+            const bed = siteX(CAGE_SITES.bed ?? bounds.rect);
+            wanderTo = bed + (wanderTo - bed) * (1 - 0.8 * Math.min(1, drives.hide));
+          } else if (attract) {
+            const k = Math.min(1, attract.strength * drives.approach) * ATTRACT_MAX;
+            wanderTo += (attract.x - wanderTo) * k;
+          }
         }
         // Stopping to sniff. A hamster that walks without ever pausing reads as machinery however
         // good the walk cycle is -- and these are also the only moments the mood poses can surface,
         // now that moving has a state of its own.
         if (pauseTicks > 0) {
           pauseTicks -= 1;
-        } else if (rng() < PAUSE_CHANCE) {
+        } else if (rng() < PAUSE_CHANCE * (1.4 - drives.activity) * pers.hang) {
           pauseTicks = PAUSE_MIN_TICKS + Math.floor(rng() * (PAUSE_MAX_TICKS - PAUSE_MIN_TICKS));
         }
-        const want = pauseTicks > 0 ? 0 : walkSpeed(input.label) * tripScale;
+        const want = pauseTicks > 0 ? 0 : pace(input.label) * tripScale;
         speed = ramp(speed, want);
         nx = moveTowardX(x, wanderTo, speed);
       }
