@@ -1183,3 +1183,37 @@ Committed as a checkpoint first; `*.blend1` and `__pycache__/` added to `.gitign
   shadow, instead of a hard 1024-texel blob of four legs.
 - Measuring while other agents run Blender on the Metal GPU gives numbers that are not this
   renderer's; the stats in the report say what else was running.
+
+## 2026-10-28 — bake-off candidate B: second round of looks, in the WebKit dev window
+
+A `tauri dev` build of the harness (its own bundle id, `com.sammythayer.webpets.bakeoff-b-dev`,
+pointed at the vite server) gives a WebKit window that reloads on every save and answers the same
+harness ops; that is the loop that replaced a 90–150 s packaged build per look. Chrome in the
+Browser pane was tried first and dropped: its tab is hidden most of the time, and a hidden Chrome
+tab throttles the diag poll to once a minute.
+
+- `RoomEnvironment` came back on the glass as three blown-out white discs (its light panels in a
+  glossy sphere). Replaced by `environment.ts`: a sky-to-floor gradient dome, one large soft window
+  up and to the left, a dim warm panel behind-right, a faint cool panel front-right. Quieter glass,
+  and the same map lights the fish's eyes and the water's top.
+- Without those reflections the empty upper glass was almost invisible against the desktop, so the
+  near glass has a Fresnel rim (emissive rises with `(1 - n·v)^3`, and so does its alpha) — the
+  silhouette of real glass catches the room however dark the room is.
+- Caustics were invisible at the first wave numbers (62 rad/m: two cells across the bed) and then
+  far too strong once raised. Now 230 and 150 rad/m (2.7 cm and 4 cm cells), with the strength a
+  parameter per material: 0.45 on the bed, pebbles, plants and memorial, 0.18 on the fish's skin.
+- The water's side faces now refract at 0.4× the look's roughness and the top at a 0.14 floor: the
+  fish reads sharp through the side, the surface is a soft streak. The dead look's 0.42 still fogs.
+- Flakes: per-instance colours came out white in the packaged webview (the crumb program compiles
+  before the first feed, with no instance colour attribute yet), so all crumbs share one warm
+  emissive material. They are 8 grid px across because the behaviour clears a feed in about one
+  second (BITE_RANGE 12, one bite per tick), the same as under Pixi: a crumb has to be seen in the
+  moment it exists.
+- The lite tier's water was a 42 % sheet of the near-white volume colour, which made everything
+  behind it milky; it is now the attenuation colour at 30 % over the teal wall. It is a tint, not
+  real water, and it says so in the report.
+- The auto tier probe measured one window at launch and locked. With two other agents building and
+  rendering on the same machine, a launch under load chose lite for the rest of the session and the
+  first recorded clip is lite without anyone asking for it. The probe now runs in ten-second windows
+  for the whole session: under 45 advances/s drops to lite, a lite window at 58/s or better at least
+  a minute after a drop promotes back to full. `VITE_WEBPETS_LIVE_TIER=full|lite` still pins it.
