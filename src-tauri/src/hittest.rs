@@ -41,6 +41,9 @@ use crate::window::MAIN_WINDOW;
 pub const POINTER_POLL_MS: u64 = 50;
 /// Re-read the primary monitor's scale factor every this many polls (~1 s).
 const PRIMARY_SF_REFRESH_POLLS: u32 = 20;
+/// Check every this many polls (~0.5 s) whether the window is on the active Space but counted as
+/// occluded, and re-order it front if so. See `window::nudge_occluded`.
+const OCCLUSION_CHECK_POLLS: u32 = 10;
 
 /// Mirrors `PointerState` in `src/platform/types.ts`.
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -97,6 +100,13 @@ pub fn spawn(app: AppHandle) {
             if polls % PRIMARY_SF_REFRESH_POLLS == 1 {
                 if let Ok(Some(m)) = app.primary_monitor() {
                     primary_sf = m.scale_factor();
+                }
+            }
+            if polls % OCCLUSION_CHECK_POLLS == 3 {
+                match crate::window::nudge_occluded(&app) {
+                    Ok(true) => eprintln!("[webpets] window was on the active Space but counted occluded; re-ordered it front"),
+                    Ok(false) => {}
+                    Err(e) => eprintln!("[webpets] occlusion check failed: {e}"),
                 }
             }
             let (Ok(cursor), Ok(pos), Ok(size), Ok(sf)) = (

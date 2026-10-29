@@ -1287,3 +1287,20 @@ hamster, both verified with harness clips in the installed app.
 ### what stays fixed
 `PetOutput` is unchanged: a grid position, a facing, an anim and a bite. The spine, the plates and
 the water pass do not know any of this exists; they only see a fish that moves better.
+
+### a window shown under a fullscreen Space stays "hidden" to WebKit — fixed in the shell
+
+Found while recording step 2 (and independently by the B builder): the harness app, launched while
+a fullscreen browser Space was active, came on screen when the Space changed yet kept
+`document.visibilityState === 'hidden'`, so `requestAnimationFrame` stayed off, the worker pacer
+drove ~15 fps and the harness poll was clamped to once a minute. Every command timed out as "never
+picked up". Relaunching on a desktop Space fixed it, which is a workaround for a script and no fix
+for a user whose pet starts at login behind a fullscreen app.
+
+The cause is the window server's occlusion state: the window was ordered in while not on the active
+Space, stays flagged occluded after it arrives, and WebKit never re-evaluates. The shell now checks
+every half second (from the cursor poller it already runs) whether the window is visible, on the
+active Space, and NOT counted visible by the window server, and re-orders it front with
+`orderFrontRegardless` — no activation, the app is an Accessory. One line in the log when it
+happens. This is also the first real cause behind "the packaged app runs at 15 fps" that reproduces
+on demand.

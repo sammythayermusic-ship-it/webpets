@@ -16,7 +16,7 @@ use tauri::{
 use tauri_plugin_store::StoreExt;
 
 #[cfg(target_os = "macos")]
-use objc2_app_kit::{NSNormalWindowLevel, NSStatusWindowLevel, NSWindow, NSWindowCollectionBehavior};
+use objc2_app_kit::{NSNormalWindowLevel, NSStatusWindowLevel, NSWindow, NSWindowCollectionBehavior, NSWindowOcclusionState};
 
 use crate::state::ShellState;
 
@@ -647,6 +647,55 @@ pub fn layering_readback(_app: &AppHandle) -> Result<(i64, u64), String> {
     Ok((0, 0))
 }
 
+
+/// Re-orders the window front if it is on the active Space but the window server does not count it
+/// as visible. Called from the cursor poller every half second while the window is shown.
+///
+/// Why this exists: a window shown while a *fullscreen* Space is active (a pet launched at login
+/// behind a fullscreen app, or a build started from a fullscreen terminal) is on every Space by its
+/// collection behaviour, yet when the user switches to a desktop Space it comes on screen with the
+/// window server still reporting it occluded. WebKit reads that occlusion state, keeps the document
+/// `hidden`, stops `requestAnimationFrame` and clamps timers — the 15 fps case from checkpoint 0 —
+/// and nothing in the app ever shows the window again to make it re-evaluate. Ordering it front
+/// once it is actually on the active Space is that nudge. `orderFrontRegardless` because the app is
+/// an Accessory and must not activate.
+///
+/// Returns whether a nudge happened, so the caller can log it exactly once per occurrence.
+#[cfg(target_os = "macos")]
+pub fn nudge_occluded(app: &AppHandle) -> Result<bool, String> {
+    let window = main_window(app)?;
+    let handle = window.clone();
+    let (tx, rx) = std::sync::mpsc::channel::<bool>();
+    window
+        .run_on_main_thread(move || {
+            let Ok(ptr) = handle.ns_window() else {
+                let _ = tx.send(false);
+                return;
+            };
+            // SAFETY: as in `apply_layering`.
+            let nudged = unsafe {
+                let ns: &NSWindow = &*ptr.cast::<NSWindow>();
+                let on_space = ns.isOnActiveSpace();
+                let visible = ns.isVisible();
+                let counted_visible = ns.occlusionState().contains(NSWindowOcclusionState::Visible);
+                if visible && on_space && !counted_visible {
+                    ns.orderFrontRegardless();
+                    true
+                } else {
+                    false
+                }
+            };
+            let _ = tx.send(nudged);
+        })
+        .map_err(err)?;
+    rx.recv_timeout(std::time::Duration::from_millis(500))
+        .map_err(|e| format!("occlusion check timed out: {e}"))
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn nudge_occluded(_app: &AppHandle) -> Result<bool, String> {
+    Ok(false)
+}
 
 /// Shows the window without focusing it. Never calls `set_focus`: with the Accessory activation
 /// policy `show()` orders the window front without activating the app.
