@@ -1247,3 +1247,43 @@ first shortfall — the fish is a toy — and that is geometry and a rig, not a 
 Merge note: the only conflict was this file (both sides appended entries); both are kept in order.
 `three` is now a dependency of the mainline (C's one addition). The evidence for A and B is copied
 in compact form under `docs/reports/bakeoff/{a,b}/`; C's full set came with the merge.
+
+## 2026-10-28 — Step 2 plan: pet behaviour on the hybrid
+
+The needs model and the motion primitives are already on the mainline (two entries above); the
+scene now draws a live fish whose spine reads the behaviour's speed and facing. Step 2 is the part
+in between: a behaviour that *uses* the drives, and the plumbing that feeds it. Fish first, then the
+hamster, both verified with harness clips in the installed app.
+
+### plan
+1. **Plumbing.** `PetInput` gains `drives` (from `store.actions.drives(napping)`) and `personality`.
+   The scene asks the store for drives once per tick. Pointer entering and leaving the habitat
+   becomes `setPresence`; a bite becomes `poke('bite')`; a **tap on the glass** becomes
+   `poke('tap')`. A tap is a mousedown followed by a mouseup with no movement, which means the window
+   drag can no longer start on mousedown: it starts on the first mousemove past a few px, as every
+   draggable thing does. A harness op `setNeeds` lets a script put the pet in any state of need.
+2. **Fish motion planner.** The wander stops being a figure-eight. The fish picks waypoints inside
+   the water (biased by the drives: activity sets range and pace, approach pulls toward the glass
+   near the pointer, hide pulls behind the plant and down to the gravel, surface pulls to the
+   waterline), swims each leg as an ARC sampled by distance (`motion.arc`), with a heading that has
+   momentum (`motion.turn`) and a speed with inertia (`motion.approachSpeed`), so turns sweep, stops
+   have weight and no two legs are alike (`motion.noise1` seeds the bulge and the pauses). Darts are
+   `motion.dartSpeed` bursts: a greeting is a dart to the glass, a startle (a tap) a dart away, a
+   flake a lunge. Surface gulps: rise, hang, gape, sink. Naps: when `drives.nap`, settle to the
+   gravel and sleep in daylight until rested. Personality in motion, not in words: zen = long slow
+   arcs and few darts; degen = short legs, many darts, surface visits; anxious = edge-hugging, quick
+   retreats, hides after one tap; sarcastic = ignores the pointer until curious, then parks at the
+   glass and stares.
+3. **Hamster.** Same drives through the existing errand table: activity sets walk pace and errand
+   frequency; nap is a daylight sleep in the bedding; hide is the bedding pile; approach is the near
+   bars; greet is a run to the bars. Sniff pauses between legs (a short stop with the nose up, the
+   `idle` art) and a groom (the `eat` art, already a one-shot) as errands with no site. The wheel runs
+   at the activity's pace. Secondary motion (ears, cheeks) is step 4.
+4. **Evidence.** Harness scripts under `tools/bakeoff/`-style `tools/scripts/`: `fish-day.json`
+   (rested, curious, pointer arrives after an absence, a tap, a feed), `fish-tired.json` (energy set
+   low: nap and wake), `hamster-day.json`. Clips and stills to `docs/reports/step-2/`, judged against
+   "no visible loop" and "reacts to me", fixed, re-recorded.
+
+### what stays fixed
+`PetOutput` is unchanged: a grid position, a facing, an anim and a bite. The spine, the plates and
+the water pass do not know any of this exists; they only see a fish that moves better.
