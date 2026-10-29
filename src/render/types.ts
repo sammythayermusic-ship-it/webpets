@@ -2,6 +2,7 @@
 
 import type { Habitat, HungerLabel, Personality, Rect, Rng, Species } from '../sim/types';
 import type { Drives } from '../sim/needs';
+import type { Daylight } from '../app/daynight';
 import type { Scale, TrayChipSize } from '../sim/constants';
 
 export type { Rect };
@@ -37,6 +38,9 @@ export interface ManifestLayer {
    * is NOT tinted — the crossfade is its night — so the two mechanisms never stack.
    */
   night?: string;
+  /** Step 3: the same layer under first light and last light, crossfaded by the time of day. */
+  dawn?: string;
+  dusk?: string;
 }
 
 /** Ellipse-ish water body: ellipse (cx, cy, rx, ry) clipped to surfaceY <= y <= floorY. Grid px. */
@@ -198,6 +202,8 @@ export interface SceneView {
   /** pantry > 0 && pantryDays < PANTRY_LOW_DAYS */
   pantryLow: boolean;
   night: boolean;
+  /** The four light sets' weights by the local hour (`src/app/daynight.ts`); `night` is this past its midpoint. */
+  daylight: Daylight;
   reducedMotion: boolean;
   /** night && alive */
   asleep: boolean;

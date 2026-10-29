@@ -19,6 +19,9 @@ DEST = sys.argv[2]
 SHADOW_OPACITY = 0.52
 SHADOW_TINT = np.array([0.055, 0.060, 0.080], dtype=np.float32)
 NIGHT_SHADOW_TINT = np.array([0.02, 0.025, 0.06], dtype=np.float32)
+# Long, warm-edged shadows: the step-3 dawn and dusk sets.
+DAWN_SHADOW_TINT = np.array([0.07, 0.05, 0.08], dtype=np.float32)
+DUSK_SHADOW_TINT = np.array([0.08, 0.045, 0.05], dtype=np.float32)
 EPS = 1e-6
 
 
@@ -56,7 +59,7 @@ def bbox(a, thr):
     return [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())]
 
 
-def build(variant, suffix, night):
+def build(variant, suffix, night, tint=None):
     src = os.path.join(STAGE, variant)
     b_rgb, b_a = load(os.path.join(src, "_bg_shadow.png"))
     c_rgb, c_a = load(os.path.join(src, "_bg_clean.png"))
@@ -71,7 +74,8 @@ def build(variant, suffix, night):
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     fall = np.clip(1.0 - (((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2), 0.0, 1.0) ** 1.35
     s_a = raw * fall * SHADOW_OPACITY * (0.8 if night else 1.0)
-    s_rgb = np.broadcast_to(NIGHT_SHADOW_TINT if night else SHADOW_TINT, (h, w, 3)).copy()
+    base_tint = tint if tint is not None else (NIGHT_SHADOW_TINT if night else SHADOW_TINT)
+    s_rgb = np.broadcast_to(base_tint, (h, w, 3)).copy()
     c_rgb = un_composite(c_rgb, g_rgb, g_a)
     bg_rgb, bg_a = over(c_rgb, c_a, s_rgb, s_a)
     if variant == "memorial":
@@ -87,7 +91,14 @@ def build(variant, suffix, night):
 
 
 res = []
-for variant, suffix, night in (("day", "", False), ("night", "_night", True), ("memorial", "", False)):
+VARIANTS = (
+    ("day", "", False, None),
+    ("night", "_night", True, None),
+    ("dawn", "_dawn", False, DAWN_SHADOW_TINT),
+    ("dusk", "_dusk", False, DUSK_SHADOW_TINT),
+    ("memorial", "", False, None),
+)
+for variant, suffix, night, tint in VARIANTS:
     if os.path.isdir(os.path.join(STAGE, variant)):
-        res.append(build(variant, suffix, night))
+        res.append(build(variant, suffix, night, tint))
 print(json.dumps(res, indent=1))

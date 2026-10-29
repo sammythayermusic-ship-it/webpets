@@ -37,7 +37,7 @@ import type {
 import { createPersistence, defaultGraveyard, defaultSettings, migratePetDoc, PET_VERSION, type Persistence } from './persistence';
 import { speciesModule } from '../species';
 import { decide } from './notifications';
-import { resolveNight } from './daynight';
+import { PURE_DAY, resolveDaylight, resolveNight } from './daynight';
 import { advanceNeedsTo, regimeNow } from './needsBridge';
 import type { RegimeSource } from './needsBridge';
 
@@ -138,6 +138,7 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
         latches: decision.latches,
         hunger: derivedHunger(r.state, at),
         night: resolveNight(s.settings.dayNight, s.nightOverride, at),
+        daylight: resolveDaylight(s.settings.dayNight, s.nightOverride, at),
         lastFeedEvent,
         needs,
       };
@@ -262,7 +263,7 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
       },
       setNightOverride(night) {
         const s = get();
-        set({ nightOverride: night, night: resolveNight(s.settings.dayNight, night, now()) });
+        set({ nightOverride: night, night: resolveNight(s.settings.dayNight, night, now()), daylight: resolveDaylight(s.settings.dayNight, night, now()) });
       },
       async setSpecies(species, habitat) {
         // Was a hardcoded `!== 'fish' || !== 'bowl'`. Now it asks the registry, so a species becomes
@@ -335,6 +336,7 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
           lastFeedEvent: null,
           hunger: derivedHunger(pet, at),
           night: resolveNight(settings.dayNight, get().nightOverride, at),
+          daylight: resolveDaylight(settings.dayNight, get().nightOverride, at),
           // A pet saved before needs existed wakes rested and settled, anchored at the moment it is
           // read. Anchoring at `at` rather than at its lastReconciledAt is deliberate: nothing is owed
           // for the time before the model existed.
@@ -442,7 +444,7 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
 
       setDayNight(mode) {
         const settings: SettingsDoc = { ...get().settings, dayNight: mode };
-        set({ settings, night: resolveNight(mode, get().nightOverride, now()) });
+        set({ settings, night: resolveNight(mode, get().nightOverride, now()), daylight: resolveDaylight(mode, get().nightOverride, now()) });
         saveSettings();
       },
 
@@ -515,6 +517,7 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
       lastFeedEvent: null,
       hunger: 100,
       night: false,
+      daylight: PURE_DAY,
       nightOverride: null,
       needs: defaultNeeds(Date.now()),
       present: false,

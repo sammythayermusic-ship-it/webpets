@@ -93,6 +93,7 @@ export function toChipView(
     pantryFraction: Math.max(0, Math.min(1, pet.pantry / PANTRY_VISUAL_MAX)),
     pantryLow: pet.pantry > 0 && days < PANTRY_LOW_DAYS,
     night: s.night,
+    daylight: s.daylight,
     reducedMotion,
     asleep: s.night && pet.alive,
   };

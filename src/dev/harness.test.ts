@@ -67,6 +67,7 @@ function fakeState(actions: AppActions): AppState {
     lastFeedEvent: null,
     hunger: 100,
     night: false,
+    daylight: { dawn: 0, day: 1, dusk: 0, night: 0 },
     nightOverride: null,
     needs: defaultNeeds(B),
     present: false,

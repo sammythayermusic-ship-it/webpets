@@ -6,6 +6,7 @@ import type { FeedResult, GraveRecord, Habitat, PetState, SimEvent, Species } fr
 import type { Drives, NeedsState, Stimulus } from '../sim/needs';
 import type { Scale } from '../sim/constants';
 import type { Layering } from '../platform/types';
+import type { Daylight } from './daynight';
 
 export type DayNightMode = 'auto' | 'day' | 'night';
 
@@ -156,6 +157,8 @@ export interface AppState {
   hunger: number;
   /** True when the scene should render night (settings + local sunset, or dev override). */
   night: boolean;
+  /** The four light sets' weights for the same moment and settings; `night` is its night past 0.5. */
+  daylight: Daylight;
   /** Dev panel override; null = follow settings. */
   nightOverride: boolean | null;
   /** The pet's needs, anchored at the last tick or stimulus. Persisted inside the pet document. */

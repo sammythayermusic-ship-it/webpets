@@ -11,7 +11,9 @@
           "name": "bg",
           "file": "habitats/fish/bowl/bg.png",
           "z": 0,
-          "night": "habitats/fish/bowl/bg_night.png"
+          "night": "habitats/fish/bowl/bg_night.png",
+          "dawn": "habitats/fish/bowl/bg_dawn.png",
+          "dusk": "habitats/fish/bowl/bg_dusk.png"
         },
         {
           "name": "memorial",
@@ -34,13 +36,17 @@
           "name": "decor_front",
           "file": "habitats/fish/bowl/decor_front.png",
           "z": 0,
-          "night": "habitats/fish/bowl/decor_front_night.png"
+          "night": "habitats/fish/bowl/decor_front_night.png",
+          "dawn": "habitats/fish/bowl/decor_front_dawn.png",
+          "dusk": "habitats/fish/bowl/decor_front_dusk.png"
         },
         {
           "name": "glass",
           "file": "habitats/fish/bowl/glass.png",
           "z": 0,
-          "night": "habitats/fish/bowl/glass_night.png"
+          "night": "habitats/fish/bowl/glass_night.png",
+          "dawn": "habitats/fish/bowl/glass_dawn.png",
+          "dusk": "habitats/fish/bowl/glass_dusk.png"
         }
       ],
       "water": {

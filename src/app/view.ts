@@ -46,6 +46,7 @@ export function toSceneView(s: AppState, prefersReducedMotion: boolean): SceneVi
     pantryFraction: clamp01(pet.pantry / PANTRY_VISUAL_MAX),
     pantryLow: pet.pantry > 0 && pantryDays(pet.pantry) < PANTRY_LOW_DAYS,
     night: s.night,
+    daylight: s.daylight,
     reducedMotion: prefersReducedMotion,
     asleep: s.night && pet.alive,
   };

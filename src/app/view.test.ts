@@ -65,9 +65,11 @@ describe('view + daynight', () => {
   it('isNightAt uses the local hour', () => {
     const d = new Date(2026, 0, 1, 12, 0, 0);
     expect(isNightAt(d.getTime())).toBe(false);
-    expect(isNightAt(new Date(2026, 0, 1, 6, 59, 0).getTime())).toBe(true);
+    // Night is the light curve past its midpoint: it lifts at 06:00 and falls at 18:45.
+    expect(isNightAt(new Date(2026, 0, 1, 5, 50, 0).getTime())).toBe(true);
     expect(isNightAt(new Date(2026, 0, 1, 19, 0, 0).getTime())).toBe(true);
-    expect(isNightAt(new Date(2026, 0, 1, 7, 0, 0).getTime())).toBe(false);
+    expect(isNightAt(new Date(2026, 0, 1, 6, 10, 0).getTime())).toBe(false);
+    expect(isNightAt(new Date(2026, 0, 1, 18, 40, 0).getTime())).toBe(false);
     expect(resolveNight('night', null, d.getTime())).toBe(true);
     expect(resolveNight('day', null, d.getTime())).toBe(false);
     expect(resolveNight('day', true, d.getTime())).toBe(true);

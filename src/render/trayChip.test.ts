@@ -15,6 +15,7 @@ function view(over: Partial<SceneView> = {}): SceneView {
     pantryFraction: 1,
     pantryLow: false,
     night: false,
+    daylight: { dawn: 0, day: 1, dusk: 0, night: 0 },
     reducedMotion: false,
     asleep: false,
     ...over,

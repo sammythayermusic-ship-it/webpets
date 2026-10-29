@@ -2,7 +2,12 @@
 
     Blender -b wp_scene.blend -P c_plates.py -- <stage_dir> <variants> <samples>
 
-variants: comma separated from  day,night,memorial   (default all three)
+variants: comma separated from  day,night,dawn,dusk,memorial   (default day,night,memorial)
+
+Step 3 added dawn and dusk: the same geometry under a low, warm key that has MOVED — to the
+right-front at dawn, to the left-back at dusk — with long shadows, a dim cool fill and a dimmer, tinted
+world. The app crossfades the four sets by the local hour, so the light changes direction through the
+day rather than only colour.
 
 Same five-pass scheme as wp_render2.py's bowl job (it is proven, and finish2.un_composite depends on
 it), with two differences that are the whole point of the candidate:
@@ -19,6 +24,7 @@ delivered PNGs under assets/habitats/fish/bowl/.
 import os
 import sys
 import bpy
+from mathutils import Vector
 
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 OUT = ARGS[0] if ARGS else "/tmp/wp3d-c"
@@ -113,6 +119,30 @@ def only_collection(*names):
 
 # ------------------------------------------------------------------ lighting
 LIGHT_DAY = {}
+LIGHT_POSE = {}
+# Where the lights look: the middle of the water.
+AIM = Vector((0.0, 0.0, 0.25))
+
+
+def remember_poses():
+    for name in ("LGT_key", "LGT_fill", "LGT_rim"):
+        o = bpy.data.objects[name]
+        LIGHT_POSE[name] = (tuple(o.location), tuple(o.rotation_euler))
+
+
+def restore_poses():
+    for name, (loc, rot) in LIGHT_POSE.items():
+        o = bpy.data.objects[name]
+        o.location = loc
+        o.rotation_euler = rot
+
+
+def aim_light(name, loc):
+    """Move a light and point its -Z at the water, which is what an area light shines along."""
+    o = bpy.data.objects[name]
+    o.location = loc
+    direction = AIM - Vector(loc)
+    o.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
 
 
 def remember_lights():
@@ -145,7 +175,33 @@ def rig(variant):
     key, fill, rim = (bpy.data.objects[n].data for n in ("LGT_key", "LGT_fill", "LGT_rim"))
     bounce = bounce_light().data
     w = sc.world.node_tree.nodes.get("Background")
-    if variant == "night":
+    restore_poses()
+    if variant == "dawn":
+        # First light: a low, small, pink-gold sun from the right and the front, so the shadows are
+        # long and fall left across the bed; the sky is still cool, so the fill is blue and the world
+        # dim. The rim is a faint cold edge from behind.
+        aim_light("LGT_key", (1.05, -0.55, 0.30))
+        key.energy, key.color, key.size = 95.0, (1.0, 0.74, 0.56), 0.42
+        fill.energy, fill.color = 10.0, (0.55, 0.70, 1.0)
+        rim.energy, rim.color = 18.0, (0.6, 0.78, 1.0)
+        bounce.energy, bounce.color = 4.0, (1.0, 0.8, 0.7)
+        if w is not None:
+            s, c = LIGHT_DAY["world"]
+            w.inputs["Strength"].default_value = s * 0.45
+            w.inputs["Color"].default_value = (c[0] * 0.85, c[1] * 0.9, c[2] * 1.0, 1.0)
+    elif variant == "dusk":
+        # Last light: a low orange sun from the left and behind, raking across the glass toward the
+        # viewer; a violet fill from the sky's other half; the world warm and dim.
+        aim_light("LGT_key", (-1.0, 0.35, 0.28))
+        key.energy, key.color, key.size = 110.0, (1.0, 0.58, 0.32), 0.40
+        fill.energy, fill.color = 9.0, (0.62, 0.52, 0.95)
+        rim.energy, rim.color = 30.0, (1.0, 0.62, 0.40)
+        bounce.energy, bounce.color = 5.0, (1.0, 0.72, 0.5)
+        if w is not None:
+            s, c = LIGHT_DAY["world"]
+            w.inputs["Strength"].default_value = s * 0.35
+            w.inputs["Color"].default_value = (c[0] * 1.0, c[1] * 0.8, c[2] * 0.7, 1.0)
+    elif variant == "night":
         # Moonlight: one cool, soft, dim key from high left; a faint violet fill; a cyan rim from behind
         # that keeps the glass edge readable against a dark desk. Ambient falls to a blue trace.
         key.energy, key.color, key.size = 16.0, (0.62, 0.72, 1.0), 1.1
@@ -276,6 +332,7 @@ def bowl_passes(stage, memorial=False):
 print("WP_GPU %s" % (use_gpu(),), flush=True)
 base()
 remember_lights()
+remember_poses()
 for v in VARIANTS:
     if v == "memorial":
         rig("day")
