@@ -59,10 +59,15 @@ def load(path):
     return a[:, :, :3].copy(), a[:, :, 3].copy()
 
 
-def save(rgb, alpha, path):
+def save(rgb, alpha, path, fast=False):
+    """`fast` skips zlib's optimiser: right for the hundreds of loop frames that only feed ffmpeg
+    or ship inside a video, where the PNG's byte count is nobody's concern."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     out = np.clip(np.dstack([rgb, alpha]) * 255.0 + 0.5, 0, 255).astype(np.uint8)
-    Image.fromarray(out).save(path, optimize=True)
+    if fast:
+        Image.fromarray(out).save(path, compress_level=1)
+    else:
+        Image.fromarray(out).save(path, optimize=True)
     return path
 
 
@@ -171,9 +176,10 @@ def build_loop(loop_dir, glass_name, out_name):
         crop_a = a[y:y + h, x:x + w]
         # Sequence and alpha video: the clip baked in, so neither needs the runtime mask (it is
         # still declared; a stencil costs nothing). Opaque video: straight RGB over black.
-        save(crop_rgb, crop_a * ell, os.path.join(seq_dir, "%s_%04d.png" % (out_name, i)))
-        save(crop_rgb, crop_a * ell, os.path.join(tmp_rgba, "f_%04d.png" % i))
-        save(crop_rgb * crop_a[:, :, None], np.ones_like(crop_a), os.path.join(tmp_rgb, "f_%04d.png" % i))
+        if LOOP_KIND == "frames":
+            save(crop_rgb, crop_a * ell, os.path.join(seq_dir, "%s_%04d.png" % (out_name, i)))
+        save(crop_rgb, crop_a * ell, os.path.join(tmp_rgba, "f_%04d.png" % i), fast=True)
+        save(crop_rgb * crop_a[:, :, None], np.ones_like(crop_a), os.path.join(tmp_rgb, "f_%04d.png" % i), fast=True)
     return {"frames": len(frames), "seq_dir": seq_dir, "rgba": tmp_rgba, "rgb": tmp_rgb}
 
 

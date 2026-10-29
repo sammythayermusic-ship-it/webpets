@@ -46,6 +46,11 @@ def base(samples):
     c.volume_bounces = 2
     c.sample_clamp_indirect = 30.0
     c.blur_glossy = 0.2
+    # film_transparent_glass (the glass passes) keeps any transmissive surface rougher than this
+    # OPAQUE. Cycles' default is 0.1 and the glass's rim roughness rises to 0.11 (a_look.py), which
+    # painted the outer ~80 px of the front glass as a solid grey annulus. Everything transmissive
+    # here is meant to be see-through, so the threshold is lifted out of the way.
+    c.film_transparent_roughness = 1.0
     # caustics_reflective/refractive are left to the scene (a_look.py turns them off; see there).
     c.denoising_input_passes = 'RGB_ALBEDO_NORMAL'
     c.denoising_prefilter = 'ACCURATE'
