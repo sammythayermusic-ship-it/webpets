@@ -3,6 +3,7 @@
     Blender -b assets/3d/wp_scene-a-look.blend -P assets/3d/scripts/a_render.py -- <stage_dir> <jobs> [samples]
 
 jobs, comma separated:
+  glass    the two glass passes (day, night) alone at 160 samples: alpha is not denoised
   plates   the day bowl: _full, _bg_shadow, _mask, _glass (the clean bg plate is loop frame 0)
   night    the night bowl: _nbg_shadow, _nbg_clean, _nglass under WP_RigNight and the night world
   memorial the day memorial backdrop: _mem_shadow, _mem_clean
@@ -164,7 +165,13 @@ def loop_pass(stage, prefix, night):
     sc.render.use_crop_to_border = False
     sc.render.border_min_x, sc.render.border_max_x, sc.render.border_min_y, sc.render.border_max_y = LOOP_BORDER
     for i in range(LOOP_N):
-        C.shoot("CAM_bowl", BOWL_RES, os.path.join(stage, prefix, "%s_%04d.png" % (prefix.strip("/"), i + 1)), frame=LOOP + i)
+        path = os.path.join(stage, prefix, "%s_%04d.png" % (prefix.strip("/"), i + 1))
+        # Resumable: a loop is an hour of GPU and a session can be cut off in the middle of it. A
+        # frame that is already on disk is the same frame (same scene file, same seed) and is kept.
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            print("WP_KEPT %s" % path, flush=True)
+            continue
+        C.shoot("CAM_bowl", BOWL_RES, path, frame=LOOP + i)
     sc.render.use_border = False
     CATCHER.hide_render = False
     reset()
@@ -183,6 +190,26 @@ if "plates" in JOBS:
 
 if "night" in JOBS:
     bowl_passes(stage, "_n", night=True)
+
+if "glass" in JOBS:
+    # The glass passes alone at a higher sample count. Their alpha is the Fresnel of a transparent
+    # film and the denoiser does not touch alpha, so at 32 samples the front glass is a static grain
+    # over everything behind it; two frames at 160 cost a minute and the grain is gone.
+    old = sc.cycles.samples
+    sc.cycles.samples = 160
+    sc.cycles.adaptive_min_samples = 160
+    for prefix, night in (("_", False), ("_n", True)):
+        reset()
+        C.show_collections("WP_Bowl", "WP_RigNight" if night else "WP_Rig")
+        C.rig(night)
+        sc.cycles.film_transparent_glass = True
+        set_material(GLASS, "WP_glass_front")
+        for o in MESHES:
+            o.hide_render = (o.name != "ENV_bowl_glass")
+        C.shoot("CAM_bowl", BOWL_RES, os.path.join(stage, prefix + "glass.png"), frame=LOOP)
+        reset()
+    sc.cycles.samples = old
+    sc.cycles.adaptive_min_samples = min(64, old)
 
 if "memorial" in JOBS:
     reset()

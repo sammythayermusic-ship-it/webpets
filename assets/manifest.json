@@ -237,7 +237,7 @@
         80,
         80
       ],
-      "fps": 12,
+      "fps": 24,
       "body": {
         "w": 50,
         "h": 32
@@ -258,7 +258,118 @@
               "sprites/fish/idle/idle_0009.png",
               "sprites/fish/idle/idle_0010.png",
               "sprites/fish/idle/idle_0011.png",
-              "sprites/fish/idle/idle_0012.png"
+              "sprites/fish/idle/idle_0012.png",
+              "sprites/fish/idle/idle_0013.png",
+              "sprites/fish/idle/idle_0014.png",
+              "sprites/fish/idle/idle_0015.png",
+              "sprites/fish/idle/idle_0016.png",
+              "sprites/fish/idle/idle_0017.png",
+              "sprites/fish/idle/idle_0018.png",
+              "sprites/fish/idle/idle_0019.png",
+              "sprites/fish/idle/idle_0020.png",
+              "sprites/fish/idle/idle_0021.png",
+              "sprites/fish/idle/idle_0022.png",
+              "sprites/fish/idle/idle_0023.png",
+              "sprites/fish/idle/idle_0024.png"
+            ]
+          },
+          "frames": 24,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        },
+        "eat": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/fish/eat/eat_0001.png",
+              "sprites/fish/eat/eat_0002.png",
+              "sprites/fish/eat/eat_0003.png",
+              "sprites/fish/eat/eat_0004.png",
+              "sprites/fish/eat/eat_0005.png",
+              "sprites/fish/eat/eat_0006.png",
+              "sprites/fish/eat/eat_0007.png",
+              "sprites/fish/eat/eat_0008.png",
+              "sprites/fish/eat/eat_0009.png",
+              "sprites/fish/eat/eat_0010.png",
+              "sprites/fish/eat/eat_0011.png",
+              "sprites/fish/eat/eat_0012.png",
+              "sprites/fish/eat/eat_0013.png",
+              "sprites/fish/eat/eat_0014.png",
+              "sprites/fish/eat/eat_0015.png",
+              "sprites/fish/eat/eat_0016.png"
+            ]
+          },
+          "frames": 16,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "loop": false,
+          "returnTo": "idle",
+          "anchor": [
+            0.08,
+            -0.01
+          ]
+        },
+        "sleep": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/fish/sleep/sleep_0001.png",
+              "sprites/fish/sleep/sleep_0002.png",
+              "sprites/fish/sleep/sleep_0003.png",
+              "sprites/fish/sleep/sleep_0004.png",
+              "sprites/fish/sleep/sleep_0005.png",
+              "sprites/fish/sleep/sleep_0006.png",
+              "sprites/fish/sleep/sleep_0007.png",
+              "sprites/fish/sleep/sleep_0008.png",
+              "sprites/fish/sleep/sleep_0009.png",
+              "sprites/fish/sleep/sleep_0010.png",
+              "sprites/fish/sleep/sleep_0011.png",
+              "sprites/fish/sleep/sleep_0012.png"
             ]
           },
           "frames": 12,
@@ -276,64 +387,9 @@
             10,
             11
           ],
-          "loop": true
-        },
-        "eat": {
-          "source": {
-            "kind": "sequence",
-            "files": [
-              "sprites/fish/eat/eat_0001.png",
-              "sprites/fish/eat/eat_0002.png",
-              "sprites/fish/eat/eat_0003.png",
-              "sprites/fish/eat/eat_0004.png",
-              "sprites/fish/eat/eat_0005.png",
-              "sprites/fish/eat/eat_0006.png",
-              "sprites/fish/eat/eat_0007.png",
-              "sprites/fish/eat/eat_0008.png"
-            ]
-          },
-          "frames": 8,
-          "sequence": [
-            0,
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7
-          ],
-          "loop": false,
-          "returnTo": "idle",
-          "anchor": [
-            0.13,
-            -0.01
-          ]
-        },
-        "sleep": {
-          "source": {
-            "kind": "sequence",
-            "files": [
-              "sprites/fish/sleep/sleep_0001.png",
-              "sprites/fish/sleep/sleep_0002.png",
-              "sprites/fish/sleep/sleep_0003.png",
-              "sprites/fish/sleep/sleep_0004.png",
-              "sprites/fish/sleep/sleep_0005.png",
-              "sprites/fish/sleep/sleep_0006.png"
-            ]
-          },
-          "frames": 6,
-          "sequence": [
-            0,
-            1,
-            2,
-            3,
-            4,
-            5
-          ],
           "loop": true,
           "anchor": [
-            -0.47,
+            -0.46,
             1.95
           ]
         },
@@ -348,10 +404,18 @@
               "sprites/fish/hungry/hungry_0005.png",
               "sprites/fish/hungry/hungry_0006.png",
               "sprites/fish/hungry/hungry_0007.png",
-              "sprites/fish/hungry/hungry_0008.png"
+              "sprites/fish/hungry/hungry_0008.png",
+              "sprites/fish/hungry/hungry_0009.png",
+              "sprites/fish/hungry/hungry_0010.png",
+              "sprites/fish/hungry/hungry_0011.png",
+              "sprites/fish/hungry/hungry_0012.png",
+              "sprites/fish/hungry/hungry_0013.png",
+              "sprites/fish/hungry/hungry_0014.png",
+              "sprites/fish/hungry/hungry_0015.png",
+              "sprites/fish/hungry/hungry_0016.png"
             ]
           },
-          "frames": 8,
+          "frames": 16,
           "sequence": [
             0,
             1,
@@ -360,11 +424,19 @@
             4,
             5,
             6,
-            7
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
           ],
           "loop": true,
           "anchor": [
-            -0.31,
+            -0.3,
             4.87
           ]
         },
@@ -377,17 +449,29 @@
               "sprites/fish/dead/dead_0003.png",
               "sprites/fish/dead/dead_0004.png",
               "sprites/fish/dead/dead_0005.png",
-              "sprites/fish/dead/dead_0006.png"
+              "sprites/fish/dead/dead_0006.png",
+              "sprites/fish/dead/dead_0007.png",
+              "sprites/fish/dead/dead_0008.png",
+              "sprites/fish/dead/dead_0009.png",
+              "sprites/fish/dead/dead_0010.png",
+              "sprites/fish/dead/dead_0011.png",
+              "sprites/fish/dead/dead_0012.png"
             ]
           },
-          "frames": 6,
+          "frames": 12,
           "sequence": [
             0,
             1,
             2,
             3,
             4,
-            5
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
           ],
           "loop": true,
           "anchor": [
@@ -406,10 +490,18 @@
               "sprites/fish/happy/happy_0005.png",
               "sprites/fish/happy/happy_0006.png",
               "sprites/fish/happy/happy_0007.png",
-              "sprites/fish/happy/happy_0008.png"
+              "sprites/fish/happy/happy_0008.png",
+              "sprites/fish/happy/happy_0009.png",
+              "sprites/fish/happy/happy_0010.png",
+              "sprites/fish/happy/happy_0011.png",
+              "sprites/fish/happy/happy_0012.png",
+              "sprites/fish/happy/happy_0013.png",
+              "sprites/fish/happy/happy_0014.png",
+              "sprites/fish/happy/happy_0015.png",
+              "sprites/fish/happy/happy_0016.png"
             ]
           },
-          "frames": 8,
+          "frames": 16,
           "sequence": [
             0,
             1,
@@ -418,11 +510,19 @@
             4,
             5,
             6,
-            7
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
           ],
           "loop": true,
           "anchor": [
-            0.23,
+            0.13,
             -1.96
           ]
         },
@@ -437,10 +537,18 @@
               "sprites/fish/excited/excited_0005.png",
               "sprites/fish/excited/excited_0006.png",
               "sprites/fish/excited/excited_0007.png",
-              "sprites/fish/excited/excited_0008.png"
+              "sprites/fish/excited/excited_0008.png",
+              "sprites/fish/excited/excited_0009.png",
+              "sprites/fish/excited/excited_0010.png",
+              "sprites/fish/excited/excited_0011.png",
+              "sprites/fish/excited/excited_0012.png",
+              "sprites/fish/excited/excited_0013.png",
+              "sprites/fish/excited/excited_0014.png",
+              "sprites/fish/excited/excited_0015.png",
+              "sprites/fish/excited/excited_0016.png"
             ]
           },
-          "frames": 8,
+          "frames": 16,
           "sequence": [
             0,
             1,
@@ -449,11 +557,19 @@
             4,
             5,
             6,
-            7
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
           ],
           "loop": true,
           "anchor": [
-            0.58,
+            0.32,
             -0.01
           ]
         },
@@ -466,21 +582,33 @@
               "sprites/fish/curious/curious_0003.png",
               "sprites/fish/curious/curious_0004.png",
               "sprites/fish/curious/curious_0005.png",
-              "sprites/fish/curious/curious_0006.png"
+              "sprites/fish/curious/curious_0006.png",
+              "sprites/fish/curious/curious_0007.png",
+              "sprites/fish/curious/curious_0008.png",
+              "sprites/fish/curious/curious_0009.png",
+              "sprites/fish/curious/curious_0010.png",
+              "sprites/fish/curious/curious_0011.png",
+              "sprites/fish/curious/curious_0012.png"
             ]
           },
-          "frames": 6,
+          "frames": 12,
           "sequence": [
             0,
             1,
             2,
             3,
             4,
-            5
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
           ],
           "loop": true,
           "anchor": [
-            -0.98,
+            -0.99,
             -2.11
           ]
         }

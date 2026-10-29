@@ -25,7 +25,7 @@ describe('parseManifest', () => {
     const fish = m.sprites['fish'];
     // The LOGICAL frame. The art is a whole multiple of it, derived from the texture at load time.
     expect(fish?.frame).toEqual([80, 80]);
-    expect(fish?.fps, 'the art has its own rate, independent of the 8 Hz simulation tick').toBe(12);
+    expect(fish?.fps, 'the art was rendered at 24 fps, independent of the 8 Hz simulation tick').toBe(24);
     expect(Object.keys(fish?.states ?? {}).sort()).toEqual([
       'curious', 'dead', 'eat', 'excited', 'happy', 'hungry', 'idle', 'sleep',
     ]);

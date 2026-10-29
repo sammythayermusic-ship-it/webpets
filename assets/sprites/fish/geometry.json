@@ -6,7 +6,7 @@
  "camera": "CAM_fish",
  "projection": "orthographic",
  "mmPerPx": 0.50391,
- "fps": 12,
+ "fps": 24,
  "facing": "right",
  "bodyBox": [
   106.2,
@@ -168,5 +168,16 @@
  "_projected": [
   "bodyBox",
   "anchor"
- ]
+ ],
+ "frames_perState": {
+  "idle": 24,
+  "eat": 16,
+  "sleep": 12,
+  "hungry": 16,
+  "dead": 12,
+  "happy": 16,
+  "excited": 16,
+  "curious": 12
+ },
+ "_note_24fps": "candidate A: every 12 fps key frame plus the half-frame between (linear interpolation of the rig)"
 }
