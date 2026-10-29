@@ -1,0 +1,19 @@
+{
+  "comment": "Step 2, fish: three taps in a row on an anxious day: it hides by the plant and the floor, then settles. 24 s at Medium.",
+  "steps": [
+    { "op": "force", "state": "fed" },
+    { "op": "night", "value": false },
+    { "op": "presence", "present": true },
+    { "op": "pointer", "x": 344, "y": 300 },
+    { "op": "setNeeds", "energy": 0.9, "curiosity": 0.3, "comfort": 0.7, "stress": 0 },
+    { "op": "sleep", "ms": 1000 },
+    { "op": "record", "name": "fish-rattled", "seconds": 24, "fps": 60 },
+    { "op": "sleep", "ms": 3000 },
+    { "op": "poke", "kind": "tap" },
+    { "op": "sleep", "ms": 1500 },
+    { "op": "poke", "kind": "tap" },
+    { "op": "sleep", "ms": 1500 },
+    { "op": "poke", "kind": "tap" },
+    { "op": "sleep", "ms": 18500 }
+  ]
+}

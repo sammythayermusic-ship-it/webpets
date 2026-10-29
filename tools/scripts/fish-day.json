@@ -1,0 +1,24 @@
+{
+  "comment": "Step 2, fish: a rested curious fish, the pointer arrives after an absence (greeting), a tap (startle), a feed, then it is left alone. 30 s at Medium.",
+  "steps": [
+    { "op": "force", "state": "fed" },
+    { "op": "night", "value": false },
+    { "op": "setBalance", "n": 1000 },
+    { "op": "setNeeds", "energy": 1, "curiosity": 1, "comfort": 0.8, "stress": 0 },
+    { "op": "presence", "present": false },
+    { "op": "pointer", "x": null },
+    { "op": "sleep", "ms": 1500 },
+    { "op": "record", "name": "fish-day", "seconds": 30, "fps": 60 },
+    { "op": "sleep", "ms": 4000 },
+    { "op": "presence", "present": true },
+    { "op": "pointer", "x": 120, "y": 300 },
+    { "op": "sleep", "ms": 6000 },
+    { "op": "poke", "kind": "tap" },
+    { "op": "sleep", "ms": 5000 },
+    { "op": "feed" },
+    { "op": "sleep", "ms": 7000 },
+    { "op": "presence", "present": false },
+    { "op": "pointer", "x": null },
+    { "op": "sleep", "ms": 7500 }
+  ]
+}

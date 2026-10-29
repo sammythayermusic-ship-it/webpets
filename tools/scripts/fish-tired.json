@@ -1,0 +1,15 @@
+{
+  "comment": "Step 2, fish: worn out at midday: settles to the gravel and naps; then rested again. 24 s at Medium.",
+  "steps": [
+    { "op": "force", "state": "fed" },
+    { "op": "night", "value": false },
+    { "op": "presence", "present": false },
+    { "op": "pointer", "x": null },
+    { "op": "setNeeds", "energy": 0.05, "curiosity": 0.2, "comfort": 0.8, "stress": 0 },
+    { "op": "sleep", "ms": 1000 },
+    { "op": "record", "name": "fish-tired", "seconds": 24, "fps": 60 },
+    { "op": "sleep", "ms": 12000 },
+    { "op": "setNeeds", "energy": 1 },
+    { "op": "sleep", "ms": 12500 }
+  ]
+}
