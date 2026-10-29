@@ -180,28 +180,39 @@ function advancePlate(p: Plate, deltaMS: number): void {
   }
 }
 
+/** Play or pause one video, seeking to `twin`'s time first when it resumes beside a running twin. */
+function wantVideo(v: HTMLVideoElement, playing: boolean, twin: HTMLVideoElement | null): void {
+  if (playing && v.paused) {
+    if (twin && !twin.paused) v.currentTime = twin.currentTime;
+    void v.play().catch(() => undefined);
+  } else if (!playing && !v.paused) {
+    v.pause();
+  }
+}
+
 /**
- * Keep a night video and its day twin in step while only ONE of them decodes.
+ * Keep a night video and its day twin in step while only ONE of them decodes, and neither while
+ * the page cannot be seen.
  *
  * Both clips are the same loop under different light, so the one that is fully faded out can stop;
  * when it is needed again it is seeked to its twin's time before it plays, which lands within a
  * frame of the right phase -- invisible under a two-second crossfade, and it halves the steady-state
- * decode cost. Called every tick; cheap when nothing changes.
+ * decode cost. A hidden document (the window hidden with Cmd+Shift+P, or off every screen) pauses
+ * both: the decoder does not know nobody is watching, and measured on the packaged app it kept the
+ * GPU process at ~10% of a core for a bowl nobody could see. Called every tick; cheap when nothing
+ * changes.
  */
-function syncVideoPair(day: Plate, night: Plate, nightT: number): void {
+function syncVideoPair(day: Plate, night: Plate | null, nightT: number, visible: boolean): void {
   const d = day.video;
-  const n = night.video;
-  if (!d || !n) return;
-  const want = (v: HTMLVideoElement, twin: HTMLVideoElement, playing: boolean): void => {
-    if (playing && v.paused) {
-      v.currentTime = twin.currentTime;
-      void v.play().catch(() => undefined);
-    } else if (!playing && !v.paused) {
-      v.pause();
-    }
-  };
-  want(n, d, nightT > 0);
-  want(d, n, nightT < 1);
+  const n = night?.video ?? null;
+  if (!d) return;
+  if (n) wantVideo(n, visible && nightT > 0, d);
+  wantVideo(d, visible && (n === null || nightT < 1), n);
+}
+
+/** Whether anyone could see the page. True where there is no document (tests, a worker). */
+function docVisible(): boolean {
+  return typeof document === 'undefined' || document.visibilityState !== 'hidden';
 }
 
 export function buildLayers(
@@ -379,7 +390,7 @@ export function buildLayers(
       if (!n) continue;
       n.sprite.alpha = nightT;
       n.sprite.visible = nightT > 0;
-      if (day.video && n.video) syncVideoPair(day, n, nightT);
+      if (day.video) syncVideoPair(day, n, nightT, docVisible());
     }
     // The pet, its food and the bubbles are lit by the day render whatever the hour. With real night
     // plates behind them a full-brightness fish would glow; a mild dim keeps it in the same room.
@@ -398,6 +409,14 @@ export function buildLayers(
 
   applyWorldTint();
   applyPantry();
+
+  /** The videos follow the page's visibility; the tint path only re-evaluates them when it changes. */
+  const onVisibility = (): void => {
+    const visible = docVisible();
+    for (const { day, night: n } of pairs) if (day.video) syncVideoPair(day, n, nightT, visible);
+  };
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibility);
+  onVisibility();
 
   return {
     root,
@@ -467,6 +486,7 @@ export function buildLayers(
       }
     },
     destroy() {
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibility);
       root.destroy({ children: true });
     },
   };
