@@ -1,6 +1,6 @@
 // Manifest schema validation + fetch. Pure (no Pixi) so it is testable in node.
 
-import type { FrameSource, LayerName, Manifest, ManifestHabitat, ManifestLayer, ManifestSprite, ManifestSpriteState } from './types';
+import type { FrameSource, LayerName, LiveSpec, Manifest, ManifestHabitat, ManifestLayer, ManifestSprite, ManifestSpriteState } from './types';
 import type { Rect } from '../sim/types';
 
 export const MANIFEST_URL = '/manifest.json';
@@ -122,6 +122,10 @@ function layer(v: unknown, path: string): ManifestLayer {
   if (!LAYER_NAMES.has(name)) throw new ManifestError(`${path}.name`, `unknown layer "${name}"`);
   const out: ManifestLayer = { name: name as LayerName, z: num(v['z'], `${path}.z`) };
   if (v['file'] !== undefined) out.file = assetPath(v['file'], `${path}.file`);
+  if (v['night'] !== undefined) {
+    if (out.file === undefined) throw new ManifestError(`${path}.night`, 'a night variant needs a day file');
+    out.night = assetPath(v['night'], `${path}.night`);
+  }
   if (v['blend'] !== undefined) {
     const b = v['blend'];
     if (b !== 'normal' && b !== 'multiply') throw new ManifestError(`${path}.blend`, 'expected "normal" | "multiply"');
@@ -152,6 +156,16 @@ function habitat(v: unknown, path: string): ManifestHabitat {
     ...(v['pantryRect'] === undefined ? {} : { pantryRect: rect(v['pantryRect'], `${path}.pantryRect`) }),
     petAnchor: pair(v['petAnchor'], `${path}.petAnchor`),
     opaqueRect: rect(v['opaqueRect'], `${path}.opaqueRect`),
+    ...(v['live'] === undefined ? {} : { live: liveKind(v['live'], `${path}.live`) }),
+  };
+}
+
+function liveKind(v: unknown, path: string): LiveSpec {
+  if (!isRecord(v)) throw new ManifestError(path, 'expected a live layer object');
+  if (v['kind'] !== 'fish-bowl') throw new ManifestError(`${path}.kind`, 'expected "fish-bowl"');
+  return {
+    kind: 'fish-bowl',
+    ...(v['contents'] === undefined ? {} : { contents: assetPath(v['contents'], `${path}.contents`) }),
   };
 }
 

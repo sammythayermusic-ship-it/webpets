@@ -28,6 +28,14 @@ export interface ManifestLayer {
   /** Sort order within the fixed slot order (ties broken by slot order). */
   z: number;
   blend?: 'normal' | 'multiply';
+  /**
+   * A second rendering of the same layer under night lighting, crossfaded in by the night amount.
+   *
+   * Night used to be a blue tint multiplied over day art. That cannot move a highlight or change
+   * where the light comes from; a plate rendered under a moonlit rig can. A layer with a night file
+   * is NOT tinted — the crossfade is its night — so the two mechanisms never stack.
+   */
+  night?: string;
 }
 
 /** Ellipse-ish water body: ellipse (cx, cy, rx, ry) clipped to surfaceY <= y <= floorY. Grid px. */
@@ -71,6 +79,24 @@ export interface ManifestHabitat {
   petAnchor: [number, number];
   /** Bounding rect of the habitat's opaque pixels; used for hit regions and hover. */
   opaqueRect: Rect;
+  /**
+   * Which live (real-time 3D) layer this habitat is drawn with, if any. Absent means the habitat is
+   * plates and sprites only. `fish-bowl` is candidate C's water-and-fish layer, drawn between the
+   * back plates and the front glass in the same WebGL context as the plates.
+   */
+  live?: LiveSpec;
+}
+
+/** A habitat's live layer: which one, and the extra plates it needs that no Pixi layer draws. */
+export interface LiveSpec {
+  kind: 'fish-bowl';
+  /**
+   * A grey mask, 4x the grid like the plates: 1 where the bg plate shows a thing (gravel, pebbles,
+   * plants, stand), 0 where it shows the back wall of the empty glass. The plate's own alpha cannot
+   * tell those apart (the glass is opaque to the film), and the water must: a thing is seen through
+   * the water, a bare back wall IS water.
+   */
+  contents?: string;
 }
 
 /**
@@ -234,6 +260,8 @@ export interface HabitatScene {
     stepSkips: number;
     hasView: boolean;
     layerAlpha: Record<string, number>;
+    /** Present only for a habitat with a live layer: its quality tier and the spine's numbers. */
+    live?: { tier: 'full' | 'lean'; spine: Record<string, number> };
   };
   /** PNG data URL of the whole canvas (habitat + shadow) rendered right now; for tests and dev diagnostics. */
   snapshot(): Promise<string>;

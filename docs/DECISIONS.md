@@ -1164,3 +1164,86 @@ and `drives(napping)` is what the scene will hand the behaviour.
 - Found by a test, not by reasoning: the default day/night mode is `auto`, and the test fixture's B is
   an evening in this time zone, so a greeting test with no settings file met an asleep pet. Pinned to
   day; the asleep-does-not-greet rule itself is right.
+## 2026-10-28 — bake-off candidate C: composition, one WebGL2 context
+
+Tried first, kept: Pixi and Three share one WebGL2 context on one canvas. The scene creates the
+canvas and the context itself, hands both to `Application.init({ canvas, context })` and to
+`THREE.WebGLRenderer({ canvas, context })`, and draws a frame as Pixi (back half of the layer stack,
+clear) → `renderer.resetState()` → Three (fish into an MSAA render target, then one full-canvas
+water pass into the default framebuffer) → Pixi `resetState()` → Pixi (front half, no clear). The
+layer stack was split into `root` (bg, medium, decor_back) and `front` (the rest) with the same
+transform, so a habitat without a live layer draws both halves back to back and is pixel-identical
+to before. Verified in the packaged WKWebView build: the harness `record`/`snapshot` see the whole
+picture, the window stays one transparent surface, click-through and the hit regions are untouched.
+The stacked-canvases fallback was not needed and was not built. One wrinkle: Pixi leaves the unpack
+pixel-store flags set, which makes Three's first empty 3D-texture upload warn; the flags are reset
+before Three starts.
+
+## 2026-10-28 — bake-off candidate C: the fish inside the bowl
+
+The plates were rendered for an empty bowl, so the live pass owns everything the water does to what
+is behind the front glass. Measured, then rejected: weighting the bg plate by its alpha squared to
+hide the back wall of the glass. The empty-bowl plate is alpha 1.0 everywhere inside the glass (the
+film treats glass as opaque), so that weight was 1 and the back wall came through as a dark,
+smeared reflection of the gravel: murk. Kept: `c_contents.py` renders a mask of the bowl's things
+(gravel, pebbles, plants, stand) with the glass hidden; the water pass weights the plate by that
+mask (eroded a grid px so the plate's dark anti-aliased fringes go to the water, not to an outline)
+and draws lit water where there is only wall. 20 s of render.
+
+Rejected: leaving `decor_front` to Pixi. It is cut from the same pixels as the bg plate, so any lens
+or ripple the water applied to the plate made the near pebbles and leaves ghost against their own
+refracted copies. Kept: the live pass samples `decor_front` (day and night) itself, at the same lens
+and ripple and at the full front parallax, and composites it over the fish; Pixi's copy is hidden
+when the live layer is active. The lens is a mild magnification toward the centre (1.14) that
+vanishes at the glass, applied to plate, decor and fish alike; a stronger lens (1.19) tore at the
+rim and was rejected.
+
+Caustics: the first version lit the whole dish wall and read as cracked glass. Confined to the bed
+(floorY − 24 .. floorY + 16 grid px) and cut to about a third of the strength.
+
+Parallax bug found on the hover still: the front glass slides with the pointer, the water's clip
+ellipse did not, and a sliver of water showed past the rim. Every edge the water computes (rim,
+waterline, meniscus) now follows the glass offset.
+
+Night: a plate crossfade (bg, decor_front, glass each have a `_night` render under a moonlit rig)
+plus the Three light rig interpolated by the same night amount. First rig made the fish brown-red;
+the key kept some warmth and was raised so the goldfish stays orange under the moon.
+
+Quality tier: `scene.ts` measures the frame cost (EMA of the draw) and drops the live layer to
+`lean` (fish target at half resolution, shafts and caustics dimmed) above 9 ms, back to `full`
+under 4 ms. The stills and clip report which tier was active.
+
+## 2026-10-28 — bake-off candidate C: measured
+
+Packaged `WebPets C.app` (bundle id `com.sammythayer.webpets.bakeoff-c`), driven by the harness,
+Blender finished, the two other candidates building on the same machine: 60 advances/s at Small,
+Medium and Large with 0.6–0.8 ms of draw cost and the `full` tier throughout, so the tier switch is
+a safety net that never fired here. CPU shown at Medium: 22% of a core by the baseline's `ps`
+method (lifetime average), 16% by `top` over 2 s intervals; hidden 2–3%. RSS 275 MB, bundle 26 MB.
+Against checkpoint 0 (21% / 5% / 200 MB / 23 MB): the same CPU, more memory (three plate bitmaps
+and a 4× MSAA target), 3 MB more bundle. The cost sits between a plates-only app and a full
+real-time scene because the only per-pixel work is one water pass and a small fish; nothing
+transmissive, no shadow maps. Report and evidence in `docs/reports/bakeoff/c/`.
+
+## 2026-10-28 — Step 1 decided: the hybrid wins
+
+The three candidates, their scorecards and numbers are in `docs/reports/bakeoff.md`; each branch
+keeps its full evidence. In one line each: A (rendered ceiling) has the best stills and no life; B
+(live 3D) has the most life and a toy for a bowl; C (hybrid) is alive inside a believable bowl at the
+lowest memory and bundle cost. **C is merged into the mainline and everything continues on it.**
+
+Why C and not "B, then make it pretty": the quality bar is real glass and water with a real animal
+in it, and material quality in real time is paid per material in shader hours, while a Cycles plate
+pays it once in render minutes. C already draws the plates and only the moving things live; so the
+two places it falls short — a flat water surface, an opaque back wall — are exactly the two places
+that are live or can be re-rendered, and B has already shown how each is done. A's advantage is the
+same lesson from the other side: its look is worth keeping, its stillness is not.
+
+Carried forward as the first items of steps 3 and 4: a real rippling surface in the water pass and
+a see-through glass plate (from B); the Cycles caustic loop as a baked gravel texture and A's glass
+settings for the plates (from A); and a real fish asset, because all three builders listed the same
+first shortfall — the fish is a toy — and that is geometry and a rig, not a renderer.
+
+Merge note: the only conflict was this file (both sides appended entries); both are kept in order.
+`three` is now a dependency of the mainline (C's one addition). The evidence for A and B is copied
+in compact form under `docs/reports/bakeoff/{a,b}/`; C's full set came with the merge.

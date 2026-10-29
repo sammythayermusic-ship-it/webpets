@@ -10,7 +10,8 @@
         {
           "name": "bg",
           "file": "habitats/fish/bowl/bg.png",
-          "z": 0
+          "z": 0,
+          "night": "habitats/fish/bowl/bg_night.png"
         },
         {
           "name": "memorial",
@@ -32,12 +33,14 @@
         {
           "name": "decor_front",
           "file": "habitats/fish/bowl/decor_front.png",
-          "z": 0
+          "z": 0,
+          "night": "habitats/fish/bowl/decor_front_night.png"
         },
         {
           "name": "glass",
           "file": "habitats/fish/bowl/glass.png",
-          "z": 0
+          "z": 0,
+          "night": "habitats/fish/bowl/glass_night.png"
         }
       ],
       "water": {
@@ -63,6 +66,10 @@
         "y": 22,
         "w": 172,
         "h": 203
+      },
+      "live": {
+        "kind": "fish-bowl",
+        "contents": "habitats/fish/bowl/contents.png"
       }
     },
     "hamster/cage": {

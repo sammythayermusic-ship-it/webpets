@@ -33,6 +33,13 @@ export const SLOT_ORDER = [
 
 export type SlotName = (typeof SLOT_ORDER)[number];
 
+/**
+ * Where the live layer goes: everything up to and including `decor_back` is drawn BEHIND it, the
+ * rest in front. The split is a property of the slot order, not of any habitat, which is what lets
+ * a habitat without a live layer draw both halves back to back and look exactly as it did.
+ */
+export const BACK_SLOTS: readonly SlotName[] = ['bg', 'medium', 'decor_back'];
+
 const SLOT_OF: Readonly<Record<Exclude<LayerName, 'shadow'>, SlotName>> = {
   bg: 'bg',
   memorial: 'bg',
@@ -69,9 +76,16 @@ const BLINK_LOW_ALPHA = 0.6;
 const FOG_ALPHA = 0.5;
 
 export interface LayerStack {
-  /** Render this into the RenderTexture. */
+  /** The back half of the stack: bg (or memorial), medium, decor_back. Positioned by the scene. */
   readonly root: Container;
+  /**
+   * The front half: pantry, pet, food, fx, decor_front, glass, night. The scene gives it the SAME
+   * transform as `root`; a live layer is drawn between the two.
+   */
+  readonly front: Container;
   readonly slots: Readonly<Record<SlotName, Container>>;
+  /** The eased night amount, 0..1, for anything else that lights itself by it. */
+  nightT(): number;
   setPantryFraction(f: number): void;
   setPantryLow(low: boolean): void;
   setNight(on: boolean): void;
@@ -114,15 +128,22 @@ function fileSprite(
 }
 
 export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<string, Texture>): LayerStack {
-  const root = new Container({ label: 'habitat' });
+  const root = new Container({ label: 'habitat:back' });
+  const front = new Container({ label: 'habitat:front' });
   const slots = Object.fromEntries(SLOT_ORDER.map((n) => [n, new Container({ label: `slot:${n}` })])) as Record<SlotName, Container>;
-  for (const n of SLOT_ORDER) root.addChild(slots[n]);
+  for (const n of SLOT_ORDER) (BACK_SLOTS.includes(n) ? root : front).addChild(slots[n]);
 
   let bg: Sprite | null = null;
   let memorial: Sprite | null = null;
   let medium: Sprite | null = null;
   /** Every sprite the world tint applies to: the habitat's own art, whichever variant is showing. */
   const worldSprites: Sprite[] = [];
+  /**
+   * Layers with a rendered night variant: the day sprite and the night sprite drawn over it, whose
+   * alpha IS the night amount. These are excluded from the night tint (they would be lit twice) but
+   * still take the starving tint.
+   */
+  const nightPairs: Array<{ day: Sprite; night: Sprite }> = [];
   let pantryFill: Sprite | null = null;
   /** Art px per grid px for the pantry_fill texture; its crop rect addresses TEXELS, not grid px. */
   let pantryArt = 1;
@@ -175,10 +196,20 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
       default:
         break;
     }
-    if (l.name === 'bg' || l.name === 'memorial' || l.name === 'decor_back' || l.name === 'decor_front' || l.name === 'glass') {
+    slot.addChild(sprite);
+    const isWorld = l.name === 'bg' || l.name === 'memorial' || l.name === 'decor_back' || l.name === 'decor_front' || l.name === 'glass';
+    const nightTex = l.night === undefined ? undefined : textures.get(l.night);
+    if (isWorld && nightTex !== undefined) {
+      const night = new Sprite({ texture: nightTex, label: `${l.name}:night` });
+      night.scale.set(1 / layerArtScale(l.night as string, nightTex, habitat.grid));
+      night.alpha = 0;
+      night.visible = false;
+      if (l.blend === 'multiply') night.blendMode = 'multiply';
+      slot.addChild(night);
+      nightPairs.push({ day: sprite, night });
+    } else if (isWorld) {
       worldSprites.push(sprite);
     }
-    slot.addChild(sprite);
   }
 
   // Programmatic white fog over the water for the dead phase (glass slot, above the glass art).
@@ -249,6 +280,14 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
   const applyWorldTint = (): void => {
     const tint = mixTint(towards(NIGHT_TINT, nightT), towards(STARVING_TINT, starvingT));
     for (const sp of worldSprites) sp.tint = tint;
+    // A rendered night is a crossfade, not a tint. The starving shift still applies to both halves.
+    const starve = towards(STARVING_TINT, starvingT);
+    for (const { day, night } of nightPairs) {
+      day.tint = starve;
+      night.tint = starve;
+      night.alpha = nightT;
+      night.visible = nightT > 0 && day.visible;
+    }
     // A habitat that still ships a painted night overlay keeps working; the bowl no longer has one.
     if (night) {
       night.alpha = nightT;
@@ -261,7 +300,9 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
 
   return {
     root,
+    front,
     slots,
+    nightT: () => nightT,
     setPantryFraction(f) {
       const v = Math.max(0, Math.min(1, Number.isFinite(f) ? f : 0));
       if (v === pantryFraction) return;
@@ -282,6 +323,7 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
       const showMemorial = phase === 'memorial';
       if (bg) bg.visible = !showMemorial || memorial === null;
       if (memorial) memorial.visible = showMemorial;
+      applyWorldTint(); // a night sprite follows its day sprite's visibility
       // The memorial bowl is empty: no water layer over it.
       if (medium) medium.visible = !showMemorial;
       fog.visible = phase === 'dead';
@@ -322,6 +364,7 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
     },
     destroy() {
       root.destroy({ children: true });
+      front.destroy({ children: true });
     },
   };
 }
