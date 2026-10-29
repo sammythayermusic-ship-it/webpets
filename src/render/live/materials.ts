@@ -194,14 +194,28 @@ function addWorldUniforms(shader: WebGLProgramParametersWithUniforms, world: Wor
   );
 }
 
-/** Give a lit material the caustic light term. Returns the same material. */
+/**
+ * What is under water is seen THROUGH water: the thin water shell only refracts, it does not absorb
+ * along the path from the bed to the glass, so the bed's side read bone-dry and blown out below the
+ * waterline. Absorb the albedo by depth under the top face (red first, the way water does) so the bed
+ * and pebbles darken and cool toward the bottom of the bowl.
+ */
+const GLSL_DEPTH_ABSORB = /* glsl */ `
+{
+  float wpDepth = max(uWaterTop - vWpWorld.y, 0.0);
+  diffuseColor.rgb *= exp(-wpDepth * vec3(5.0, 2.2, 1.4));
+}
+`;
+
+/** Give a lit material the caustic light term and the depth absorption. Returns the same material. */
 export function withCaustics<M extends Material>(material: M, world: WorldUniforms): M {
   material.onBeforeCompile = (shader) => {
     addWorldVarying(shader);
     addWorldUniforms(shader, world);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${GLSL_CAUSTIC}`)
-      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${glslCausticApply(0.45)}`);
+      .replace('#include <color_fragment>', `#include <color_fragment>\n${GLSL_DEPTH_ABSORB}`)
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${glslCausticApply(0.28)}`);
   };
   material.customProgramCacheKey = () => 'wp-caustic';
   material.needsUpdate = true;
@@ -357,14 +371,16 @@ export function createGlassFrontMaterial(): MeshPhysicalMaterial {
   // the emissive so it rides on top of the (quiet) environment reflection and shows against any
   // desktop. The alpha rises with it so the rim also dims what is behind, the way an edge-on wall of
   // glass does.
+  // A fifth power and a lower gain: the third power at 0.34 drew a wide white halo around the whole
+  // bowl (and a white band at the lip) that read as a frosted outline, not as an edge of glass.
   m.onBeforeCompile = (shader) => {
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <emissivemap_fragment>',
       `#include <emissivemap_fragment>
 {
-  float wpFr = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 3.0);
-  totalEmissiveRadiance += vec3(0.78, 0.9, 1.0) * wpFr * 0.34;
-  diffuseColor.a = clamp(diffuseColor.a + wpFr * 0.3, 0.0, 1.0);
+  float wpFr = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 5.0);
+  totalEmissiveRadiance += vec3(0.78, 0.9, 1.0) * wpFr * 0.18;
+  diffuseColor.a = clamp(diffuseColor.a + wpFr * 0.16, 0.0, 1.0);
 }`,
     );
   };
