@@ -1217,3 +1217,27 @@ tab throttles the diag poll to once a minute.
   first recorded clip is lite without anyone asking for it. The probe now runs in ten-second windows
   for the whole session: under 45 advances/s drops to lite, a lite window at 58/s or better at least
   a minute after a drop promotes back to full. `VITE_WEBPETS_LIVE_TIER=full|lite` still pins it.
+
+## 2026-10-28 — bake-off candidate B: final measurements, the halo and the bed
+
+- The window of the app launched under a fullscreen Space never joined the desktop Space that came
+  after it (`onscreen: false` in `CGWindowListCopyWindowInfo`, `visibilityState` hidden), and a
+  hidden WKWebView throttles `setInterval` to about once a minute: harness `force`/`night` timed
+  out as "never picked up" while `state` still answered eventually. Relaunching the app on a desktop
+  Space fixed it; the candidate's measurements were all taken that way. Noted for the harness
+  docs: if `state` says hidden, relaunch before trusting any number.
+- The Large still showed two things worth one contained change: the front glass's Fresnel rim
+  (third power at 0.34, alpha +0.3) drew a white halo the width of a finger around the whole bowl,
+  and the bed's side below the waterline was bone-white under the caustic web, because the water is
+  a thin refracting shell and nothing absorbed the light on the way from the bed to the glass.
+  Now: rim at the fifth power, 0.18, alpha +0.16; the materials that take caustics multiply their
+  albedo by `exp(-depth · (5, 2.2, 1.4)/m)` under the top face; caustic strength 0.28 (was 0.45).
+  Judged on the new stills: the bed reads as wet gravel in shade, the rim is an edge. The empty
+  glass above the water still captures as a white band in a transparent PNG; composited over a desk
+  grey (`still-medium-on-desk.png`) it is a translucent sheen, which is what the compositor draws.
+- Numbers (stats.json): 60 advances/s and 60 fps at all three scales in the packaged app, full
+  tier; 14.3 % of a core shown idle, 25.4 % a second after a feed, 3.2 % hidden; 308 MB resident;
+  36.2 MB installed. `ps` percentages are decaying averages and other candidates' apps were running.
+- Not done, and written as shortfalls instead: a fish that looks like a fish (fin rays, scales,
+  translucency — an asset gap), the waterline ring, a less regular caustic field, a floor for the
+  eating pose, a visible pointer response, plants that sway.
