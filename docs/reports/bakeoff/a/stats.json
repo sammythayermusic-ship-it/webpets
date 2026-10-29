@@ -1,0 +1,73 @@
+{
+  "small": {
+    "advancesPerSec": 60,
+    "stepsPerSec": 8,
+    "fps": 56,
+    "visibility": "visible",
+    "renderMs": 0.2,
+    "elapsedMs": 5004
+  },
+  "medium": {
+    "advancesPerSec": 60,
+    "stepsPerSec": 8,
+    "fps": 63,
+    "visibility": "visible",
+    "renderMs": 0,
+    "elapsedMs": 5000
+  },
+  "large": {
+    "advancesPerSec": 60,
+    "stepsPerSec": 8,
+    "fps": 63,
+    "visibility": "visible",
+    "renderMs": 0.1,
+    "elapsedMs": 5001
+  },
+  "cpu": {
+    "shown": {
+      "cpuPercentOfOneCore": 20.2,
+      "rssMB": 373,
+      "pids": "7036 7038 7040"
+    },
+    "hidden": {
+      "cpuPercentOfOneCore": 1.8,
+      "rssMB": 398,
+      "pids": "10645 10656 10658"
+    }
+  },
+  "rssMB": 373,
+  "bundleMB": 35,
+  "renderMinutes": 57,
+  "notes": {
+    "stats": "harness stats, 5 s each, page visible, 2x display; taken on the H.264 build (the loop container does not change the scene cost; renderMs is the Pixi frame)",
+    "cpu": "top -l 4 -s 2 over the webpets binary + its WebKit WebContent and GPU helpers, three per-interval samples averaged; shown = window on screen, page visible, loop playing; hidden = Cmd+Shift+P (harness hide), loop videos paused by layers.ts",
+    "loopVariants": {
+      "hevcAlphaMov (shipped)": {
+        "cpuShown": 20.2,
+        "rssMB": 373,
+        "bundleMB": 35,
+        "artBytes": 1605331
+      },
+      "h264Mp4Masked": {
+        "cpuShown": 24.6,
+        "rssMB": 384,
+        "bundleMB": 36,
+        "artBytes": 1985731
+      },
+      "pngSequence": {
+        "cpuShown": 17.9,
+        "rssMB": 1161,
+        "bundleMB": 132,
+        "artBytes": 101711872,
+        "hiddenCpu": "not measured"
+      },
+      "baselineCheckpoint0": {
+        "cpuShown": 21,
+        "cpuHidden": 5,
+        "rssMB": 200,
+        "bundleMB": 23
+      }
+    },
+    "renderMinutes": "57 min of Cycles on the M4 GPU logged in this stage (plates + night + memorial + fish 124 frames: 32 min; glass + day loop 96 + night loop 96: 24 min; glass redo: 0.4 min), while two other candidates shared the GPU. The first builder's look-dev previews (nine rounds) are not logged; roughly ten more minutes."
+  }
+}

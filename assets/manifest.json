@@ -23,9 +23,9 @@
         {
           "name": "medium",
           "z": 0,
-          "video": "habitats/fish/bowl/water_day.mp4",
+          "video": "habitats/fish/bowl/water_day.mov",
           "night": {
-            "video": "habitats/fish/bowl/water_night.mp4"
+            "video": "habitats/fish/bowl/water_night.mov"
           },
           "loop": true,
           "region": {

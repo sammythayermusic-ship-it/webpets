@@ -1168,3 +1168,34 @@ the fish is the same toy body. Geometry is the next lever and it is not a shader
 
 The render stage for this session is under the session scratchpad
 (`.../scratchpad/stage/`, `render.log`); it is rebuildable from the scripts and is not in the repo.
+
+## 2026-10-28 — bake-off candidate A: finishing, the grey ring, and which loop container ships
+
+Resumed a third time with the loops half rendered (96 day frames, 92 night) and a Blender still
+running from the previous session; left it to finish, then `a_finish` built the plates, the 24 fps
+fish and the loops, and the checkpoint went in as `3f8f46a`. Environment first: node_modules and
+most of the repo were iCloud-evicted (`brctl download` on every dataless file; the cargo target dir
+was deleted rather than downloaded, a fresh release build was faster), and a stuck
+`screencaptureui` overlay from hours earlier kept the webview reporting `hidden`, which throttles
+the harness poll to minutes per command. Killing that overlay was the whole fix.
+
+- **The grey ring.** The first packaged build drew a solid grey annulus inside the glass, radius
+  250–340 art px. The glass plate's alpha was 1.0 there. Cause: `film_transparent_glass` keeps any
+  transmissive surface rougher than `film_transparent_roughness` (default 0.1) opaque, and the
+  glass's Fresnel-driven roughness ramp ends at 0.11 at the rim. Set the threshold to 1.0 in
+  `a_common.base()`; the two glass passes re-rendered in 21 s; alpha now ramps 0.10 → 0.88 → 1.0
+  at the silhouette. Worth remembering for every future glass pass.
+- **Hidden cost.** First measurement hidden (Cmd+Shift+P): 16.5% of a core, the baseline's is 5%.
+  The `<video>` kept decoding for a hidden window. `layers.ts` now pauses both twins while
+  `document.visibilityState` is hidden and resumes with a seek to the twin's time: 1.8–2.3%.
+- **Which container.** Same build, shown and idle at Medium: HEVC-with-alpha mov 20.2% / 373 MB
+  RSS; H.264 mp4 masked by the ellipse stencil 24.6% / 384 MB; PNG sequence 17.9% / 1161 MB RSS /
+  132 MB bundle. The sequence is cheapest to draw and impossible to ship (97 MB of art, 200
+  textures resident). The mov ships: VideoToolbox decodes it with alpha, it plays and loops in the
+  packaged app from a blob URL, and it costs less than the mp4, whose every frame is a full-alpha
+  quad through a stencil.
+- **measure.sh** rewritten on `top -l` after the first version's `ps -axo ... -p` quietly listed the
+  first process of the whole table three times, and `pcpu` from `ps` is a lifetime average anyway.
+- **Not done.** The fish body, the caustic web's line-like look, the hazy upper glass and the gravel
+  are listed in the report as shortfalls. Each is geometry or another hour of loop renders; none
+  is a shader knob.

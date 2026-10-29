@@ -30,8 +30,10 @@ untouched `wp_scene.blend` every time, never saved in place):
 glass, near/far matte, full) by day and the three night plates, the memorial, every fish state at
 24 fps (each 12 fps key plus the half-frame between, 124 frames), and the water loop: 96 frames at
 24 fps by day and 96 by night, rendered only inside the glass (a border), un-composited against the
-glass pass, cropped to the inside of the glass (166×164 grid px at 4x) and delivered three ways for
-measurement: a PNG sequence, an opaque H.264 mp4, an HEVC-with-alpha mov.
+glass pass, cropped to the inside of the glass (166×164 grid px at 4x) and built three ways for measurement
+(a PNG sequence, an opaque H.264 mp4 masked at runtime, an HEVC-with-alpha mov). The mov is what
+ships: `water_day.mov` (1.0 MB) and `water_night.mov` (0.6 MB), decoded by VideoToolbox, alpha in
+the file, still clipped by the runtime ellipse.
 
 **Runtime** (`src/render/types.ts`, `manifest.ts`, `layers.ts`, `assets.ts`, `frameClock.ts`):
 a manifest layer may be a still (`file`), a frame sequence (`frames` + `fps`, `loop`) or a `video`
@@ -49,19 +51,95 @@ the grid, the window scale, hit regions and click-through are untouched.
 
 ## How it looks, honestly (self-review at the end)
 
-_filled in below after the last recording_
+Seen in the installed app at all three sizes and in the clip (`bakeoff-20s.mp4`, frames pulled at
+1, 4, 6, 8, 11, 13, 15, 17, 19 s and 0.1 s apart around 7 s):
+
+- The bowl reads as a glass bowl on a stand: a Fresnel rim, the waterline as a bright meniscus
+  ring, the stand and its contact shadow, pebbles with a wet coat, veined blades. At Large (2x
+  display, 2016 px) it holds up; at Small it is a clean thumbnail.
+- The water moves. The surface band and the light on the gravel drift on a 4 s loop with no
+  visible seam (frame 96 → 1 differs from its neighbours by exactly as much as any adjacent pair,
+  measured on the raw renders: 0.79 vs 0.84 mean |diff|). It is gentle, as a still bowl's should be.
+- Night is a different light, not a tint: a cool moon from behind, the desk lamp on the stand, the
+  caustic web gone blue, the fish dimmed with it. The 2 s crossfade is clean.
+- The fish is lit as part of the bowl and passes behind the front plants; at 24 fps the swim loop
+  no longer steps. Turns are the old mirror-flip tween.
+- The first packaged build showed a solid grey ring inside the glass: Cycles keeps transmissive
+  surfaces rougher than `film_transparent_roughness` (0.1) opaque under `film_transparent_glass`,
+  and the rim roughness ramp reaches 0.11. Threshold lifted, glass passes re-rendered, fixed.
+
+Where it falls short of the bar, and why it was left (see Shortfalls).
 
 ## Numbers
 
-_filled in from stats.json_
+From `stats.json` (harness `stats` over 5 s, page visible; `top` over the three processes):
+
+| | Small (6) | Medium (16) | Large (24) |
+|---|---|---|---|
+| scene advances / s | 60 | 60 | 60 |
+| Pixi fps | 56 | 63 | 63 |
+| render ms / frame | 0.2 | 0.0 | 0.1 |
+
+| | CPU (share of one core) | RSS |
+|---|---|---|
+| shown, idle, loop playing (shipped mov) | 20.2% | 373 MB |
+| hidden (Cmd+Shift+P), loop paused | 1.8% | 398 MB |
+| baseline checkpoint 0 (still bowl, 12 fps fish) | ~21% | ~200 MB |
+
+The three loop containers, same build otherwise, shown and idle at Medium:
+
+| container | CPU shown | RSS | bundle | art |
+|---|---|---|---|---|
+| HEVC with alpha `.mov` (shipped) | 20.2% | 373 MB | 35 MB | 1.6 MB |
+| H.264 `.mp4`, opaque, masked at runtime | 24.6% | 384 MB | 36 MB | 2.0 MB |
+| PNG sequence, 2×96 frames | 17.9% | 1161 MB | 132 MB | 97 MB |
+
+The sequence is the cheapest to draw (no decoder; one texture swap per frame) and the only one
+the GPU process keeps nothing warm for, but it costs 200 textures resident and 97 MB on disk,
+which is the bundle budget three times over. The mov decodes in hardware with its alpha, and is
+cheaper than the mp4 whose every frame is masked through a stencil over a full-alpha quad. Shown
+CPU is at the baseline, not under it: the loop is paid for by the fish at 24 fps and the decoder.
+Hidden is a third of the baseline because the videos now pause with the document. RSS is up by
+the 24 fps fish (124 frames at 320 px) and three night plates; the bundle is 35 MB against 23.
 
 ## Shortfalls (the list that was left when I stopped)
 
-_filled in below_
+1. The fish is still a smooth toy: a lathe body with a procedural scale relief, rayed fins and a
+   coated eye. It does not have the silhouette, the translucent fin edges or the eye of a real
+   fish, and no shader change gets it there; it is geometry and a rig.
+2. The caustic light on the gravel is a projected Voronoi web. It drifts and loops cleanly, but at
+   Large it reads as bright lines laid on the gravel rather than light refracted through water.
+   Real caustics through this bowl were measured at the noise floor at 32 samples (MNEE), and a
+   softer web is another two hours of loop renders.
+3. The upper half of the bowl, above the waterline, is a hazy grey: the back glass reflecting the
+   bright world, with two soft blobs where the key reflects. It should be clear glass showing the
+   desktop through it. The static plates would take minutes to re-render; the loop frames behind
+   them, an hour each by day and night.
+4. Gravel is a crazy-paving lathe and the pebbles are smarties; the plants are veined blades with
+   no sway. Same answer: geometry, then an hour of loop.
+5. Reaction is canned. The fish turns toward the pointer with the behaviour's attention and the
+   glass sheen follows it, but it cannot bend, dart or look up: every state is a rendered loop.
+   This is the ceiling of the approach, not a bug in it.
+6. The mov variant was measured in the installed app but the final 20 s clip and the six stills
+   were captured on the H.264 build minutes earlier (same art, same frames); when the mov build
+   was up the user's screen was in use and the window reported hidden, so the re-captures came
+   back empty and were discarded.
 
 ## Render minutes
 
-_filled in_
+57 minutes of Cycles on the M4 GPU in the two logged stages (plates, night plates, memorial and
+the 124 fish frames: 32 min; the two 96-frame loops and the glass passes: 24 min; the glass redo:
+under a minute), with two other candidates rendering on the same GPU at the time. The look-dev
+previews of the first builder (nine rounds) were not logged; about ten minutes more.
+
+## Rebuilding the art
+
+```
+Blender -b assets/3d/wp_scene.blend -P assets/3d/scripts/a_look.py        # -> wp_scene-a-look.blend
+Blender -b assets/3d/wp_scene-a-look.blend -P assets/3d/scripts/a_render.py -- <stage> plates,night,memorial,fish,glass,loop,nloop
+python3 assets/3d/scripts/a_finish.py <stage> assets --loop mov
+```
+`measure.sh <label>` prints the CPU/RSS sample used in `stats.json`.
 
 ## What it would take to add the hamster, frog and chicken on this pipeline
 
