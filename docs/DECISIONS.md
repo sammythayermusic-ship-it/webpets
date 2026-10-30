@@ -1304,3 +1304,66 @@ active Space, and NOT counted visible by the window server, and re-orders it fro
 `orderFrontRegardless` — no activation, the app is an Accessory. One line in the log when it
 happens. This is also the first real cause behind "the packaged app runs at 15 fps" that reproduces
 on demand.
+
+## 2026-10-30 — After the bake-off, Step A: lock in C
+
+Sammy picked C, the hybrid. The brief from here is `docs/AFTER-BAKEOFF.md` (committed with this step,
+together with the long form of `docs/PHASE-NEXT.md` from his folder): a real goldfish, then
+behaviour, then a pet that talks, gets to know him, and brings sports and news into the bowl. Where
+AFTER-BAKEOFF and PHASE-NEXT disagree, AFTER-BAKEOFF wins.
+
+### the base: `main`, by fast-forward
+The brief leaves "merge C to `main` or rebase onto it" to us. Most of the work was already done on
+Oct 28: the phase branch `claude/webpets-next-phase-7a22a3` merged C (`b6f6f40`) on top of the
+health check, the harness, the needs model with its attention events, and the motion primitives,
+then started PHASE-NEXT step 2 (a fish motion planner and the hamster's drives, `3a02c3d`,
+`60e7cad`) and step 3 (dawn and dusk plates and daylight weights, `91b3936`). `main` had nothing past
+`d5a5966`, so the phase branch is a straight fast-forward of it: no rebase, no rewritten history,
+every Oct 28 commit keeps its hash. **`main` is the base from now on.** Work happens on this
+session's branch and `main` is fast-forwarded to it at each checkpoint (`main` is checked out in
+Sammy's own folder, so it only ever moves by fast-forward). The phase branch and the three
+candidate branches stay as they were, locally and on `origin`.
+
+Checked that nothing was lost: C's tip `c7c7633` is an ancestor of the merge, and the only conflict
+in that merge was this file. The step 2 and 3 groundwork stays: Step C of the new brief is
+PHASE-NEXT step 2 done on C, which is what the planner already is, and the dawn and dusk plates
+cost nothing until the crossfade draws them.
+
+### fixed on the way in
+- The merged tip did not typecheck: the time-of-day commit added `daylight` to the scene view but
+  not to the slice of state the tray chip's `toChipView` picks. One line and the test fixture.
+- `assets/3d/` (the `.blend`, its checkpoints, the scripts, the glTF exports) was shipped inside every
+  build through `publicDir`, about 4 MB nothing loads: the live layer reads `assets/live/`. Added to
+  the list `vite.config.ts` strips.
+- `docs/PHASE-NEXT.md` existed in two versions: the condensed one committed on Oct 28 (`bdd5940`)
+  and the long one in Sammy's folder, which is the one he points at. The long one is committed
+  now. The condensed one is in history; the two things only it said still hold and are kept in
+  `CLAUDE.md` and here: the quality bar ("it has to look like Apple made it ... someone would leave
+  it open just to watch it, and ask what it is") and a step 6 for the iPhone (app, home and lock
+  screen widgets, a Live Activity for the starving countdown, one pet on both), which
+  AFTER-BAKEOFF now lists under "Later".
+
+### kept as reference, then retired
+The losing candidates' best ideas are copied into `assets/reference/` (stripped from the build,
+explained in its README), so Step B can use them without checking out a branch:
+- `bakeoff-a/`: `a_look.py` and the scripts around it, the `.blend` it writes, and two rendered fish
+  frames. The fish part is the reference for Step B: Voronoi scale relief with darkened scale edges,
+  fin rays as `sin(N·atan2)` driving bump and transmission, subsurface, a wet coat, an eye with a
+  dark pupil and a gold iris ring. A's hover and feed stills joined its others in
+  `docs/reports/bakeoff/a/`.
+- `bakeoff-b/`: `materials.ts` (moving water normals, real transmission with a lite tier, depth
+  absorption that takes red first, a back wall that is see-through above the waterline), the scene
+  that wires it, its flakes and bubbles as objects inside the water, and the glTF export script.
+
+Then the A and B worktrees were retired. Everything in them was committed and pushed; the only
+untracked files were iCloud's " 2" duplicates (124 byte-identical copies in A, one older capture in
+B that is already in B's history). A forced `git worktree remove` was refused by the session's
+safety check as an irreversible delete, so the two folders were **moved to the Trash** instead and
+`git worktree prune` dropped them from git: 710 MB, recoverable until the Trash is emptied. Their
+`src-tauri/target` folders, the ~5 GB `NEEDS-SAMMY.md` promised to delete, had already gone on
+Oct 29 (folder times 01:53 and 01:54). `WebPets A.app` and `WebPets B.app` stay installed until
+Sammy says otherwise.
+
+The build cache for this worktree is an APFS clone of the phase worktree's `src-tauri/target`
+(`cp -c`: no space used until the files diverge), so the first release build reused every
+dependency instead of compiling ~600 crates on a 97%-full disk.

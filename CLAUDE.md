@@ -1,20 +1,24 @@
 # WebPets — CLAUDE.md
 
 ## What this repo is
-A premium desktop tech pet for macOS: Tauri 2 + Vite + TypeScript (strict) + PixiJS 8. A habitat floats in the
+A premium desktop tech pet for macOS: Tauri 2 + Vite + TypeScript (strict) + PixiJS 8 + Three.js. A habitat floats in the
 corner of the screen, transparent around the art, always on top, no Dock icon (the tray is its home). The pet
 gets hungry on a clock that never pauses, eats when fed, and dies if neglected. Built today: **fish in a bowl**
 and **hamster in a cage or a glass terrarium**. **Frog and chicken are not built** (declared in `Species` in
 `src/sim/types.ts`, absent from `src/species/index.ts`). Art is soft 3D rendered from `assets/3d/wp_scene.blend`
-(primitives and code, no paid generation). The direction and quality bar ("it has to look like Apple made it";
-realistic yet cyber; something you would leave open just to watch) are in `docs/PHASE-NEXT.md`.
+(primitives and code, no paid generation). The renderer is the bake-off winner, C, the hybrid: Blender plates for
+what holds still, a live Three.js pass between them for what moves (the fish, the water, light), sharing Pixi's
+WebGL context. Quality bar: "it has to look like Apple made it"; realistic yet cyber; something you would leave
+open just to watch.
 
 **No crypto, no NFTs, no wallets, no blockchain, no coin — at any phase.** `$FEED` is plain in-app food (a number
 in `pet.json`). Blueprint Phases 2 and 3 are shelved. Open questions, keep the code able to go either way: how
 the app makes money, whether food costs anything, whether a pet can die for good.
 
 ## Read first
-1. `docs/PHASE-NEXT.md` — the current brief and step list. Overrides the Blueprint wherever they disagree.
+1. `docs/AFTER-BAKEOFF.md` — the current brief: C won, a real goldfish, and the pets get a brain (talk, get to know
+   you, sports and news). Steps A to G, a checkpoint after each. Wins over PHASE-NEXT wherever they disagree.
+   `docs/PHASE-NEXT.md` — the brief it sits on; its Steps 3 to 5 come after AFTER-BAKEOFF's Step G. Both override the Blueprint.
 2. `docs/ARCHITECTURE.md` — the binding module contract (ownership, layers, window geometry, Rust commands and events, sim API). Written for Phase 0: where a later DECISIONS entry changed something, DECISIONS wins; update the contract when you change it.
 3. `docs/DECISIONS.md` — the decision log. Append under your own dated heading (`## YYYY-MM-DD — topic`).
 4. `docs/HARNESS.md` — the packaged-app verification harness (file-driven; compiled in only by `npm run build:harness`).
@@ -68,7 +72,7 @@ Generators and tools:
 - `src/sim/` — pure rules: hunger, reconcile, feed, pantry, mood, pet, ledger, constants, types. `src/sim/constants.ts` holds every tunable (feeding twice a day: 50-point meal, 24 h bar, death 12 h after zero).
 - `src/app/` — Zustand vanilla store, persistence (store plugin), 30 s scheduler, notification decisions, `view.ts` (state to scene view), day/night.
 - `src/platform/` — `types.ts` interface; `tauri.ts` (real), `browser.ts` (mock for dev and Playwright), `geometry.ts`.
-- `src/render/` — PixiJS scene, layers, sprite player, sequencer, water bounds, food, fx, expression, tray chip, asset and manifest loading, `pacer.ts`.
+- `src/render/` — PixiJS scene, layers, sprite player, sequencer, water bounds, food, fx, expression, tray chip, asset and manifest loading, `pacer.ts`; `live/` is the hybrid's Three.js layer (`bowlLayer.ts`: the fish, the water pass; `spine.ts`, `mapping.ts`, `shaders.ts`), loading `assets/live/fish.glb`.
 - `src/species/` — `index.ts` registry (fish, hamster); `fish/` and `hamster/` each have `behavior.ts` (pure state machine), `layout.ts`, `lines.ts` (speech pools), `module.ts`; hamster adds `terrarium.ts`.
 - `src/ui/` — DOM HUD, tray wiring, speech bubbles, pantry dialog, montage, memorial, resize grip, dev panel, hit regions, keys, `styles.css`.
 - `src/audio/` — audio hooks only (Howler; missing files are skipped). Sound is deliberately out of scope beyond hooks.
@@ -76,7 +80,7 @@ Generators and tools:
 - `src-tauri/src/` — Rust shell: `window.rs` (size, snap, layering), `tray.rs`, `hittest.rs` (click-through poller), `commands.rs`, `clock.rs`, `identity.rs` (which binary is running), `state.rs`, `lib.rs`, `harness.rs` (cargo feature `harness` only).
 - `assets/3d/` — `wp_scene.blend` (source), `scripts/` (build and render pipeline), `checkpoints/` (timestamped .blend copies), `evidence/` (reference renders).
 - `assets/habitats/{fish/bowl,hamster/cage,hamster/terrarium}/` — rendered layers (`bg`, `decor_front`, `glass`, `memorial`, ...); `assets/sprites/{fish,hamster}/<state>/` — one PNG per frame; `assets/manifest.json` indexes both (habitats `fish/bowl`, `hamster/cage`, `hamster/terrarium`; sprites `fish`, `hamster`). Vite serves `assets/` as `publicDir`.
-- Reference only, nothing reads them: `assets/habitats-160x120/`, `assets/sprites/pets-80/`, `assets/sprites/strips-80/` (Phase 0 concept art and earlier-round sprites), `assets/reference/habitats-hires/` (1024 px concept renders, dropped from the build). `assets/fonts/PressStart2P` is unused.
+- Reference only, nothing reads them: `assets/habitats-160x120/`, `assets/sprites/pets-80/`, `assets/sprites/strips-80/` (Phase 0 concept art and earlier-round sprites), `assets/reference/` (stripped from the build): `habitats-hires/` (1024 px concept renders) and `bakeoff-a/`, `bakeoff-b/` (the losing candidates' fish materials, water surface and glass, kept for Step B; see its README). `assets/fonts/PressStart2P` is unused.
 - `tools/` — generators, Mac helpers and `harness.mjs` (the harness driver; see `docs/HARNESS.md`). `scripts/install-app.sh` — behind `npm run install:app`.
 - `tests/unit/` (contract sync), `tests/e2e/` (Playwright: smoke, acceptance, hamster, resize). Unit tests sit beside the code as `*.test.ts`.
 - `docs/` — see Read first.
