@@ -1,0 +1,15 @@
+{
+  "comment": "Step B: two knocks on the glass at Medium (window-local CSS px), each a ring through the water and a startle. 9 s.",
+  "steps": [
+    { "op": "force", "state": "fed" },
+    { "op": "night", "value": false },
+    { "op": "pointer", "x": null },
+    { "op": "sleep", "ms": 1000 },
+    { "op": "record", "name": "fish-tap", "seconds": 9, "fps": 60 },
+    { "op": "sleep", "ms": 1500 },
+    { "op": "tap", "x": 250, "y": 230 },
+    { "op": "sleep", "ms": 3500 },
+    { "op": "tap", "x": 420, "y": 250 },
+    { "op": "sleep", "ms": 4200 }
+  ]
+}

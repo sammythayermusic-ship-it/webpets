@@ -1422,6 +1422,9 @@ frame cost at Medium and Large. Judged against "a stranger would call it a real 
 ## 2026-10-30 — Step B built: the goldfish, the see-through bowl, water that moves
 
 ### the fish: maps from the loft's own parameters
+The plan's "about 6k vertices" was a guess: the goldfish ships 13,500 (all parts, as exported),
+the September toy shipped 11,700 (mostly the subdivision of a simple shape).
+
 Tried first and kept: computing the maps in numpy rather than baking Cycles nodes. The body's UVs are
 the loft's parameters (u along the body, v around it), so every texel knows its point on the fish and
 the pattern can be laid out ON the surface: scale rows that follow the body and narrow toward the
