@@ -1,0 +1,14 @@
+{
+  "id": "1793395599000-stats-7e59fe9f",
+  "op": "stats",
+  "ok": true,
+  "data": {
+    "advancesPerSec": 60,
+    "stepsPerSec": 8,
+    "fps": 59,
+    "visibility": "visible",
+    "renderMs": 1,
+    "elapsedMs": 4000
+  },
+  "at": "2026-10-30T21:26:43.156Z"
+}

@@ -35,6 +35,19 @@ retired, but the disk is still at 97% (about 15 GB free). What is left that only
   until you say to remove them.
 
 
+### Bubbles died on Oct 29 (2026-10-30) — nothing blocked
+Your pet in `WebPets.app` ran out of food while the app was not running (the clock never stops),
+and died about a day before the Step A build was installed. The app is showing the "While you were
+gone" card. I left it: acknowledging a death and adopting a new pet are yours. Checkpoint evidence
+comes from the separate harness app, which has its own pet.
+
+### Google Drive may be backing up the build cache (2026-10-30) — slows builds, nothing blocked
+During the Step A captures, Google Drive's window was trying to upload this project's build
+files (`lib-thiserror`, `dep-lib-thiserror`, `invoked.timestamp`), with 264 errors. If Drive backs
+up your Desktop, it is backing up every `src-tauri/target` and `node_modules` under it: tens of
+thousands of files that change on every build. Moving the repo off the Desktop (see the item
+above) fixes this as well. Otherwise, take the Desktop out of Drive's backup.
+
 ### macOS screen-recording consent for the Claude desktop app (2026-10-28)
 While the health check was capturing the pet window, macOS put up a dialog: "Claude is requesting to
 bypass the system private window picker and directly access your screen and audio" (Allow / Open
