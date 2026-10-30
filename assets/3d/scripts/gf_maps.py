@@ -325,8 +325,8 @@ def fin_maps(out):
     tip_pale = smooth(0.70, 1.0, V)
     root = smooth(0.10, 0.0, V)
 
-    ray_col = lin(232, 98, 20)
-    mem_col = lin(250, 122, 28)
+    ray_col = lin(240, 112, 30)
+    mem_col = lin(250, 128, 34)
     tip_col = lin(255, 214, 170)
     col = mem_col * (1 - rays[..., None]) + ray_col * rays[..., None]
     col = col * (1 - 0.4 * tip_pale[..., None]) + tip_col * (0.4 * tip_pale[..., None])
@@ -334,7 +334,7 @@ def fin_maps(out):
     col = col * (1 - root[..., None]) + lin(236, 120, 36) * root[..., None]
     streak = fbm(U * 3.0, V * 30.0, 3, salt=9) - 0.5
     col *= (1.0 + 0.12 * streak)[..., None]
-    alpha = 0.64 * (1 - 0.45 * V) + 0.28 * rays * (1 - 0.3 * V)
+    alpha = 0.70 * (1 - 0.45 * V) + 0.18 * rays * (1 - 0.3 * V)
     alpha = np.maximum(alpha, root)
     alpha *= edge_fade
     alpha = np.clip(alpha, 0.0, 1.0)

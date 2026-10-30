@@ -286,14 +286,22 @@ def shoot(path):
 def bowl_passes(stage, memorial=False):
     colls = ("WP_Bowl", "WP_Memorial") if memorial else ("WP_Bowl",)
     # bg, twice: with the catcher (for the contact shadow) and without.
+    # Step B: the glass is TRANSPARENT in the bg too, not only in the front-glass pass. Through an
+    # empty bowl you see the desk behind it; the shell keeps only what glass really adds (its
+    # reflections, and the alpha they carry), and the live water pass decides how much of the desk
+    # shows through the water. Roughness up to 0.3 still counts as clear glass, so the frosted rim
+    # ramp does not turn the lip opaque.
     reset_visibility()
     only_collection(*colls)
+    sc.cycles.film_transparent_glass = True
+    sc.cycles.film_transparent_roughness = 0.3
     if memorial:
         set_material(WATER, "WP_water_memorial")  # hidden anyway; kept for parity
     shoot(os.path.join(stage, "_bg_shadow.png"))
     CATCHER.hide_render = True
     shoot(os.path.join(stage, "_bg_clean.png"))
     CATCHER.hide_render = False
+    sc.cycles.film_transparent_glass = False
 
     # near/far matte through the (empty) glass.
     reset_visibility()

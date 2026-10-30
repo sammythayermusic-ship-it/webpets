@@ -52,6 +52,54 @@ def over(s_rgb, s_a, d_rgb, d_a):
     return rgb, a
 
 
+def box_blur(a, r, passes=3):
+    """Separable box blur, `passes` times (three passes is close to a gaussian of sigma ~r)."""
+    out = a.astype(np.float32)
+    k = 2 * r + 1
+    for _ in range(passes):
+        for axis in (0, 1):
+            pad = [(0, 0)] * out.ndim
+            pad[axis] = (r + 1, r)
+            c = np.cumsum(np.pad(out, pad, mode="edge"), axis=axis)
+            hi = np.take(c, np.arange(k, k + out.shape[axis]), axis=axis)
+            lo = np.take(c, np.arange(0, out.shape[axis]), axis=axis)
+            out = (hi - lo) / k
+    return out
+
+
+def quiet_glass(rgb, a, contents):
+    """Step B: with transparent glass the bg's see-through regions come out of Cycles grainy (the
+    denoiser does not clean alpha through glass), and the live water lets that show. Glass
+    reflections are soft by nature, so blur the glass-only regions -- premultiplied, so colour does
+    not bleed from transparent pixels -- and keep everything that is a thing (gravel, plants, stand,
+    the rim where the glass is near opaque) exactly as rendered."""
+    keep = np.clip(box_blur(contents, 2, 1) * 4.0, 0.0, 1.0)
+    # only well inside the glass: blurring at the silhouette would smear the rim out into a halo
+    inside = (box_blur((a > 0.03).astype(np.float32), 6, 1) > 0.999).astype(np.float32)
+    w = (1.0 - keep) * np.clip((0.9 - a) / 0.4, 0.0, 1.0) * box_blur(inside, 2, 1)
+    pm = rgb * a[:, :, None]
+    pm_b = box_blur(pm, 3)
+    a_b = box_blur(a, 3)
+    a2 = a * (1 - w) + a_b * w
+    pm2 = pm * (1 - w[:, :, None]) + pm_b * w[:, :, None]
+    rgb2 = pm2 / np.maximum(a2, EPS)[:, :, None]
+    return np.clip(rgb2, 0.0, 1.0), np.clip(a2, 0.0, 1.0)
+
+
+def quiet_front_glass(rgb, a):
+    """The front-glass pass has the same Cycles grain in its thin reflections (alpha ~0.15 over the
+    whole water), and it is drawn over everything. Smooth where it is faint, keep the bright
+    highlights and the rim (alpha above ~0.5) as rendered."""
+    inside = (box_blur((a > 0.03).astype(np.float32), 6, 1) > 0.999).astype(np.float32)
+    w = np.clip((0.55 - a) / 0.3, 0.0, 1.0) * box_blur(inside, 2, 1)
+    pm = rgb * a[:, :, None]
+    pm_b = box_blur(pm, 2)
+    a_b = box_blur(a, 2)
+    a2 = a * (1 - w) + a_b * w
+    pm2 = pm * (1 - w[:, :, None]) + pm_b * w[:, :, None]
+    return np.clip(pm2 / np.maximum(a2, EPS)[:, :, None], 0.0, 1.0), np.clip(a2, 0.0, 1.0)
+
+
 def bbox(a, thr):
     ys, xs = np.nonzero(a > thr)
     if len(xs) == 0:
@@ -65,6 +113,7 @@ def build(variant, suffix, night, tint=None):
     c_rgb, c_a = load(os.path.join(src, "_bg_clean.png"))
     m_rgb, _ = load(os.path.join(src, "_mask.png"))
     g_rgb, g_a = load(os.path.join(src, "_glass.png"))
+    g_rgb, g_a = quiet_front_glass(g_rgb, g_a)
     h, w = c_a.shape
     raw = np.clip(b_a - c_a, 0.0, 1.0)
     x0, y0, x1, y1 = bbox(c_a, 0.02)
@@ -77,6 +126,11 @@ def build(variant, suffix, night, tint=None):
     base_tint = tint if tint is not None else (NIGHT_SHADOW_TINT if night else SHADOW_TINT)
     s_rgb = np.broadcast_to(base_tint, (h, w, 3)).copy()
     c_rgb = un_composite(c_rgb, g_rgb, g_a)
+    cpath = os.path.join(DEST, "contents.png")
+    if os.path.exists(cpath):
+        contents = np.asarray(Image.open(cpath).convert("L"), dtype=np.float32) / 255.0
+        if contents.shape == c_a.shape:
+            c_rgb, c_a = quiet_glass(c_rgb, c_a, contents)
     bg_rgb, bg_a = over(c_rgb, c_a, s_rgb, s_a)
     if variant == "memorial":
         save(bg_rgb, bg_a, os.path.join(DEST, "memorial%s.png" % suffix))

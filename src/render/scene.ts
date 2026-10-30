@@ -28,11 +28,32 @@ import { makeFloorBounds, makeWaterBounds } from './water';
 import { decayAttention, moodAnim, moodOf, type Mood } from '../sim/mood';
 import { createExpressionGate } from './expression';
 import { createPacer, type Pacer } from './pacer';
-import { createLiveLayer, type LiveLayer } from './live/bowlLayer';
+import { createLiveLayer, type LiveLayer, type LiveParticle } from './live/bowlLayer';
 import { loadBitmap } from './assets';
 import type { HabitatScene, Manifest, ManifestHabitat, ManifestSprite, MoveBounds, PetBehavior, SceneEvent, SceneView } from './types';
 import type { Habitat, Species } from '../sim/types';
 import type { Drives } from '../sim/needs';
+
+/**
+ * A Pixi container's sprites as live-layer particles (grid px), one per child in child order, a hidden
+ * one at alpha 0, so a particle keeps its slot (and its depth in the water) for its whole life.
+ * Reuses `out`.
+ */
+function particlesOf(c: Container, out: LiveParticle[]): LiveParticle[] {
+  const n = c.children.length;
+  for (let i = 0; i < n; i += 1) {
+    const ch = c.children[i]!;
+    const p = out[i] ?? { x: 0, y: 0, alpha: 0 };
+    p.x = ch.position.x;
+    p.y = ch.position.y;
+    p.alpha = ch.visible ? ch.alpha : 0;
+    out[i] = p;
+  }
+  out.length = n;
+  return out;
+}
+const flakeParts: LiveParticle[] = [];
+const bubbleParts: LiveParticle[] = [];
 
 const STEP_MS = 1000 / PET_FPS;
 /** Cap the accumulator so a background tab does not replay minutes of steps at once. */
@@ -359,6 +380,7 @@ export function createScene(
     tap(cssX, cssY) {
       const f = scaleFactor(scale);
       pendingTap = { x: (cssX - WINDOW_PAD) / f, y: (cssY - WINDOW_PAD) / f };
+      m?.live?.tap(pendingTap.x, pendingTap.y);
       lastInteractionAt = Date.now();
     },
     async mount(el, s) {
@@ -503,6 +525,10 @@ export function createScene(
         // pass draws it, refracted with everything else, over the fish. Pixi's copy would sit on top
         // undistorted and ghost against the refracted plate behind it.
         if (decorDay !== null) layers.slots.decor_front.visible = false;
+        // Flakes and bubbles are inside the water too: Pixi keeps their physics, the live layer
+        // draws them where the water bends and tints them like the fish.
+        flakes.container.visible = false;
+        bubbles.container.visible = false;
         // The fish mesh arrives asynchronously; the water draws from the first frame. A load failure
         // is loud: a bowl with water and no fish is the same lie an empty bowl was.
         live.ready.catch((err: unknown) => {
@@ -563,6 +589,7 @@ export function createScene(
         m.live?.setPose(drawnX, drawnY, lastFacing, m.player.state());
         m.flakes.interpolate(t, dtMs);
         m.bubbles.update(dtMs, rng);
+        if (m.live) m.live.setParticles(particlesOf(m.flakes.container, flakeParts), particlesOf(m.bubbles.container, bubbleParts));
         m.layers.update(dtMs);
         const t0 = performance.now();
         m.draw(dtMs);

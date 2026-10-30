@@ -191,7 +191,7 @@ def build_mouth(root):
             b = 2 * math.pi * j / nv
             rad = R + rr * math.cos(b)
             verts.append((x0 + rr * math.sin(b) * 0.8, rad * math.cos(a), zc + rad * math.sin(a) * 0.68))
-            cols.append((0.80, 0.24, 0.10, 1.0))
+            cols.append((0.66, 0.19, 0.08, 1.0))
     for i in range(nu):
         for j in range(nv):
             a = i * nv + j

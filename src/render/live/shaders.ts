@@ -154,6 +154,8 @@ uniform float uRipple;       // ripple strength, grid px
 uniform float uPhase;        // 'alive' 1, 'dead' 0.35: dead water goes still
 uniform vec2 uPointer;       // grid px, or (-1e4, -1e4)
 uniform vec2 uParallax;      // grid px, the front plates' slide; the bg follows a third of it
+uniform vec3 uTaps[4];       // taps on the glass: grid px x, y, and the clock time it happened (-1e4: none)
+uniform float uWallAlpha;    // how much of the desk the water hides where there is only back wall (day)
 
 // --- value noise (cheap, smooth) -----------------------------------------------------------------
 float wpHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -179,15 +181,50 @@ vec2 wpRippleNormal(vec2 g, float t) {
   return vec2(hx - h0, hy - h0) / e;
 }
 
-// caustic web: two warped noise fields folded into bright threads
+// Wave trains on the surface, in the surface's own plane (grid x, and depth stretched out of the
+// foreshortened band): three crossing trains of different length, speed and heading, so ripples are
+// seen to TRAVEL across the water rather than shimmer in place. Returns the surface slope.
+vec2 wpWaves(vec2 s, float t) {
+  vec2 d1 = vec2(0.94, 0.34);
+  vec2 d2 = vec2(-0.51, 0.86);
+  vec2 d3 = vec2(0.20, -0.98);
+  float a1 = dot(s, d1) * 0.42 - t * 1.5;
+  float a2 = dot(s, d2) * 0.66 - t * 1.95;
+  float a3 = dot(s, d3) * 1.05 - t * 2.6;
+  return d1 * cos(a1) * 0.55 + d2 * cos(a2) * 0.32 + d3 * cos(a3) * 0.18;
+}
+
+// caustic web: two warped noise fields folded into bright threads. Not even: a slow field gathers the
+// threads into brighter patches that drift (where the surface happens to focus the light), and the
+// threads sharpen where it is bright and blur where it is not.
 float wpCaustic(vec2 g, float t) {
   vec2 p = g * 0.075;
   vec2 w = vec2(wpNoise(p * 1.7 + vec2(t * 0.17, -t * 0.12)), wpNoise(p * 1.7 + vec2(-t * 0.14, t * 0.16) + 7.3));
   float a = wpNoise(p * 3.1 + w * 1.4 + vec2(t * 0.21, t * 0.1));
   float b = wpNoise(p * 2.6 - w * 1.1 + vec2(-t * 0.13, t * 0.19) + 3.1);
-  float ridge = 1.0 - abs(a - b) * 2.4;
+  float patchy = smoothstep(0.22, 0.82, wpNoise(g * 0.028 + vec2(t * 0.035, -t * 0.027)) * 0.7 + wpNoise(g * 0.06 - vec2(t * 0.05, 0.0)) * 0.3);
+  float ridge = 1.0 - abs(a - b) * mix(1.5, 2.3, patchy);
   ridge = clamp(ridge, 0.0, 1.0);
-  return pow(ridge, 4.0);
+  return pow(ridge, mix(2.2, 3.4, patchy)) * mix(0.3, 1.0, patchy);
+}
+
+// A tap on the glass: a ring that runs out from where you knocked, and fades.
+vec2 wpTapRipple(vec2 g, float t, out float crest) {
+  vec2 n = vec2(0.0);
+  crest = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float age = t - uTaps[i].z;
+    if (age < 0.0 || age > 2.4) continue;
+    vec2 d = g - uTaps[i].xy;
+    float r = length(d);
+    float front = age * 48.0;
+    float x = r - front;
+    float env = exp(-x * x / 60.0) * exp(-age * 1.5) * smoothstep(0.0, 0.08, age);
+    float w = sin(x * 0.75) * env;
+    n += (d / max(r, 1e-3)) * w * 2.8;
+    crest += max(w, 0.0);
+  }
+  return n;
 }
 
 void main() {
@@ -226,6 +263,11 @@ void main() {
 
   // --- refraction: a lens toward the centre plus moving ripples -------------------------------------
   vec2 n = wpRippleNormal(g + vec2(uTime * 1.5, 0.0), uTime) * uRipple * uPhase;
+  // the surface's wave trains, seen through the side: the refraction they cause sweeps across too
+  vec2 sPlane = vec2(g.x, (gm.y - uSurface.y) * uSurface.z / max(uSurface.w, 1.0));
+  n += wpWaves(sPlane * 0.5, uTime) * 0.35 * uPhase;
+  float tapCrest;
+  n += wpTapRipple(gm, uTime, tapCrest);
   // the pointer at the glass: a standing dimple the water bends around
   vec2 toPtr = g - uPointer;
   float ptrD = length(toPtr);
@@ -279,6 +321,10 @@ void main() {
   float shaft = wpNoise(vec2(g.x * 0.09 + uTime * 0.05, g.y * 0.012 - uTime * 0.02));
   shaft = smoothstep(0.55, 0.85, shaft) * (1.0 - depth) * body;
   col += vec3(0.55, 0.75, 0.85) * shaft * 0.10 * (1.0 - 0.75 * uNight) * uTier;
+  // light from the rippling surface moving down through the water: soft bands that travel with the waves
+  vec2 wv = wpWaves(vec2(g.x, g.y * 0.35) * 0.5, uTime);
+  float shimmer = smoothstep(0.15, 0.6, wv.x * 0.8 + wv.y * 0.6) * (1.0 - depth) * body;
+  col += vec3(0.7, 0.9, 1.0) * shimmer * 0.06 * (1.0 - 0.7 * uNight) * uPhase;
 
   // --- caustics on the gravel -----------------------------------------------------------------------
   // Only on the BED: the band from the back of the gravel down to just past its near lip. Below
@@ -286,7 +332,7 @@ void main() {
   float gravelBand = smoothstep(uFloorY - 24.0, uFloorY - 6.0, gm.y) * (1.0 - smoothstep(uFloorY + 4.0, uFloorY + 16.0, gm.y)) * inner;
   float caus = wpCaustic(q, uTime * uPhase + 11.0);
   vec3 causCol = mix(vec3(0.95, 1.0, 0.85), vec3(0.45, 0.6, 1.0), uNight);
-  vec3 causAdd = causCol * caus * gravelBand * mix(0.22, 0.09, uNight) * (0.5 + 0.5 * uTier);
+  vec3 causAdd = causCol * caus * gravelBand * mix(0.16, 0.07, uNight) * (0.5 + 0.5 * uTier);
   col += causAdd * plateW;
 
   // --- the fish, inside the water: refracted with the plate, tinted by its depth --------------------
@@ -301,7 +347,13 @@ void main() {
   float rim = smoothstep(0.80, 1.0, e) * 0.14 * (1.0 - 0.5 * uNight);
   col += vec3(0.75, 0.9, 1.0) * rim;
   // the surface seen across: the room reflected, sharper ripples, a bright meniscus at the near edge
-  vec2 ns = wpRippleNormal(g * 1.8 + vec2(uTime * 2.2, 0.0), uTime * 1.4) * uPhase;
+  vec2 ns = wpRippleNormal(g * 1.8 + vec2(uTime * 2.2, 0.0), uTime * 1.4) * uPhase * 0.6;
+  // the trains, in the surface plane, warped a little so their crests wander instead of ruling lines
+  vec2 warp = vec2(wpNoise(sPlane * 0.035 + uTime * 0.05), wpNoise(sPlane * 0.035 - uTime * 0.04 + 4.1)) - 0.5;
+  vec2 wsl = wpWaves(sPlane * 0.32 + warp * 9.0, uTime) * uPhase;
+  ns += wsl * 0.7;
+  float tapC2;
+  ns += wpTapRipple(gm, uTime, tapC2) * 0.25;
   vec3 N = normalize(vec3(ns.x * 0.9, 1.0, ns.y * 0.9));
   vec3 L = normalize(vec3(-0.35, 1.0, 0.55));
   vec3 V = vec3(0.0, 0.16, 0.99);
@@ -311,7 +363,10 @@ void main() {
   float bandT = clamp((gm.y - topEdge) / max(botEdge - topEdge, 1.0), 0.0, 1.0);
   // the room reflected in the surface, strongest at the far edge, with ripple-broken glints
   float fres = 0.12 + 0.28 * (1.0 - bandT);
-  col = mix(col, skyCol, band * fres);
+  // the reflection brightens on the faces of the waves that tilt toward the window and darkens on the
+  // backs: the bands you see running across a real bowl's surface
+  float tilt = clamp(0.5 + 0.9 * dot(wsl, vec2(-0.35, 0.55)), 0.0, 1.0);
+  col = mix(col, skyCol * (0.8 + 0.4 * tilt), band * fres * (0.85 + 0.45 * tilt));
   col += vec3(1.0, 0.98, 0.92) * spec * band * mix(1.1, 0.5, uNight);
   // the meniscus: a bright line where the water meets the front glass, a thin shadow under it
   float meniscus = exp(-pow((gm.y - botEdge) / 0.75, 2.0)) * inner * smoothstep(0.05, 0.4, sArg);
@@ -320,8 +375,17 @@ void main() {
   col *= 1.0 - 0.22 * underline;
   float farLine = exp(-pow((gm.y - topEdge) / 0.7, 2.0)) * inner;
   col += skyCol * farLine * 0.3;
+  col += vec3(0.75, 0.92, 1.0) * tapCrest * 0.24;
 
-  vec4 water = vec4(col, 1.0);
+  // --- how much of the desk shows through ---------------------------------------------------------
+  // Only where the water has nothing behind it but the back wall: the gravel, the plants, the fish
+  // and the surface (which reflects the room) stay solid. More water in the line of sight (deeper,
+  // nearer the glass's edge) hides more. Premultiplied, so the plate under it is not counted twice.
+  float wallA = mix(uWallAlpha, min(1.0, uWallAlpha + 0.18), clamp(depth * 0.6 + toEdge * 0.5, 0.0, 1.0));
+  wallA = mix(wallA, min(1.0, wallA + 0.12), uNight);
+  float solid = max(max(plateW, fish.a), max(decor.a, band * 0.85 + meniscus));
+  float a = mix(wallA, 1.0, clamp(solid, 0.0, 1.0));
+  vec4 water = vec4(col * a, a);
   gl_FragColor = mix(fishHere, water, mask);
 }
 `;

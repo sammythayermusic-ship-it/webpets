@@ -16,12 +16,19 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { ManifestHabitat, ScenePhase } from '../types';
 import { createFishUniforms, loadFishModel, type FishModel, type FishPart } from './fishModel';
-import { cameraFrustum, cameraPose, depthWander, fishScale, gridToWorld } from './mapping';
+import { METRES_PER_GRID_PX, cameraFrustum, cameraPose, depthWander, fishScale, gridToWorld } from './mapping';
 import { createSpine, type FacingSign, type Spine, type SpineState } from './spine';
 import { WATER_FRAGMENT, WATER_VERTEX } from './shaders';
 
 /** Quality tiers: `lean` halves the fish render target and dims the shafts/caustics. */
 export type LiveTier = 'full' | 'lean';
+
+/**
+ * How much of the desk the water hides where there is nothing behind it but the back of the bowl, by
+ * day (more at depth, at the glass's edge and at night; see the water pass). Below 1 the bowl is
+ * glass you can see through, as real glass and water are; high enough that the water stays blue.
+ */
+export const WALL_ALPHA = 0.5;
 
 export interface LiveLayerOptions {
   gl: WebGL2RenderingContext;
@@ -35,6 +42,13 @@ export interface LiveLayerOptions {
    */
   plates: { day: ImageBitmap; night: ImageBitmap | null; decorDay: ImageBitmap | null; decorNight: ImageBitmap | null; contents: ImageBitmap | null };
   rng: () => number;
+}
+
+/** A flake or a bubble, where Pixi's physics put it this frame: grid px, and its fade. */
+export interface LiveParticle {
+  x: number;
+  y: number;
+  alpha: number;
 }
 
 export interface LiveLayer {
@@ -51,6 +65,14 @@ export interface LiveLayer {
   setParallax(dx: number, dy: number): void;
   setTier(tier: LiveTier): void;
   tier(): LiveTier;
+  /** A knock on the glass at grid (gx, gy): a ring runs out across the water from there. */
+  tap(gx: number, gy: number): void;
+  /**
+   * The flakes and bubbles to draw this frame. They are drawn INSIDE the water (into the fish's
+   * render target), so the water bends and tints them exactly as it does the fish; Pixi keeps their
+   * physics and hides its own sprites.
+   */
+  setParticles(flakes: readonly LiveParticle[], bubbles: readonly LiveParticle[]): void;
   /** Advance the clocks by `dtMs` and draw. The caller has already drawn the back plates. */
   render(dtMs: number): void;
   spineState(): SpineState;
@@ -154,6 +176,93 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
     root.visible = phase !== 'memorial';
   });
 
+  // ---- flakes and bubbles, inside the water ------------------------------------------------------
+  const spriteTexture = (size: number, paint: (ctx: CanvasRenderingContext2D, s: number) => void): THREE.CanvasTexture => {
+    const c = document.createElement('canvas');
+    c.width = size;
+    c.height = size;
+    const ctx = c.getContext('2d');
+    if (ctx) paint(ctx, size);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+  // A food flake: an irregular, lit crumb, darker at its rim.
+  const flakeTex = spriteTexture(48, (ctx, n) => {
+    ctx.translate(n / 2, n / 2);
+    ctx.beginPath();
+    for (let i = 0; i <= 14; i += 1) {
+      const a = (i / 14) * Math.PI * 2;
+      const r = n * 0.36 * (1 + 0.18 * Math.sin(a * 3 + 0.7) + 0.08 * Math.sin(a * 7));
+      if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+      else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    const g = ctx.createRadialGradient(-n * 0.1, -n * 0.12, n * 0.02, 0, 0, n * 0.42);
+    g.addColorStop(0, '#f6c77a');
+    g.addColorStop(0.6, '#d98a3a');
+    g.addColorStop(1, '#9c4f1c');
+    ctx.fillStyle = g;
+    ctx.fill();
+  });
+  // A bubble: a bright rim, a nearly clear middle, one highlight.
+  const bubbleTex = spriteTexture(48, (ctx, n) => {
+    const c = n / 2;
+    const rim = ctx.createRadialGradient(c, c, n * 0.30, c, c, n * 0.47);
+    rim.addColorStop(0, 'rgba(255,255,255,0.06)');
+    rim.addColorStop(0.7, 'rgba(235,250,255,0.55)');
+    rim.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = rim;
+    ctx.beginPath();
+    ctx.arc(c, c, n * 0.47, 0, Math.PI * 2);
+    ctx.fill();
+    const hi = ctx.createRadialGradient(c - n * 0.14, c - n * 0.15, 0, c - n * 0.14, c - n * 0.15, n * 0.12);
+    hi.addColorStop(0, 'rgba(255,255,255,0.95)');
+    hi.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hi;
+    ctx.fillRect(0, 0, n, n);
+  });
+  const makePool = (tex: THREE.Texture, count: number, gridSize: number): THREE.Sprite[] =>
+    Array.from({ length: count }, (_, i) => {
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, rotation: i * 2.399 });
+      const sp = new THREE.Sprite(mat);
+      sp.scale.setScalar(gridSize * METRES_PER_GRID_PX);
+      sp.visible = false;
+      sp.renderOrder = 2;
+      fishScene.add(sp);
+      return sp;
+    });
+  const flakePool = makePool(flakeTex, 12, 4.4);
+  const bubblePool = makePool(bubbleTex, 8, 6);
+  // Bubbles rise at different depths, some in front of the fish and some behind it.
+  const BUBBLE_DEPTHS = [-0.022, 0.016, -0.006, 0.026, -0.014, 0.008, -0.026, 0.02];
+  let flakeList: readonly LiveParticle[] = [];
+  let bubbleList: readonly LiveParticle[] = [];
+  const bubbleTint = new THREE.Color();
+  const placeParticles = (fishDepth: number): void => {
+    for (let i = 0; i < flakePool.length; i += 1) {
+      const sp = flakePool[i]!;
+      const f = flakeList[i];
+      sp.visible = f !== undefined && f.alpha > 0.01;
+      if (!f || !sp.visible) continue;
+      // just in front of the fish's plane: it swims up to a flake and takes it
+      const w = gridToWorld(f.x, f.y, fishDepth - 0.006);
+      sp.position.set(w.x, w.y, w.z);
+      sp.material.opacity = f.alpha;
+    }
+    // moonlight: bubbles catch less of it
+    bubbleTint.setRGB(1 - 0.45 * nightT, 1 - 0.38 * nightT, 1 - 0.2 * nightT);
+    for (let i = 0; i < bubblePool.length; i += 1) {
+      const sp = bubblePool[i]!;
+      const b = bubbleList[i];
+      sp.visible = b !== undefined && b.alpha > 0.01;
+      if (!b || !sp.visible) continue;
+      const w = gridToWorld(b.x, b.y, BUBBLE_DEPTHS[i % BUBBLE_DEPTHS.length]!);
+      sp.position.set(w.x, w.y, w.z);
+      sp.material.opacity = b.alpha;
+      sp.material.color.copy(bubbleTint);
+    }
+  };
+
   // ---- water pass --------------------------------------------------------------------------------
   const plateTexture = (bmp: ImageBitmap): THREE.Texture => {
     const t = new THREE.Texture(bmp);
@@ -218,7 +327,10 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
     uPhase: { value: 1 },
     uPointer: { value: new THREE.Vector2(-1e4, -1e4) },
     uParallax: { value: new THREE.Vector2(0, 0) },
+    uTaps: { value: [0, 1, 2, 3].map(() => new THREE.Vector3(0, 0, -1e4)) },
+    uWallAlpha: { value: WALL_ALPHA },
   };
+  let tapSlot = 0;
   const waterMat = new THREE.ShaderMaterial({
     vertexShader: WATER_VERTEX,
     fragmentShader: WATER_FRAGMENT,
@@ -334,6 +446,15 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       resizeTarget();
     },
     tier: () => tier,
+    tap(gx, gy) {
+      const slot = waterUniforms.uTaps.value[tapSlot % 4];
+      if (slot) slot.set(gx, gy, clock);
+      tapSlot += 1;
+    },
+    setParticles(f, b) {
+      flakeList = f;
+      bubbleList = b;
+    },
     render(dtMs) {
       clock += dtMs / 1000;
       sharedUniforms.uTime.value = clock;
@@ -362,8 +483,8 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
         const mouth = model?.mouth;
         if (mouth) {
           // a goldfish pushes its lips forward as it opens them
-          mouth.object.position.set(mouth.base.x + 0.0011 * s.mouth, mouth.base.y, mouth.base.z);
-          mouth.object.scale.setScalar(1 + 0.32 * s.mouth);
+          mouth.object.position.set(mouth.base.x + 0.0005 * s.mouth, mouth.base.y, mouth.base.z);
+          mouth.object.scale.set(1 + 0.12 * s.mouth, 1 + 0.2 * s.mouth, 1 + 0.2 * s.mouth);
           mouth.object.updateMatrixWorld(true);
         }
         // the thin-edge glow and the light through the fins follow the key light, day or night
@@ -383,11 +504,12 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
         }
       }
 
+      placeParticles(depthEase);
       renderer.resetState();
       renderer.setRenderTarget(rt);
       renderer.setClearColor(0x000000, 0);
       renderer.clear(true, true, false);
-      if (root.visible) renderer.render(fishScene, camera);
+      renderer.render(fishScene, camera);
       renderer.setRenderTarget(null);
       renderer.setViewport(0, 0, wCss, hCss);
       if (waterQuad.visible) renderer.render(waterScene, waterCam);
@@ -406,6 +528,9 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       waterMat.dispose();
       waterQuad.geometry.dispose();
       model?.dispose();
+      for (const sp of [...flakePool, ...bubblePool]) sp.material.dispose();
+      flakeTex.dispose();
+      bubbleTex.dispose();
       renderer.dispose();
     },
   };
