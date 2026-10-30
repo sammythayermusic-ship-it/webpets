@@ -26,10 +26,12 @@ export default defineConfig({
     {
       // Source and superseded art is for humans only; never ship it. `habitats-160x120` and the two
       // sprite reference folders are the retired pixel-art rounds, and the bitmap font went with the
-      // chrome restyle; together they were about 4 MB of a 14 MB bundle that nothing loads.
+      // chrome restyle; together they were about 4 MB of a 14 MB bundle that nothing loads. `3d` is the
+      // Blender source (the .blend, its checkpoints, the scripts and the glTF exports): the live layer
+      // loads its fish from `live/`, never from here.
       name: 'webpets-strip-unshipped-art',
       closeBundle() {
-        for (const dir of ['reference', 'habitats-160x120', 'sprites/pets-80', 'sprites/strips-80', 'fonts']) {
+        for (const dir of ['reference', '3d', 'habitats-160x120', 'sprites/pets-80', 'sprites/strips-80', 'fonts']) {
           rmSync(resolve(__dirname, 'dist', dir), { recursive: true, force: true });
         }
       },
