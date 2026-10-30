@@ -75,7 +75,7 @@ export function phaseOf(pet: PetState, deathAcknowledgedFor: string | null): Sce
 
 /** Minimal SceneView for paintTrayChip; mirrors app/view.ts's toSceneView without importing it. */
 export function toChipView(
-  s: Pick<AppState, 'pet' | 'hunger' | 'latches' | 'night'>,
+  s: Pick<AppState, 'pet' | 'hunger' | 'latches' | 'night' | 'daylight'>,
   reducedMotion: boolean,
 ): SceneView {
   const pet = s.pet;

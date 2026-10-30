@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PetState } from '../sim/types';
 import { DAY_MS, HOUR_MS } from '../sim/constants';
+import { PURE_NIGHT } from '../app/daynight';
 import { captionText, labelFor, pantryDays, phaseOf, toChipView, toHudModel, tooltipText } from './model';
 
 const NOW = 1_700_000_000_000;
@@ -91,7 +92,7 @@ describe('phaseOf / toChipView', () => {
   });
   it('builds a SceneView for the chip painter', () => {
     const v = toChipView(
-      { pet: pet({ pantry: 25 }), hunger: 20, latches: { pantryLowFiredForPantry: null, deathAcknowledgedFor: null }, night: true },
+      { pet: pet({ pantry: 25 }), hunger: 20, latches: { pantryLowFiredForPantry: null, deathAcknowledgedFor: null }, night: true, daylight: PURE_NIGHT },
       false,
     );
     expect(v.label).toBe('hungry');
