@@ -33,7 +33,15 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], viewport: VIEWPORT },
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: VIEWPORT,
+        // Headless Chromium renders WebGL in software (SwiftShader) unless told otherwise, and the
+        // live bowl (a full-canvas water pass and a lit fish) runs at ~1 fps there, so every
+        // wall-clock wait in the suite timed out. ANGLE on Metal is the GPU path the packaged app
+        // uses anyway: measured 60 fps headless on the M4.
+        launchOptions: { args: ['--use-angle=metal'] },
+      },
     },
   ],
 });

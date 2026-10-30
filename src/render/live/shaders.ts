@@ -366,8 +366,13 @@ void main() {
   // the reflection brightens on the faces of the waves that tilt toward the window and darkens on the
   // backs: the bands you see running across a real bowl's surface
   float tilt = clamp(0.5 + 0.9 * dot(wsl, vec2(-0.35, 0.55)), 0.0, 1.0);
-  col = mix(col, skyCol * (0.8 + 0.4 * tilt), band * fres * (0.85 + 0.45 * tilt));
+  col = mix(col, skyCol * (0.62 + 0.76 * tilt), band * fres * (0.75 + 0.7 * tilt));
   col += vec3(1.0, 0.98, 0.92) * spec * band * mix(1.1, 0.5, uNight);
+  // broad glints riding the wave faces that catch the light: what the eye follows across a surface
+  float glint = smoothstep(0.62, 0.95, tilt) * smoothstep(0.3, 0.7, wpNoise(sPlane * 0.09 + vec2(uTime * 0.3, 0.0)));
+  col += vec3(1.0, 0.99, 0.95) * glint * band * mix(0.22, 0.10, uNight);
+  // and the shadowed backs, a touch darker, so the bands have two sides
+  col *= 1.0 - band * smoothstep(0.35, 0.05, tilt) * 0.10;
   // the meniscus: a bright line where the water meets the front glass, a thin shadow under it
   float meniscus = exp(-pow((gm.y - botEdge) / 0.75, 2.0)) * inner * smoothstep(0.05, 0.4, sArg);
   col += mix(vec3(0.92, 0.98, 1.0), vec3(0.45, 0.6, 0.9), uNight) * meniscus * 0.8;

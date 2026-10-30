@@ -1485,3 +1485,12 @@ surface band stay solid. The water stays C's blue. Tried at 0.66 first: the desk
 Twice in this step macOS evicted files from the working folder mid-step (3,300 build files, then
 ~200 sources), and tests timed out reading them. `CARGO_TARGET_DIR=$HOME/.cache/webpets/target`
 for every build from now on (CLAUDE.md). The repo itself still needs to move; NEEDS-SAMMY.
+
+### the e2e suite gets the GPU
+After the goldfish the e2e suite timed out on every test. Headless Chromium renders WebGL in
+software (SwiftShader); the live bowl ran at ~1 fps there and slowing, and the suite's wall-clock
+waits ran out (the acceptance walk had already been taking 1.9 of its 2 minutes before Step B).
+`--use-angle=metal` in `playwright.config.ts` puts the test browser on the M4's GPU, the same Metal
+path the packaged app's WebKit uses: 60 fps headless, and the whole suite runs in 39 s instead of
+nearly 5 minutes. The surface's wave bands were also made easier to see (contrast and broad glints
+that ride the bright faces), after a frame-by-frame check showed them moving but faint.
