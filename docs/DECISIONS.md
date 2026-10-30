@@ -1367,3 +1367,54 @@ Sammy says otherwise.
 The build cache for this worktree is an APFS clone of the phase worktree's `src-tauri/target`
 (`cp -c`: no space used until the files diverge), so the first release build reused every
 dependency instead of compiling ~600 crates on a 97%-full disk.
+
+## 2026-10-30 — Step B plan: a real goldfish, and C's own shortfalls
+
+### the fish
+The live fish today is the September toy: a round body, a cartoon eye with a brow, fins that are
+orange cards, one subdivision level, and a "scale pattern" that is a sine grid in the shader. Step B
+replaces the asset, not the rig: the spine shader, the mapping and the behaviour stay as they are.
+
+- **A new mesh, built by a script** (`assets/3d/scripts/gf_build.py`, a fresh scene, no edits to
+  `wp_scene.blend`). A common goldfish with a longish forked tail: a lofted body whose depth,
+  width and keel follow measured goldfish proportions (deepest at about 40% of the standard length
+  from the snout, the caudal peduncle about a third of that), a terminal mouth, eyes set high and
+  forward, a gill cover, and the real fin set: dorsal, forked caudal, anal, paired pelvics (new) and
+  paired pectorals. Same root frame and length as the old mesh (nose +0.06 m, tail tip -0.06 m), so
+  the spine shader's envelopes and `fishScale()` keep meaning what they mean. About 6k vertices in
+  place of one subdivision of a 500-face body.
+- **Maps, baked from code.** The body's UVs come straight from the loft (u along the body, v around
+  it), so every texel knows its point on the fish. The script computes, per texel: the scale pattern
+  (staggered, overlapping cycloid scales, each raised toward its free edge, the reticulated darker
+  edge of real goldfish scales, a little colour and shine variation per scale), the lateral line, the
+  gill-cover edge, the eye socket and nostrils; and from those, a base-colour map, a tangent-space
+  normal map and a roughness/metalness map. Fins get one shared map: rays that branch toward the
+  edge and carry joints, a thin membrane between them that lets light through, a frayed pale edge.
+  The eye gets its own: a black pupil, a gold iris ring, a dark limbus. This is A's look (`a_look.py`:
+  scale relief with darker edges, fin rays driving bump and translucency, a gold-ringed eye under a
+  wet coat) moved from Cycles nodes into maps a real-time material can read.
+- **Materials in the live layer.** Body: physical material with those maps, a clear coat for the
+  wet skin, a little metalness so scales glint as the fish turns, and a warm glow where the body is
+  thin and turns away from the camera (the subsurface edge). Fins: the fin map's colour and alpha, a
+  back-light term so a fin between you and the light glows, double sided. Eye: the iris map under a
+  sharp clear coat, so the key light leaves a real highlight that moves with the fish. The cartoon
+  glints go.
+
+### the water, the bowl, the flakes
+- **Ripples you can see moving.** Wave trains travelling across the surface band (not only noise),
+  with glints that move with them, and a faint matching shimmer through the side glass.
+- **A bowl you can see through.** The bg plates are re-rendered with Cycles' transparent glass, so
+  above the water the desk shows through both walls; in the water, where there is only back wall,
+  the water pass leaves some alpha so the desk shows through the water too, tinted. Gravel, plants
+  and the fish stay opaque. Click-through is unaffected: it reads `opaqueRect` and the hit regions,
+  not pixels.
+- **Flakes and bubbles inside the water.** Pixi keeps their physics; the live layer draws them, as
+  small lit objects in the fish's render target, so the water pass bends and tints them exactly like
+  the fish. Pixi's own copies are hidden for a live habitat.
+- **A tap ripple.** A tap on the glass starts a ring in the water pass that spreads and fades.
+- **Caustics that are not even.** The web is modulated by a slow large-scale field (brighter where
+  the light enters, patches that drift and focus), and its sharpness varies.
+
+### evidence
+Stills at day, night and feeding beside the bake-off's C stills; the bake-off's 20-second script;
+frame cost at Medium and Large. Judged against "a stranger would call it a real goldfish".
