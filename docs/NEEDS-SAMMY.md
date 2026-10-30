@@ -35,6 +35,14 @@ retired, but the disk is still at 97% (about 15 GB free). What is left that only
   until you say to remove them.
 
 
+### Update, Step B (2026-10-30, evening): eviction is now hitting source files
+Twice during Step B macOS evicted files from the working folder while I was using them: 3,300 build
+files, then ~200 sources (`src/sim`, the sprite frames, the Blender scene). Tests then time out
+reading them and look like failures. I re-download and carry on, and I moved the Rust build cache
+out of iCloud (`~/.cache/webpets/target`, about 3 GB), but the repo itself is still on the iCloud
+Desktop with ~13 GB free. Moving it (or turning off "Optimize Mac Storage") is the one fix; emptying
+the Trash and deleting `~/Desktop/webpets/src-tauri/target` (5.4 GB) would buy time.
+
 ### Bubbles died on Oct 29 (2026-10-30) — nothing blocked
 Your pet in `WebPets.app` ran out of food while the app was not running (the clock never stops),
 and died about a day before the Step A build was installed. The app is showing the "While you were

@@ -1418,3 +1418,70 @@ replaces the asset, not the rig: the spine shader, the mapping and the behaviour
 ### evidence
 Stills at day, night and feeding beside the bake-off's C stills; the bake-off's 20-second script;
 frame cost at Medium and Large. Judged against "a stranger would call it a real goldfish".
+
+## 2026-10-30 — Step B built: the goldfish, the see-through bowl, water that moves
+
+### the fish: maps from the loft's own parameters
+Tried first and kept: computing the maps in numpy rather than baking Cycles nodes. The body's UVs are
+the loft's parameters (u along the body, v around it), so every texel knows its point on the fish and
+the pattern can be laid out ON the surface: scale rows that follow the body and narrow toward the
+tail and the head (15 rows a side, ~27 scales along the lateral line, pitch following the local depth),
+the gill cover's free edge, the lateral line's pores, the eye socket, the nostrils. Each scale is a
+ramp rising toward its free edge, and the winner of a max over its neighbours is what shows, which
+gives real shingle overlap with the free edges convex toward the tail (checked on the normal map:
+they are). A's Cycles look (Voronoi relief, edge darkening, rays as `sin(N·atan2)`) is the same idea;
+the regular staggered grid reads as a fish where Voronoi read as a pebbled skin. All three maps bake in
+about a second, so the look is tuned by editing numbers, not by waiting on renders.
+
+Kept: a dev-only close-up page (`fish-preview.html`) with the bowl's light rig, because the
+packaged app shows the fish 120–240 px long and Cycles' preview lies about real-time materials.
+It found the one real bug: the eyes were wound inside out. Cycles draws both sides, so its preview
+had eyes; the live layer culls back faces and the first goldfish had none. `gf_build.py` now
+recalculates outward normals on every closed mesh.
+
+Judged on the fish at Large and in the close-up and changed: the first maps read yellow under the
+rig (real goldfish are a deeper orange; the gradient moved toward red-orange); the gill cover read
+as a separate yellow helmet (its gold cheek and shine were cut, its colour brought down to the
+flank's); the fins read as a hatched grid (one fork per ray instead of two, thinner and lower-
+contrast rays, a fuller membrane, more light through it); the open mouth read as a red ball on the
+nose (darker lips, a smaller gape). The rays still show as fine lines in the tail at Large, which is
+right for a goldfish.
+
+Fins flutter from their own hinge now: each fin's root point and longest ray are exported with it
+(glTF extras) and the shader weights the flutter by distance from that root. The September fish's
+rule (distance from the spine) would have left the goldfish's pectorals, which sit close to the
+body, still.
+
+### the bowl you can see through
+The bg plates are rendered with Cycles' transparent glass (and a roughness threshold of 0.3 so the
+frosted rim ramp still counts as clear). Alpha through the empty bowl is now ~0.3 (the two walls'
+reflections) instead of 1. The 0.5-alpha box is unchanged (the rim and the silhouette stay above
+it), so `opaqueRect` and the click-through region are exactly as before; the tests say so.
+Cycles leaves grain in thin glass (the denoiser does not clean alpha through glass), visible once
+the desk shows through: `c_finish.py` smooths the glass-only regions (premultiplied, away from the
+silhouette, never over the gravel, plants or stand), and the same for the faint parts of the
+front-glass plate, whose grain had been on top of the water since the bake-off. High-frequency
+alpha noise in the front glass went from 0.022 to 0.0007.
+
+In the water the pass now outputs alpha below 1 only where there is back wall behind it: 0.5 by
+day, rising with depth, toward the glass's edge and at night; the gravel, plants, fish and the
+surface band stay solid. The water stays C's blue. Tried at 0.66 first: the desk did not show at all.
+
+### water that moves, a tap, the caustics, flakes and bubbles
+- Three crossing wave trains on the surface, in the surface's own plane (depth stretched back out
+  of the foreshortened band), warped by slow noise. Unwarped they ruled the band into horizontal
+  ribs; warped they read as wavelets crossing it. The same trains drive faint light bands through
+  the body and a share of the refraction, so the movement carries below the surface.
+- A tap on the glass (the scene's existing tap) starts a ring in the water pass, four at a time,
+  spreading at 48 grid px/s and gone in 2.4 s.
+- Caustics: a slow field gathers the web into drifting brighter patches and sharpens the threads
+  there. The first version of that made white lightning cracks on the near pebbles; the threads
+  were widened and the peak cut.
+- Flakes and bubbles keep Pixi's physics; their sprites are read every frame and drawn by the live
+  layer as sprites in the fish's render target, so the water refracts and tints them like the fish.
+  Each keeps its slot, so a bubble keeps its depth (some pass in front of the fish, some behind).
+
+### the build cache moves out of iCloud
+Twice in this step macOS evicted files from the working folder mid-step (3,300 build files, then
+~200 sources), and tests timed out reading them. `CARGO_TARGET_DIR=$HOME/.cache/webpets/target`
+for every build from now on (CLAUDE.md). The repo itself still needs to move; NEEDS-SAMMY.

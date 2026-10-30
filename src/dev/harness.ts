@@ -38,7 +38,7 @@ const HABITATS: ReadonlySet<string> = new Set<Habitat>([
 export interface HarnessContext {
   store: Pick<AppStore, 'getState'>;
   platform: { window: Pick<WindowApi, 'getGeometry'> };
-  scene: Pick<HabitatScene, 'snapshot' | 'debugState' | 'fps' | 'setPointer'>;
+  scene: Pick<HabitatScene, 'snapshot' | 'debugState' | 'fps' | 'setPointer' | 'tap'>;
   devPanel: DevPanelHandle & Partial<{ open(): void; close(): void }>;
   hud?: Pick<HudHandle, 'setVisible'>;
 }
@@ -351,6 +351,15 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
       const x = nullableNum(cmd, 'x');
       const y = x === null ? null : num(cmd, 'y');
       ctx.scene.setPointer(x, y);
+      return { x, y };
+    }
+    case 'tap': {
+      // What a real click on the glass does (main.ts): the needs stimulus, and the scene's tap,
+      // which startles the fish and rings the water. Window-local CSS px, like `pointer`.
+      const x = num(cmd, 'x');
+      const y = num(cmd, 'y');
+      actions.poke('tap');
+      ctx.scene.tap(x, y);
       return { x, y };
     }
     case 'poke': {
