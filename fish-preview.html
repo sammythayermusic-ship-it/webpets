@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Goldfish preview</title>
+    <!-- Dev only (npm run dev, then /fish-preview.html): the live goldfish close up, under the bowl's
+         light rig, for judging the look. Not part of the build: vite builds index.html alone. -->
+    <style>
+      html, body { margin: 0; height: 100%; background: #24576a; }
+      canvas { display: block; width: 100vw; height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <script type="module" src="/src/dev/fishPreview.ts"></script>
+  </body>
+</html>

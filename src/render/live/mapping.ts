@@ -111,7 +111,7 @@ export function cameraPose(): { position: WorldPoint; pitch: number } {
  * Length of the exported fish mesh nose to tail tip, root space, metres (bbox of HERO_fish_body
  * and HERO_fish_tail in fish-rig.json: 0.0598 - (-0.0605)).
  */
-export const FISH_MESH_LENGTH_M = 0.1203;
+export const FISH_MESH_LENGTH_M = 0.1218;
 
 /**
  * How long the fish is drawn, grid px. The rendered sprite the simulation was tuned against draws

@@ -13,26 +13,12 @@
 // rendered empty, so the refraction the water would have given the gravel is applied here, to both.
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { ManifestHabitat, ScenePhase } from '../types';
-import { assetUrl } from '../assets';
+import { createFishUniforms, loadFishModel, type FishModel, type FishPart } from './fishModel';
 import { cameraFrustum, cameraPose, depthWander, fishScale, gridToWorld } from './mapping';
 import { createSpine, type FacingSign, type Spine, type SpineState } from './spine';
-import {
-  FISH_BODY_COLOR,
-  FISH_BODY_EMISSIVE,
-  FISH_BODY_ROUGHNESS,
-  FISH_FIN_COLOR,
-  FISH_NORMAL_BEGIN,
-  FISH_VERTEX_BEGIN,
-  FISH_VERTEX_PARS,
-  WATER_FRAGMENT,
-  WATER_VERTEX,
-} from './shaders';
-
-/** Where the shipped fish lives (Vite publicDir = assets/). */
-export const FISH_GLB = 'live/fish.glb';
+import { WATER_FRAGMENT, WATER_VERTEX } from './shaders';
 
 /** Quality tiers: `lean` halves the fish render target and dims the shafts/caustics. */
 export type LiveTier = 'full' | 'lean';
@@ -71,19 +57,12 @@ export interface LiveLayer {
   destroy(): void;
 }
 
-type FlutterMode = 0 | 1 | 2 | 3;
-
-interface Part {
-  mesh: THREE.Mesh;
-  uniforms: Record<string, THREE.IUniform>;
-}
-
 /** The three lights of wp_scene.blend's rig, as directions in Three's Y-up frame (from Blender x, z, -y). */
-const KEY_DIR = new THREE.Vector3(-0.34, 1.3, 0.4).normalize();
-const FILL_DIR = new THREE.Vector3(0.78, 0.16, 0.62).normalize();
-const RIM_DIR = new THREE.Vector3(0.3, 0.8, -0.95).normalize();
+export const KEY_DIR = new THREE.Vector3(-0.34, 1.3, 0.4).normalize();
+export const FILL_DIR = new THREE.Vector3(0.78, 0.16, 0.62).normalize();
+export const RIM_DIR = new THREE.Vector3(0.3, 0.8, -0.95).normalize();
 
-interface RigColours {
+export interface RigColours {
   key: [THREE.Color, number];
   fill: [THREE.Color, number];
   rim: [THREE.Color, number];
@@ -93,7 +72,7 @@ interface RigColours {
   env: number;
 }
 
-const DAY: RigColours = {
+export const DAY: RigColours = {
   key: [new THREE.Color(1.0, 0.9, 0.78), 2.6],
   fill: [new THREE.Color(0.64, 0.78, 1.0), 0.9],
   rim: [new THREE.Color(1.0, 0.76, 0.55), 1.6],
@@ -105,7 +84,7 @@ const DAY: RigColours = {
 
 // Moonlight, but the fish must still read as a goldfish: the key keeps a little warmth and enough
 // strength that the orange survives, the rim does the cold blue work.
-const NIGHT: RigColours = {
+export const NIGHT: RigColours = {
   key: [new THREE.Color(0.8, 0.84, 1.0), 1.1],
   fill: [new THREE.Color(0.45, 0.5, 1.0), 0.35],
   rim: [new THREE.Color(0.5, 0.8, 1.0), 1.4],
@@ -117,10 +96,6 @@ const NIGHT: RigColours = {
 
 function lerpColor(out: THREE.Color, a: THREE.Color, b: THREE.Color, t: number): THREE.Color {
   return out.copy(a).lerp(b, t);
-}
-
-function linear(r: number, g: number, b: number): THREE.Color {
-  return new THREE.Color().setRGB(r, g, b, THREE.LinearSRGBColorSpace);
 }
 
 export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
@@ -141,6 +116,7 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.05, 6);
   camera.position.set(pose.position.x, pose.position.y, pose.position.z);
   camera.rotation.set(pose.pitch, 0, 0);
+  camera.updateMatrixWorld(true);
   const key = new THREE.DirectionalLight(DAY.key[0], DAY.key[1]);
   key.position.copy(KEY_DIR);
   const fill = new THREE.DirectionalLight(DAY.fill[0], DAY.fill[1]);
@@ -158,133 +134,25 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
   const root = new THREE.Group();
   root.visible = false;
   fishScene.add(root);
-  const parts: Part[] = [];
-  let mouth: THREE.Object3D | null = null;
-  let mouthBase = new THREE.Vector3();
+  const parts: FishPart[] = [];
+  let model: FishModel | null = null;
   const spine: Spine = createSpine();
   const rootInv = new THREE.Matrix4();
   const tmp = new THREE.Matrix4();
+  const unscale = new THREE.Matrix4();
+  const keyView = new THREE.Vector3();
+  const sharedUniforms = createFishUniforms();
 
-  const sharedUniforms = {
-    uAmp: { value: 0 },
-    uK: { value: 0 },
-    uPhase: { value: 0 },
-    uTurn: { value: 0 },
-    uSway: { value: 0 },
-    uFlutter: { value: 0 },
-    uTime: { value: 0 },
-  };
-
-  const bendMaterial = (mat: THREE.MeshPhysicalMaterial, flutter: FlutterMode, kind: 'body' | 'fin' | 'other'): Record<string, THREE.IUniform> => {
-    const own: Record<string, THREE.IUniform> = {
-      uToRoot: { value: new THREE.Matrix4() },
-      uFromRoot: { value: new THREE.Matrix4() },
-      uFlutterMode: { value: flutter },
-    };
-    mat.onBeforeCompile = (shader) => {
-      Object.assign(shader.uniforms, sharedUniforms, own);
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', `#include <common>\n${FISH_VERTEX_PARS}`)
-        .replace('#include <beginnormal_vertex>', FISH_NORMAL_BEGIN)
-        .replace('#include <begin_vertex>', FISH_VERTEX_BEGIN);
-      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vRootPos;');
-      if (kind === 'body') {
-        shader.fragmentShader = shader.fragmentShader
-          .replace('#include <color_fragment>', FISH_BODY_COLOR)
-          .replace('#include <roughnessmap_fragment>', FISH_BODY_ROUGHNESS)
-          .replace('#include <emissivemap_fragment>', FISH_BODY_EMISSIVE);
-      } else if (kind === 'fin') {
-        shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', FISH_FIN_COLOR);
-      }
-    };
-    // onBeforeCompile output is cached by the shader source, which does not change per part; the
-    // uniforms differ, so each part needs its own program key.
-    mat.customProgramCacheKey = () => `wp-fish-${kind}-${flutter}`;
-    return own;
-  };
-
-  const materialFor = (name: string): { mat: THREE.MeshPhysicalMaterial; flutter: FlutterMode; kind: 'body' | 'fin' | 'other' } => {
-    if (name.includes('fin_dorsal') || name.includes('fin_anal') || name.includes('tail') || name.includes('fin_pec')) {
-      // Fins: a lighter, warmer orange than the body, lit from behind (a sheen lobe and a touch of
-      // emission stand in for the subsurface glow of a thin membrane) so they never go muddy
-      // against the water.
-      const mat = new THREE.MeshPhysicalMaterial({
-        color: linear(1.0, 0.46, 0.16),
-        roughness: 0.5,
-        transparent: true,
-        opacity: 0.93,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        sheen: 0.9,
-        sheenColor: linear(1.0, 0.62, 0.3),
-        sheenRoughness: 0.6,
-        emissive: linear(1.0, 0.36, 0.1),
-        emissiveIntensity: 0.16,
-        clearcoat: 0.2,
-        clearcoatRoughness: 0.5,
-      });
-      const flutter: FlutterMode = name.includes('tail') ? 3 : name.includes('fin_pec') ? 2 : 1;
-      return { mat, flutter, kind: 'fin' };
-    }
-    if (name.includes('eyeglint')) {
-      const mat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.2, roughness: 0.3 });
-      return { mat, flutter: 0, kind: 'other' };
-    }
-    if (name.includes('eye')) {
-      const mat = new THREE.MeshPhysicalMaterial({
-        color: linear(0.03, 0.02, 0.04),
-        roughness: 0.08,
-        clearcoat: 1.0,
-        clearcoatRoughness: 0.05,
-      });
-      return { mat, flutter: 0, kind: 'other' };
-    }
-    if (name.includes('mouth')) {
-      // The mouth is the body's colour a shade darker, not a red tag on the nose.
-      const mat = new THREE.MeshPhysicalMaterial({ color: linear(0.78, 0.2, 0.05), roughness: 0.5, clearcoat: 0.4 });
-      return { mat, flutter: 0, kind: 'other' };
-    }
-    const mat = new THREE.MeshPhysicalMaterial({
-      color: linear(0.95, 0.27, 0.05),
-      roughness: 0.4,
-      clearcoat: 0.6,
-      clearcoatRoughness: 0.25,
-      sheen: 0.5,
-      sheenColor: linear(1.0, 0.7, 0.35),
-      sheenRoughness: 0.6,
-      emissive: linear(1.0, 0.3, 0.08),
-      emissiveIntensity: 0.05,
-    });
-    return { mat, flutter: 0, kind: 'body' };
-  };
-
-  const ready = new GLTFLoader()
-    .loadAsync(assetUrl(FISH_GLB))
-    .then((gltf) => {
-      const rigRoot = gltf.scene.getObjectByName('RIG_fish_root') ?? gltf.scene;
-      // The export carries the rig's rest rotation (1.94° about Y). The spine owns every rotation
-      // now, so the root is reset to identity and its children keep their offsets.
-      rigRoot.rotation.set(0, 0, 0);
-      rigRoot.position.set(0, 0, 0);
-      rigRoot.scale.setScalar(fishScale());
-      const tailHinge = gltf.scene.getObjectByName('RIG_fish_tail');
-      if (tailHinge) tailHinge.rotation.set(0, 0, 0);
-      gltf.scene.traverse((o) => {
-        if (!(o instanceof THREE.Mesh)) return;
-        const { mat, flutter, kind } = materialFor(o.name);
-        if (o.material instanceof THREE.Material) o.material.dispose();
-        o.material = mat;
-        o.frustumCulled = false;
-        if (kind === 'fin') o.renderOrder = 1;
-        parts.push({ mesh: o, uniforms: bendMaterial(mat, flutter, kind) });
-        if (o.name.includes('mouth')) {
-          mouth = o;
-          mouthBase = o.position.clone();
-        }
-      });
-      root.add(rigRoot);
-      root.visible = phase !== 'memorial';
-    });
+  const ready = loadFishModel(renderer, sharedUniforms).then((m) => {
+    model = m;
+    // The spine owns every rotation; the rig's empties stay at rest and only carry offsets.
+    m.root.scale.setScalar(fishScale());
+    const tailHinge = m.root.getObjectByName('RIG_fish_tail');
+    if (tailHinge) tailHinge.rotation.set(0, 0, 0);
+    parts.push(...m.parts);
+    root.add(m.root);
+    root.visible = phase !== 'memorial';
+  });
 
   // ---- water pass --------------------------------------------------------------------------------
   const plateTexture = (bmp: ImageBitmap): THREE.Texture => {
@@ -491,11 +359,17 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
         sharedUniforms.uTurn.value = s.turn;
         sharedUniforms.uSway.value = s.sway;
         sharedUniforms.uFlutter.value = s.flutter;
+        const mouth = model?.mouth;
         if (mouth) {
-          mouth.position.set(mouthBase.x + 0.003 * s.mouth, mouthBase.y - 0.001 * s.mouth, mouthBase.z);
-          mouth.scale.setScalar(1 + 0.22 * s.mouth);
-          mouth.updateMatrixWorld(true);
+          // a goldfish pushes its lips forward as it opens them
+          mouth.object.position.set(mouth.base.x + 0.0011 * s.mouth, mouth.base.y, mouth.base.z);
+          mouth.object.scale.setScalar(1 + 0.32 * s.mouth);
+          mouth.object.updateMatrixWorld(true);
         }
+        // the thin-edge glow and the light through the fins follow the key light, day or night
+        sharedUniforms.uGlow.value.copy(key.color).multiplyScalar(key.intensity / DAY.key[1]);
+        keyView.copy(KEY_DIR).transformDirection(camera.matrixWorldInverse);
+        sharedUniforms.uKeyView.value.copy(keyView);
         for (const p of parts) {
           // part -> root, in the root's UNSCALED frame: the bend amplitudes are mesh metres.
           const toRoot = p.uniforms['uToRoot'];
@@ -503,7 +377,7 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
           if (!toRoot || !fromRoot) continue;
           tmp.multiplyMatrices(rootInv, p.mesh.matrixWorld);
           // rootInv includes the root scale; undo it so root-space is mesh metres
-          tmp.premultiply(new THREE.Matrix4().makeScale(1 / fishScale(), 1 / fishScale(), 1 / fishScale()));
+          tmp.premultiply(unscale.makeScale(1 / fishScale(), 1 / fishScale(), 1 / fishScale()));
           (toRoot.value as THREE.Matrix4).copy(tmp);
           (fromRoot.value as THREE.Matrix4).copy(tmp).invert();
         }
@@ -531,10 +405,7 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       envTex.dispose();
       waterMat.dispose();
       waterQuad.geometry.dispose();
-      for (const p of parts) {
-        p.mesh.geometry.dispose();
-        if (p.mesh.material instanceof THREE.Material) p.mesh.material.dispose();
-      }
+      model?.dispose();
       renderer.dispose();
     },
   };

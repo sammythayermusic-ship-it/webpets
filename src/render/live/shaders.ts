@@ -7,7 +7,12 @@
  * Each part is a child somewhere under the root with its own transform, so the vertex is carried into
  * root space (uToRoot), bent there by the travelling wave and the turn curl, and carried back
  * (uFromRoot) before Three's own modelViewMatrix applies. Root space: +x nose, +y up, +z the fish's
- * left; the mesh is 0.12 m long, tail tip at x = -0.06.
+ * left; the goldfish (assets/3d/scripts/gf_shape.py) is rigid ahead of the gills at x = 0.045, hinges
+ * its tail at x = -0.026 and ends at the lobe tips, x = -0.0605.
+ *
+ * Fins flutter from their OWN hinge: `uFinRoot` is where the fin meets the body (root space) and
+ * `uFinLen` its longest ray, both exported with the mesh, so a fin's free edge moves and its root
+ * stays put whatever its size or angle.
  */
 export const FISH_VERTEX_PARS = /* glsl */ `
 uniform mat4 uToRoot;
@@ -20,6 +25,8 @@ uniform float uSway;
 uniform float uFlutter;
 uniform float uFlutterMode;
 uniform float uTime;
+uniform vec3 uFinRoot;
+uniform float uFinLen;
 varying vec3 vRootPos;
 
 vec3 wpBend(vec3 pr, out float slope) {
@@ -32,19 +39,21 @@ vec3 wpBend(vec3 pr, out float slope) {
   float dz = uAmp * s2 * wave + uTurn * s2 + uSway * sin(uTime * 0.9 + x * 12.0);
   float dy = 0.0;
   slope = uAmp * s2 * uK * cos(arg);
+  float f = clamp(distance(pr, uFinRoot) / max(uFinLen, 1e-4), 0.0, 1.0);
   if (uFlutterMode > 0.5 && uFlutterMode < 1.5) {
-    // dorsal / anal: the free edge is far from the spine (|y| large); it trails the beat
-    float f = clamp((abs(pr.y) - 0.012) / 0.026, 0.0, 1.0);
-    dz += uFlutter * f * f * sin(arg - 1.2 + pr.y * 40.0);
+    // dorsal / anal: the free edge trails the beat, a ripple running back along the fin
+    dz += uFlutter * 0.9 * f * f * sin(arg - 1.2 + pr.x * 220.0);
   } else if (uFlutterMode > 1.5 && uFlutterMode < 2.5) {
-    // pectoral: the tip (|z| large) sculls up and down
-    float f = clamp((abs(pr.z) - 0.011) / 0.016, 0.0, 1.0);
-    dy += uFlutter * 1.6 * f * sin(uPhase * 0.62 + sign(pr.z) * 1.1);
+    // paired fins: the tips scull, the left and right half a beat apart
+    float side = sign(uFinRoot.z);
+    float scull = sin(uTime * 5.2 + side * 1.4 + pr.x * 90.0);
+    dy += uFlutter * 0.9 * f * f * scull;
+    dz += side * uFlutter * 0.5 * f * f * (0.6 + 0.4 * sin(uTime * 2.6 + side));
   } else if (uFlutterMode > 2.5) {
     // tail: beyond the hinge the fin lags the body and its tips flex more than its root
-    float f = clamp((-x - 0.026) / 0.035, 0.0, 1.0);
-    float edge = clamp((abs(pr.y) - 0.01) / 0.03, 0.0, 1.0);
-    dz += uFlutter * 1.4 * f * sin(arg - 0.9) + uFlutter * edge * f * sin(arg - 1.8 + pr.y * 60.0);
+    float ft = clamp((-x - 0.026) / 0.035, 0.0, 1.0);
+    float edge = clamp((abs(pr.y) - 0.004) / 0.018, 0.0, 1.0);
+    dz += uFlutter * 1.4 * ft * sin(arg - 0.9) + uFlutter * edge * ft * sin(arg - 1.8 + pr.y * 60.0);
   }
   return vec3(pr.x, pr.y + dy, pr.z + dz);
 }
@@ -71,60 +80,41 @@ vec3 wpNr = mat3(uToRoot) * normal;
 vec3 objectNormal = mat3(uFromRoot) * wpNr;
 `;
 
-/** Body: belly gradient and a scale pattern, read in root space so it never swims off the mesh. */
-export const FISH_BODY_COLOR = /* glsl */ `
-#include <color_fragment>
-{
-  float belly = smoothstep(0.002, -0.024, vRootPos.y);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.98, 0.66, 0.34), belly * 0.42);
-  // staggered rows of overlapping rounds, finer toward the tail
-  vec2 sp = vec2(vRootPos.x * 520.0, vRootPos.y * 560.0);
-  float row = floor(sp.y);
-  sp.x += 0.5 * mod(row, 2.0);
-  vec2 f = fract(sp) - 0.5;
-  float d = length(vec2(f.x, f.y * 1.1));
-  float sc = smoothstep(0.55, 0.3, d);
-  float head = smoothstep(0.03, 0.045, vRootPos.x);
-  sc = mix(sc, 0.5, head);
-  diffuseColor.rgb *= 0.975 + 0.035 * sc;
-  // a cooler, darker back
-  float back = smoothstep(0.0, 0.02, vRootPos.y);
-  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.78, 0.7, 0.8), back * 0.35);
-}
-`;
-
-export const FISH_BODY_ROUGHNESS = /* glsl */ `
-#include <roughnessmap_fragment>
-{
-  vec2 sp = vec2(vRootPos.x * 520.0, vRootPos.y * 560.0);
-  float row = floor(sp.y);
-  sp.x += 0.5 * mod(row, 2.0);
-  vec2 f = fract(sp) - 0.5;
-  float d = length(vec2(f.x, f.y * 1.1));
-  roughnessFactor *= 0.88 + 0.2 * smoothstep(0.3, 0.55, d);
-}
-`;
-
-/** Body: a warm rim where the body turns away, so the silhouette lifts off the water. */
+/**
+ * Body: the subsurface glow at the thin edges. Where the body turns away from the camera light has
+ * passed through less fish, so the silhouette goes warm and bright; more so toward the tail and the
+ * belly, which are thinner. `uGlow` is the key light's colour times its strength, so it dims at night.
+ */
 export const FISH_BODY_EMISSIVE = /* glsl */ `
 #include <emissivemap_fragment>
 {
   float facing = abs(dot(normalize(vNormal), normalize(vViewPosition)));
-  float graze = pow(1.0 - facing, 3.0);
-  totalEmissiveRadiance += vec3(1.0, 0.55, 0.25) * graze * 0.22;
+  float graze = pow(1.0 - facing, 2.6);
+  float thin = 0.45 + 0.55 * smoothstep(0.02, -0.024, vRootPos.x) + 0.25 * smoothstep(-0.004, -0.012, vRootPos.y);
+  totalEmissiveRadiance += vec3(1.0, 0.42, 0.14) * uGlow * graze * thin * 0.30;
 }
 `;
 
-/** Fins: translucent, with faint rays so they read as membrane and not as orange card. */
-export const FISH_FIN_COLOR = /* glsl */ `
-#include <color_fragment>
+/**
+ * Fins: light through the membrane. A fin between the camera and the key light glows (the light
+ * hits its far side), the thin membrane more than the rays (the map's alpha is the rays), and a
+ * little always, because a fin scatters what passes through it.
+ */
+export const FISH_FIN_EMISSIVE = /* glsl */ `
+#include <emissivemap_fragment>
 {
-  float rays = 0.5 + 0.5 * sin(vRootPos.y * 1100.0 + vRootPos.x * 420.0 + vRootPos.z * 900.0);
-  float facing = abs(dot(normalize(vNormal), normalize(vViewPosition)));
-  float graze = 1.0 - facing;
-  diffuseColor.a *= (0.66 + 0.3 * graze) * (0.88 + 0.12 * rays);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.66, 0.26), 0.3 * rays + 0.25 * graze);
+  vec3 nV = normalize(normal);
+  float behind = max(0.0, -dot(nV, normalize(uKeyView)));
+  float membrane = 1.0 - 0.55 * clamp(diffuseColor.a, 0.0, 1.0);
+  totalEmissiveRadiance += diffuseColor.rgb * uGlow * (0.26 + 0.55 * behind) * membrane;
 }
+`;
+
+/** Uniforms the fragment chunks read; declared once for both. */
+export const FISH_FRAGMENT_PARS = /* glsl */ `
+varying vec3 vRootPos;
+uniform vec3 uGlow;
+uniform vec3 uKeyView;
 `;
 
 /**
