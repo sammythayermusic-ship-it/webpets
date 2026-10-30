@@ -340,6 +340,13 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
     case 'resetClock':
       actions.dev.resetClock();
       return { devClockOffsetMs: ctx.store.getState().settings.devClockOffsetMs };
+    case 'newPet': {
+      // Adopt a fresh pet (a fish in the bowl), burying the current one if it died: a script that
+      // records behaviour needs a living pet, and `force` cannot bring a dead one back.
+      actions.newPet();
+      const pet = ctx.store.getState().pet;
+      return { id: pet.id, name: pet.name, species: pet.species, habitat: pet.habitat, personality: pet.personality };
+    }
     case 'pointer': {
       const x = nullableNum(cmd, 'x');
       const y = x === null ? null : num(cmd, 'y');

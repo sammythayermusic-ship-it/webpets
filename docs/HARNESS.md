@@ -68,6 +68,7 @@ its own so the next command lands inside the clip.
 | `hide` / `show` | – | `actions.setHidden(true / false)` |
 | `devPanel` | `{ open }` | opens or closes the dev panel; data has its rect |
 | `resetClock` | – | `dev.resetClock()` |
+| `newPet` | – | `actions.newPet()`: a fresh fish in the bowl (the old pet goes to the graveyard if it died); data names it. `force` cannot revive a dead pet, this can |
 | `pointer` | `{ x, y }` or `{ x: null }` | `scene.setPointer` in window-local CSS px, without moving the real mouse |
 | `poke` | `{ kind }` | a needs stimulus: `tap` (a knock on the glass), `bite`, `feed`, `pointer`; data has the needs after |
 | `setNeeds` | `{ energy?, curiosity?, comfort?, stress? }` | `dev.setNeeds`: re-anchor any of the four needs (0..1) at now, for scripting a tired, bored, rattled or settled pet |

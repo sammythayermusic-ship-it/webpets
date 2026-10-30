@@ -209,6 +209,7 @@ describe('harness runCommand', () => {
     await runCommand({ op: 'hide' }, h.ctx, h.io);
     await runCommand({ op: 'show' }, h.ctx, h.io);
     await runCommand({ op: 'resetClock' }, h.ctx, h.io);
+    await runCommand({ op: 'newPet' }, h.ctx, h.io);
     await runCommand({ op: 'pointer', x: 100, y: 80 }, h.ctx, h.io);
     await runCommand({ op: 'pointer', x: null }, h.ctx, h.io);
     expect(h.actions.dev.skip).toHaveBeenCalledWith(3600_000);
@@ -222,6 +223,7 @@ describe('harness runCommand', () => {
     expect(h.actions.setHidden).toHaveBeenNthCalledWith(1, true);
     expect(h.actions.setHidden).toHaveBeenNthCalledWith(2, false);
     expect(h.actions.dev.resetClock).toHaveBeenCalledTimes(1);
+    expect(h.actions.newPet).toHaveBeenCalledTimes(1);
     expect(h.setPointer).toHaveBeenNthCalledWith(1, 100, 80);
     expect(h.setPointer).toHaveBeenNthCalledWith(2, null, null);
   });
