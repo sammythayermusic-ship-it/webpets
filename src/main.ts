@@ -27,6 +27,8 @@ import { hungerLabel } from './sim';
 const HUD_GRACE_MS = 400;
 /** A press that moves less than this before release is a tap on the glass, not the start of a drag. */
 const TAP_SLOP_PX = 4;
+/** A click-to-feed within this long of the last one is ignored, so a double click spends one meal. */
+const DROP_COOLDOWN_MS = 1200;
 /**
  * macOS window collection-behaviour bits, for decoding the layering read-back into something readable.
  *
@@ -314,11 +316,25 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
     press = null;
     platform.window.startDrag().catch(logRejected('startDrag'));
   });
+  // A click over the open water at the top of the bowl drops a pinch of food right there; anywhere
+  // else on the habitat it is a knock on the glass. The cursor says which: a hand over the water.
+  let lastDropAt = 0;
   window.addEventListener('mouseup', (e: MouseEvent) => {
     if (press === null || e.button !== 0) return;
     press = null;
+    const spot = scene.feedSpot(e.clientX, e.clientY);
+    if (spot !== null) {
+      if (Date.now() - lastDropAt < DROP_COOLDOWN_MS) return;
+      lastDropAt = Date.now();
+      scene.aimFeed(spot);
+      if (!store.getState().actions.feed().ok) scene.aimFeed(null);
+      return;
+    }
     store.getState().actions.poke('tap');
     scene.tap(e.clientX, e.clientY);
+  });
+  canvas?.addEventListener('mousemove', (e: MouseEvent) => {
+    canvas.style.cursor = press === null && scene.feedSpot(e.clientX, e.clientY) !== null ? 'pointer' : '';
   });
   window.addEventListener('blur', () => {
     press = null;

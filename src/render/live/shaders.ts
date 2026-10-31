@@ -154,7 +154,7 @@ uniform float uRipple;       // ripple strength, grid px
 uniform float uPhase;        // 'alive' 1, 'dead' 0.35: dead water goes still
 uniform vec2 uPointer;       // grid px, or (-1e4, -1e4)
 uniform vec2 uParallax;      // grid px, the front plates' slide; the bg follows a third of it
-uniform vec3 uTaps[4];       // taps on the glass: grid px x, y, and the clock time it happened (-1e4: none)
+uniform vec4 uTaps[4];       // rings: grid px x, y, the clock time it started (-1e4: none), kind (0 a tap on the glass, 1 food landing on the surface)
 uniform float uWallAlpha;    // how much of the desk the water hides where there is only back wall (day)
 
 // --- value noise (cheap, smooth) -----------------------------------------------------------------
@@ -208,21 +208,25 @@ float wpCaustic(vec2 g, float t) {
   return pow(ridge, mix(2.2, 3.4, patchy)) * mix(0.3, 1.0, patchy);
 }
 
-// A tap on the glass: a ring that runs out from where you knocked, and fades.
+// A tap on the glass: a ring that runs out from where you knocked, and fades. Food landing on the
+// surface rings too, but ON the surface: its ring is measured in the surface's plane (depth stretched
+// back out of the foreshortened band), so it spreads as a flat ellipse, slower and longer-lived.
 vec2 wpTapRipple(vec2 g, float t, out float crest) {
   vec2 n = vec2(0.0);
   crest = 0.0;
   for (int i = 0; i < 4; i++) {
     float age = t - uTaps[i].z;
-    if (age < 0.0 || age > 2.4) continue;
+    float onSurface = step(0.5, uTaps[i].w);
+    if (age < 0.0 || age > mix(2.4, 2.8, onSurface)) continue;
     vec2 d = g - uTaps[i].xy;
+    d.y *= mix(1.0, uSurface.z / max(uSurface.w, 1.0), onSurface);
     float r = length(d);
-    float front = age * 48.0;
+    float front = age * mix(48.0, 34.0, onSurface);
     float x = r - front;
     float env = exp(-x * x / 60.0) * exp(-age * 1.5) * smoothstep(0.0, 0.08, age);
     float w = sin(x * 0.75) * env;
     n += (d / max(r, 1e-3)) * w * 2.8;
-    crest += max(w, 0.0);
+    crest += max(w, 0.0) * mix(1.0, 1.6, onSurface);
   }
   return n;
 }

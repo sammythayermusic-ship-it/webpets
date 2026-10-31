@@ -49,6 +49,9 @@ export interface LiveParticle {
   x: number;
   y: number;
   alpha: number;
+  /** A flake's colour (0xRRGGBB, sRGB) and spin, radians; bubbles leave them unset. */
+  tint?: number;
+  rot?: number;
 }
 
 export interface LiveLayer {
@@ -73,6 +76,10 @@ export interface LiveLayer {
    * physics and hides its own sprites.
    */
   setParticles(flakes: readonly LiveParticle[], bubbles: readonly LiveParticle[]): void;
+  /** Food landing on the surface at grid x: a flat ring across the water and a fizz of tiny bubbles. */
+  splash(gx: number): void;
+  /** A gulp at grid (gx, gy): a few small bubbles out of the gills, rising and fading. */
+  puff(gx: number, gy: number): void;
   /** Advance the clocks by `dtMs` and draw. The caller has already drawn the back plates. */
   render(dtMs: number): void;
   spineState(): SpineState;
@@ -198,9 +205,10 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
     }
     const g = ctx.createRadialGradient(-n * 0.1, -n * 0.12, n * 0.02, 0, 0, n * 0.42);
-    g.addColorStop(0, '#f6c77a');
-    g.addColorStop(0.6, '#d98a3a');
-    g.addColorStop(1, '#9c4f1c');
+    // neutral and lit, so each flake's tint gives it its colour
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.6, '#e2ddd6');
+    g.addColorStop(1, '#9f958a');
     ctx.fillStyle = g;
     ctx.fill();
   });
@@ -231,8 +239,46 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       fishScene.add(sp);
       return sp;
     });
-  const flakePool = makePool(flakeTex, 12, 4.4);
+  const flakePool = makePool(flakeTex, 12, 5.2);
   const bubblePool = makePool(bubbleTex, 8, 6);
+  // Puffs: the small bubbles of a gulp or a splash, owned here (Pixi's bubbles are the ambient ones).
+  const PUFF_LIFE_S = 1.4;
+  const puffPool = makePool(bubbleTex, 14, 2.6);
+  const puffs = puffPool.map(() => ({ x: 0, y: 0, age: PUFF_LIFE_S, vx: 0, phase: 0, size: 1 }));
+  let puffNext = 0;
+  const spawnPuffs = (gx: number, gy: number, n: number, spread: number): void => {
+    for (let i = 0; i < n; i += 1) {
+      const p = puffs[puffNext % puffs.length];
+      puffNext += 1;
+      if (!p) continue;
+      p.x = gx + (opts.rng() * 2 - 1) * spread;
+      p.y = gy + (opts.rng() * 2 - 1) * 1.5;
+      p.age = -i * 0.07;
+      p.vx = (opts.rng() * 2 - 1) * 3;
+      p.phase = opts.rng() * 6.28;
+      p.size = 0.7 + opts.rng() * 0.6;
+    }
+  };
+  const updatePuffs = (dt: number, fishDepth: number): void => {
+    for (let i = 0; i < puffs.length; i += 1) {
+      const p = puffs[i]!;
+      const sp = puffPool[i]!;
+      p.age += dt;
+      const live = p.age >= 0 && p.age < PUFF_LIFE_S;
+      sp.visible = live;
+      if (!live) continue;
+      // rise, quickening, with a wobble; fade in fast and out slowly
+      p.y -= (8 + 16 * p.age) * dt;
+      p.x += (p.vx + Math.sin(p.phase + p.age * 9) * 4) * dt;
+      p.vx *= 0.96;
+      if (p.y < habitat.waterShape.surfaceY + 1) p.age = PUFF_LIFE_S;
+      const w = gridToWorld(p.x, p.y, fishDepth - 0.004);
+      sp.position.set(w.x, w.y, w.z);
+      sp.scale.setScalar(2.6 * p.size * METRES_PER_GRID_PX);
+      sp.material.opacity = Math.min(1, p.age / 0.12) * (1 - p.age / PUFF_LIFE_S) * 0.9;
+      sp.material.color.copy(bubbleTint);
+    }
+  };
   // Bubbles rise at different depths, some in front of the fish and some behind it.
   const BUBBLE_DEPTHS = [-0.022, 0.016, -0.006, 0.026, -0.014, 0.008, -0.026, 0.02];
   let flakeList: readonly LiveParticle[] = [];
@@ -248,6 +294,8 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       const w = gridToWorld(f.x, f.y, fishDepth - 0.006);
       sp.position.set(w.x, w.y, w.z);
       sp.material.opacity = f.alpha;
+      if (f.tint !== undefined) sp.material.color.setHex(f.tint);
+      if (f.rot !== undefined) sp.material.rotation = f.rot;
     }
     // moonlight: bubbles catch less of it
     bubbleTint.setRGB(1 - 0.45 * nightT, 1 - 0.38 * nightT, 1 - 0.2 * nightT);
@@ -327,7 +375,7 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
     uPhase: { value: 1 },
     uPointer: { value: new THREE.Vector2(-1e4, -1e4) },
     uParallax: { value: new THREE.Vector2(0, 0) },
-    uTaps: { value: [0, 1, 2, 3].map(() => new THREE.Vector3(0, 0, -1e4)) },
+    uTaps: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, -1e4, 0)) },
     uWallAlpha: { value: WALL_ALPHA },
   };
   let tapSlot = 0;
@@ -448,8 +496,18 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
     tier: () => tier,
     tap(gx, gy) {
       const slot = waterUniforms.uTaps.value[tapSlot % 4];
-      if (slot) slot.set(gx, gy, clock);
+      if (slot) slot.set(gx, gy, clock, 0);
       tapSlot += 1;
+    },
+    splash(gx) {
+      // the ring is centred on the surface ellipse's middle row, where the pinch lands in depth
+      const slot = waterUniforms.uTaps.value[tapSlot % 4];
+      if (slot) slot.set(gx, surface.y, clock, 1);
+      tapSlot += 1;
+      spawnPuffs(gx, habitat.waterShape.surfaceY + 10, 5, 6);
+    },
+    puff(gx, gy) {
+      spawnPuffs(gx, gy, 3, 1.5);
     },
     setParticles(f, b) {
       flakeList = f;
@@ -505,6 +563,7 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       }
 
       placeParticles(depthEase);
+      updatePuffs(dtMs / 1000, depthEase);
       renderer.resetState();
       renderer.setRenderTarget(rt);
       renderer.setClearColor(0x000000, 0);
@@ -528,7 +587,7 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       waterMat.dispose();
       waterQuad.geometry.dispose();
       model?.dispose();
-      for (const sp of [...flakePool, ...bubblePool]) sp.material.dispose();
+      for (const sp of [...flakePool, ...bubblePool, ...puffPool]) sp.material.dispose();
       flakeTex.dispose();
       bubbleTex.dispose();
       renderer.dispose();

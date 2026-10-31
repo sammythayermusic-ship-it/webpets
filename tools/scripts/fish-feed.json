@@ -1,0 +1,16 @@
+{
+  "comment": "After checkpoint B: two pinches dropped by clicking over the open water at Medium (window-local CSS px), left then right. The fish darts up, snaps the flakes, and laps the bowl when they are gone. 16 s.",
+  "steps": [
+    { "op": "force", "state": "hungry" },
+    { "op": "night", "value": false },
+    { "op": "setBalance", "n": 1000 },
+    { "op": "pointer", "x": null },
+    { "op": "sleep", "ms": 1200 },
+    { "op": "record", "name": "fish-feed", "seconds": 16, "fps": 60 },
+    { "op": "sleep", "ms": 1500 },
+    { "op": "drop", "x": 254, "y": 150 },
+    { "op": "sleep", "ms": 7000 },
+    { "op": "drop", "x": 440, "y": 150 },
+    { "op": "sleep", "ms": 7800 }
+  ]
+}

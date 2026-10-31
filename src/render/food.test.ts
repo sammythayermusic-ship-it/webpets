@@ -48,13 +48,19 @@ const floorBounds = makeFloorBounds({ rect: CAGE_FLOOR_RECT, standY: CAGE_STAND_
 const FLOOR_DOMAIN = { kind: 'floor', rect: CAGE_FLOOR_RECT, standY: CAGE_STAND_Y } as const;
 const WATER_DOMAIN = { kind: 'water', shape: BOWL_WATER_SHAPE } as const;
 
-/** Run until every flake has stopped moving, or give up. Returns the resting positions. */
-function settle(f: ReturnType<typeof createFlakes>, rng: () => number, maxSteps = 400): Array<{ x: number; y: number }> {
+/**
+ * Run until every flake has stopped moving, or give up. Returns the resting positions. "Stopped" is
+ * no change in whole px for a dozen steps: flakes in water float and then sink slowly, so a single
+ * still step proves nothing.
+ */
+function settle(f: ReturnType<typeof createFlakes>, rng: () => number, maxSteps = 800): Array<{ x: number; y: number }> {
   let last = JSON.stringify(f.positions());
+  let still = 0;
   for (let i = 0; i < maxSteps; i += 1) {
     f.step(rng);
     const now = JSON.stringify(f.positions());
-    if (now === last && i > 2) break;
+    still = now === last ? still + 1 : 0;
+    if (still >= 12) break;
     last = now;
   }
   return f.positions();
@@ -82,6 +88,23 @@ describe('food in water', () => {
     const rest = settle(f, rng);
     const moved = rest.filter((p, i) => p.x !== startXs[i]);
     expect(moved.length, 'no flake drifted at all').toBeGreaterThan(0);
+  });
+
+  it('drops a pinch where it is aimed, close together', () => {
+    const rng = seeded(3);
+    const f = createFlakes(WATER_DOMAIN, waterBounds);
+    f.feed(rng, 120);
+    for (const p of f.positions()) expect(Math.abs(p.x - 120), 'within the pinch').toBeLessThanOrEqual(8);
+  });
+
+  it('floats for a moment before it sinks, so there is something to chase near the surface', () => {
+    const rng = seeded(5);
+    const f = createFlakes(WATER_DOMAIN, waterBounds);
+    f.feed(rng, 160);
+    for (let i = 0; i < 6; i += 1) f.step(rng);
+    for (const p of f.positions()) expect(p.y, 'still at the surface after 0.75 s').toBe(waterBounds.surfaceY + 2);
+    for (let i = 0; i < 60; i += 1) f.step(rng);
+    expect(Math.max(...f.positions().map((p) => p.y)), 'sinking by 8 s').toBeGreaterThan(waterBounds.surfaceY + 10);
   });
 
   it('keeps every flake inside the water', () => {

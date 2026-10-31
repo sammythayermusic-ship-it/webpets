@@ -108,6 +108,7 @@ interface Harness {
   sleeps: number[];
   setPointer: ReturnType<typeof vi.fn>;
   tap: ReturnType<typeof vi.fn>;
+  aimFeed: ReturnType<typeof vi.fn>;
 }
 
 function makeHarness(): Harness {
@@ -118,6 +119,7 @@ function makeHarness(): Harness {
   const sleeps: number[] = [];
   const setPointer = vi.fn();
   const tap = vi.fn();
+  const aimFeed = vi.fn();
   let clock = 1_700_000_000_000;
   const ctx: HarnessContext = {
     store,
@@ -128,6 +130,8 @@ function makeHarness(): Harness {
       fps: () => 60,
       setPointer,
       tap,
+      feedSpot: (x: number) => (x > 100 ? 140 : null),
+      aimFeed,
     },
     devPanel: { toggle: vi.fn(), isOpen: () => false, getRect: () => null },
   };
@@ -145,7 +149,7 @@ function makeHarness(): Harness {
       emitted.push(r);
     },
   };
-  return { ctx, io, actions, writes, emitted, sleeps, setPointer, tap };
+  return { ctx, io, actions, writes, emitted, sleeps, setPointer, tap, aimFeed };
 }
 
 describe('harness runCommand', () => {
@@ -214,6 +218,7 @@ describe('harness runCommand', () => {
     await runCommand({ op: 'resetClock' }, h.ctx, h.io);
     await runCommand({ op: 'newPet' }, h.ctx, h.io);
     await runCommand({ op: 'tap', x: 260, y: 300 }, h.ctx, h.io);
+    await runCommand({ op: 'drop', x: 300, y: 100 }, h.ctx, h.io);
     await runCommand({ op: 'pointer', x: 100, y: 80 }, h.ctx, h.io);
     await runCommand({ op: 'pointer', x: null }, h.ctx, h.io);
     expect(h.actions.dev.skip).toHaveBeenCalledWith(3600_000);
@@ -231,6 +236,9 @@ describe('harness runCommand', () => {
     // a tap is what a real click on the glass does: the stimulus AND the ripple
     expect(h.actions.poke).toHaveBeenCalledWith('tap');
     expect(h.tap).toHaveBeenCalledWith(260, 300);
+    // a drop aims the next feed at the spot over the water, then feeds
+    expect(h.aimFeed).toHaveBeenCalledWith(140);
+    expect(h.actions.feed).toHaveBeenCalledTimes(1);
     expect(h.setPointer).toHaveBeenNthCalledWith(1, 100, 80);
     expect(h.setPointer).toHaveBeenNthCalledWith(2, null, null);
   });

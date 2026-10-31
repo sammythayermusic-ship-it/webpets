@@ -43,10 +43,12 @@ function particlesOf(c: Container, out: LiveParticle[]): LiveParticle[] {
   const n = c.children.length;
   for (let i = 0; i < n; i += 1) {
     const ch = c.children[i]!;
-    const p = out[i] ?? { x: 0, y: 0, alpha: 0 };
+    const p: LiveParticle = out[i] ?? { x: 0, y: 0, alpha: 0 };
     p.x = ch.position.x;
     p.y = ch.position.y;
     p.alpha = ch.visible ? ch.alpha : 0;
+    p.tint = ch.tint;
+    p.rot = ch.rotation;
     out[i] = p;
   }
   out.length = n;
@@ -134,6 +136,11 @@ export function createScene(
   const spriteDef: ManifestSprite | undefined = manifest.sprites[subject.species];
   if (!habitat) throw new Error(`manifest has no habitat "${habitatKey}"`);
   if (!spriteDef) throw new Error(`manifest has no sprite "${subject.species}"`);
+  /** The water the feed lands on, for a water habitat; null on a floor. */
+  const feedWater = (() => {
+    const d = species.layouts[subject.habitat]?.domain;
+    return d?.kind === 'water' ? d.shape : null;
+  })();
   // The window geometry is derived from the constants, so a manifest describing a different logical
   // grid would be drawn into a window with no room for it. The art's RESOLUTION is free to differ —
   // that factor is derived per texture in layers.ts — but the logical grid is not.
@@ -282,6 +289,8 @@ export function createScene(
   let stepSkips = 0;
   /** What the behaviour last decided, for the live layer: it draws the pose rather than a sprite. */
   let lastFacing: 1 | -1 = 1;
+  /** Where the next feed lands, grid x, when a click aimed it (see aimFeed). */
+  let feedAim: number | null = null;
   /** How many times anything advanced, and by how much. The only way to tell which clock is driving. */
   let advances = 0;
   let lastDtMs = 0;
@@ -339,6 +348,8 @@ export function createScene(
     if (out.biteFlakeIndex !== null) {
       m.flakes.remove(out.biteFlakeIndex);
       ate = true;
+      // a gulp: a few small bubbles out of the gills, just behind the head
+      m.live?.puff(out.x + out.facing * 12, out.y - 1);
     }
     // The mood only ever gets to speak when the simulation has nothing to say. `idle` means "nothing in
     // particular is happening", which is exactly the gap a feeling belongs in; eating, hunger posture,
@@ -376,6 +387,22 @@ export function createScene(
     },
     setDrivesSource(src) {
       drivesSource = src;
+    },
+    feedSpot(cssX, cssY) {
+      const w = feedWater;
+      if (w === null) return null;
+      const f = scaleFactor(scale);
+      const gx = (cssX - WINDOW_PAD) / f;
+      const gy = (cssY - WINDOW_PAD) / f;
+      // Above the water's near edge and inside the bowl: the glass's own ellipse, or the open neck
+      // above it (the rim is wider than the ellipse's top). Below the waterline a click is a tap.
+      if (gy > w.surfaceY + 2 || gy < habitat.opaqueRect.y) return null;
+      const dy = (gy - w.cy) / w.ry;
+      const half = Math.max(dy * dy < 1 ? w.rx * Math.sqrt(1 - dy * dy) : 0, w.rx * 0.6);
+      return Math.abs(gx - w.cx) <= half ? gx : null;
+    },
+    aimFeed(gx) {
+      feedAim = gx;
     },
     tap(cssX, cssY) {
       const f = scaleFactor(scale);
@@ -681,7 +708,16 @@ export function createScene(
       // it happened from the tray with the pointer nowhere near the bowl.
       lastInteractionAt = Date.now();
       attention = Math.max(attention, 0.6);
-      m.flakes.feed(rng);
+      if (feedWater !== null) {
+        // A pinch where it was aimed, or just ahead of the fish's mouth so it sees it land and goes.
+        const ahead = poseTo.x + lastFacing * 30;
+        const x = feedAim ?? Math.max(feedWater.cx - feedWater.rx * 0.6, Math.min(feedWater.cx + feedWater.rx * 0.6, ahead));
+        m.flakes.feed(rng, x);
+        m.live?.splash(x);
+      } else {
+        m.flakes.feed(rng);
+      }
+      feedAim = null;
     },
 
     setPointer(x, y) {

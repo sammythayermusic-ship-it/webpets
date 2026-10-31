@@ -1497,3 +1497,35 @@ waits ran out (the acceptance walk had already been taking 1.9 of its 2 minutes 
 path the packaged app's WebKit uses: 60 fps headless, and the whole suite runs in 39 s instead of
 nearly 5 minutes. The surface's wave bands were also made easier to see (contrast and broad glints
 that ride the bright faces), after a frame-by-frame check showed them moving but faint.
+
+## 2026-10-31 — Sammy's notes on checkpoint B: smaller, cuter, and feeding you can play with
+
+Sammy: "I want the fish to be smaller so it can swim around more. I want the feeding to be more
+interactive and exciting. I like how the fish is realistic but I want it to be cuter."
+
+### cuter, still a goldfish
+Cute is mostly proportion, so the materials stay as they were (real scales, wet skin, a real eye)
+and the shape moved toward a fantail: an egg-shaped body (depth 0.52 of the standard length, from
+0.37), a bigger head with a short blunt snout, a larger eye (35% of the head's depth) with a large
+black pupil, a broad flowing tail with rounded lobes and a shallow fork, a tall rounded dorsal. The
+mouth line curves up a little at its corner, which a goldfish's really does. Warmer orange over a
+cream belly; softer scale edges; the gill cover blended into the body instead of a helmet seam.
+
+### smaller
+Drawn at 44 grid px (from 59.5) with a 36x18 body box (from 50x32): 17 px more travel across the bowl
+and 14 more top to bottom. The bitmap sprite frames are the September fish, kept as the fallback when
+the live layer cannot run; the manifest's new `drawScale` (0.74) draws them at the same size, and the
+art tests measure them at that scale, so the fallback still fits the box the behaviour clamps.
+
+### feeding
+- **Click over the open water to drop a pinch there.** Anywhere else on the bowl a click is still a
+  knock on the glass. The cursor is a hand over the water. A second drop within 1.2 s is ignored, so a
+  double click spends one meal. The Feed button and the tray drop the pinch just ahead of the fish.
+- **The pinch** floats for one to three seconds, spreading, then tumbles slowly down (a wobble and a
+  spin), five flake colours mixed. Food landing rings the surface (a flat ring in the surface's plane)
+  and fizzes a few tiny bubbles.
+- **The fish** turns to face the nearest flake, darts when food lands (a burst that settles into the
+  hunger's lunge), and eats only what reaches its MOUTH: the bite range used to be measured from the
+  body box, so it ate flakes that touched its flank. Each bite puffs a few bubbles from the gills.
+- **A finished meal** that it actually ate earns an excited, curving lap across the bowl (`excited`
+  joins `PetAnim`). Food it never reached does not.

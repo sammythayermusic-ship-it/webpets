@@ -38,7 +38,7 @@ const HABITATS: ReadonlySet<string> = new Set<Habitat>([
 export interface HarnessContext {
   store: Pick<AppStore, 'getState'>;
   platform: { window: Pick<WindowApi, 'getGeometry'> };
-  scene: Pick<HabitatScene, 'snapshot' | 'debugState' | 'fps' | 'setPointer' | 'tap'>;
+  scene: Pick<HabitatScene, 'snapshot' | 'debugState' | 'fps' | 'setPointer' | 'tap' | 'feedSpot' | 'aimFeed'>;
   devPanel: DevPanelHandle & Partial<{ open(): void; close(): void }>;
   hud?: Pick<HudHandle, 'setVisible'>;
 }
@@ -361,6 +361,17 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
       actions.poke('tap');
       ctx.scene.tap(x, y);
       return { x, y };
+    }
+    case 'drop': {
+      // What a click over the open water does (main.ts): a pinch of food dropped right there.
+      const x = num(cmd, 'x');
+      const y = num(cmd, 'y');
+      const spot = ctx.scene.feedSpot(x, y);
+      if (spot === null) throw new Error(`drop: (${x}, ${y}) is not over the open water`);
+      ctx.scene.aimFeed(spot);
+      const r = actions.feed();
+      if (!r.ok) ctx.scene.aimFeed(null);
+      return { spot, ok: r.ok };
     }
     case 'poke': {
       const kind = stimulus(cmd);

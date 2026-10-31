@@ -228,8 +228,18 @@ export interface HabitatScene {
   /** Re-create the canvas backing store for a new devicePixelRatio (window moved between displays). */
   setResolution(dpr: number): void;
   setView(view: SceneView): void;
-  /** Drop flakes; the fish eats them. Visual only, the sim already applied the feed (manual or auto). */
+  /**
+   * Drop flakes; the fish eats them. Visual only, the sim already applied the feed (manual or auto).
+   * In water they land as a pinch: where `aimFeed` last pointed, else just ahead of the fish.
+   */
   feed(): void;
+  /**
+   * Where a click at window-local CSS px would drop food, grid px x, or null when that point is not
+   * over the open water at the top of the habitat (only water habitats have one).
+   */
+  feedSpot(cssX: number, cssY: number): number | null;
+  /** Aim the NEXT feed at grid x (null: no aim). Consumed by the next `feed()`. */
+  aimFeed(gx: number | null): void;
   /** Window-local CSS px, null when the pointer left. Drives glass sheen and parallax. */
   setPointer(x: number | null, y: number | null): void;
   on(event: SceneEvent, cb: () => void): () => void;
