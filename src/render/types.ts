@@ -187,6 +187,13 @@ export interface Manifest {
  * What the behaviour asks the art to play. `excited` is the fish's lap after a finished meal (the
  * only behaviour that asks for it; the mood can ask for it too, through the expression gate).
  */
+/**
+ * What the pet is doing, finer than its anim. Fish: hovering with the pectorals sculling; pecking at
+ * the gravel; holding a pebble in its mouth; spitting it out; gulping at the surface; looking out at
+ * the viewer; resting low at night.
+ */
+export type PetAct = 'hover' | 'peck' | 'mouthful' | 'spit' | 'gulp' | 'look' | 'rest';
+
 export type PetAnim = 'idle' | 'walk' | 'eat' | 'hungry' | 'sleep' | 'dead' | 'excited';
 
 /** alive: normal. dead: belly-up + fog, bubbles stop. memorial: empty bowl with a flag (after the death card is dismissed). */
@@ -383,6 +390,11 @@ export interface PetOutput {
    */
   turning: boolean;
   anim: PetAnim;
+  /**
+   * The detail of what the pet is doing, for art that can show it (the live fish); `anim` stays the
+   * coarse state a bitmap can draw. Absent means nothing in particular.
+   */
+  act?: PetAct;
   /** Index into input.flakes that was eaten this tick, else null. */
   biteFlakeIndex: number | null;
   /**

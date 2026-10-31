@@ -261,17 +261,13 @@ describe('fish behavior', () => {
     expect(Math.max(...xs) - Math.min(...xs)).toBeLessThanOrEqual(24);
   });
 
-  it('asleep: still near the floor with the sleep anim', () => {
+  it('asleep: low over the floor with the sleep anim', () => {
+    // Held perfectly still until step C; it now drifts slowly along the bed (see "rests low at night").
     const outs = run(400, () => input({ asleep: true }, seeded(11)));
     const settled = outs.slice(200);
-    const first = settled[0];
-    expect(first).toBeDefined();
+    expect(settled[0]).toBeDefined();
     for (const o of settled) {
       expect(o.anim).toBe('sleep');
-      if (first) {
-        expect(o.x).toBe(first.x);
-        expect(o.y).toBe(first.y);
-      }
       expect(o.y).toBeGreaterThan(bounds.floorY - HH - 12);
     }
   });
@@ -338,5 +334,128 @@ describe('interest', () => {
   it('a zero strength is the same as no interest at all', () => {
     const pull = { x: bounds.rect.x + 12, y: bounds.floorY - 12, strength: 0 };
     expect(run({ attract: pull }, 60)).toEqual(run({ attract: null }, 60));
+  });
+});
+
+describe('a goldfish left to itself (step C)', () => {
+  const TEN_MIN = 8 * 600;
+  const idle = (ticks: number, over: Partial<FishInput> = {}, seed = 11): FishOutput[] => {
+    const rng = seeded(seed);
+    return run(ticks, () => input(over, rng));
+  };
+  const cx = bounds.rect.x + bounds.rect.w / 2;
+  const cy = (bounds.surfaceY + bounds.floorY) / 2;
+
+  it('hovers between legs: still, with the act said', () => {
+    const outs = idle(800);
+    const hovers = outs.map((o, i) => ({ o, i })).filter(({ o }) => o.act === 'hover');
+    expect(hovers.length, 'some hovering').toBeGreaterThan(20);
+    for (const { o, i } of hovers) {
+      const prev = outs[i - 1];
+      if (prev) expect(Math.hypot(o.x - prev.x, o.y - prev.y), 'a hover barely moves').toBeLessThan(1.2);
+    }
+  });
+
+  it('swims a lap of the bowl now and then', () => {
+    const outs = idle(TEN_MIN);
+    // the angle round the middle of the water, unwrapped; a lap sweeps a long way one way
+    const ang = outs.map((o) => Math.atan2((o.y - cy) * (bounds.rect.w / (bounds.floorY - bounds.surfaceY)), o.x - cx));
+    const un: number[] = [ang[0] as number];
+    for (let i = 1; i < ang.length; i += 1) {
+      let d = (ang[i] as number) - (ang[i - 1] as number);
+      if (d > Math.PI) d -= 2 * Math.PI;
+      if (d < -Math.PI) d += 2 * Math.PI;
+      un.push((un[i - 1] as number) + d);
+    }
+    let best = 0;
+    for (let i = 0; i + 240 < un.length; i += 8) best = Math.max(best, Math.abs((un[i + 240] as number) - (un[i] as number)));
+    expect(best, 'radians swept round the bowl in some 30 s').toBeGreaterThan(3.5);
+  });
+
+  it('picks at the gravel: pecks low, takes a pebble, spits it out', () => {
+    const outs = idle(TEN_MIN);
+    const low = bounds.floorY - HH - 5;
+    const pecks = outs.filter((o) => o.act === 'peck');
+    expect(pecks.length, 'it pecks').toBeGreaterThan(0);
+    for (const o of pecks) expect(o.y, 'pecks happen at the bed').toBeGreaterThanOrEqual(low);
+    const firstHold = outs.findIndex((o) => o.act === 'mouthful');
+    expect(firstHold, 'it takes a pebble').toBeGreaterThan(0);
+    const spit = outs.slice(firstHold).findIndex((o) => o.act === 'spit');
+    expect(spit, 'and spits it out').toBeGreaterThan(0);
+    expect(spit, 'within a few seconds').toBeLessThan(48);
+  });
+
+  it('gulps at the surface when it wants to', () => {
+    const drives = { activity: 0.6, approach: 1, hide: 0, nap: false, greet: false, surface: 0.9 };
+    const outs = idle(TEN_MIN, { drives });
+    const gulps = outs.filter((o) => o.act === 'gulp');
+    expect(gulps.length).toBeGreaterThan(0);
+    for (const o of gulps) expect(o.y, 'at the top of the water').toBeLessThanOrEqual(bounds.surfaceY + HH + 3);
+  });
+
+  it('turns to look at you when you arrive, sooner if it is that kind of fish', () => {
+    const firstLook = (personality: 'zen' | 'degen' | 'sarcastic'): number => {
+      const b = createFishBehavior();
+      const rng = seeded(3);
+      for (let i = 0; i < 60; i += 1) b.step(input({ personality }, rng));
+      const you = { x: cx + 30, y: cy, strength: 1 };
+      for (let i = 0; i < 60; i += 1) {
+        const o = b.step(input({ personality, attract: you }, rng));
+        if (o.act === 'look') return i;
+      }
+      return Infinity;
+    };
+    expect(firstLook('degen')).toBeLessThan(firstLook('zen'));
+    expect(firstLook('zen')).toBeLessThan(Infinity);
+    // and a look is a stop: it holds still for a second or two while it looks
+    const b = createFishBehavior();
+    const rng = seeded(3);
+    for (let i = 0; i < 60; i += 1) b.step(input({}, rng));
+    const seq: FishOutput[] = [];
+    for (let i = 0; i < 60; i += 1) seq.push(b.step(input({ attract: { x: cx, y: cy, strength: 1 } }, rng)));
+    const looks = seq.filter((o) => o.act === 'look');
+    expect(looks.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it('follows you along the glass, without parking', () => {
+    const b = createFishBehavior();
+    const rng = seeded(5);
+    const at = (x: number) => input({ attract: { x, y: cy - 4, strength: 1 } }, rng);
+    for (let i = 0; i < 120; i += 1) b.step(at(bounds.rect.x + 40));
+    const later: FishOutput[] = [];
+    for (let i = 0; i < 200; i += 1) later.push(b.step(at(bounds.rect.x + bounds.rect.w - 40)));
+    const tail = later.slice(100);
+    const meanX = tail.reduce((a, o) => a + o.x, 0) / tail.length;
+    expect(Math.abs(meanX - (bounds.rect.x + bounds.rect.w - 40)), 'it went over to where you are').toBeLessThan(34);
+    const cells = new Set(tail.map((o) => `${Math.round(o.x / 6)},${Math.round(o.y / 6)}`));
+    expect(cells.size, 'still moving about').toBeGreaterThan(3);
+  });
+
+  it('rests low at night with a slow drift', () => {
+    const outs = idle(600, { asleep: true }).slice(80);
+    for (const o of outs) {
+      expect(o.y).toBeGreaterThanOrEqual(bounds.floorY - HH - 6);
+      expect(o.act).toBe('rest');
+    }
+    let fastest = 0;
+    for (let i = 1; i < outs.length; i += 1) fastest = Math.max(fastest, Math.abs((outs[i] as FishOutput).x - (outs[i - 1] as FishOutput).x));
+    expect(fastest, 'slow').toBeLessThanOrEqual(1);
+    const xs = outs.map((o) => o.x);
+    expect(Math.max(...xs) - Math.min(...xs), 'but not frozen').toBeGreaterThan(4);
+  });
+
+  it('never repeats itself: no 30-second stretch of ten minutes of idle happens twice', () => {
+    const outs = idle(TEN_MIN);
+    const key = (i: number): string =>
+      outs
+        .slice(i, i + 240)
+        .map((o) => `${o.x},${o.y},${o.facing},${o.act ?? ''}`)
+        .join(';');
+    const seen = new Set<string>();
+    for (let i = 0; i + 240 <= outs.length; i += 8) {
+      const k = key(i);
+      expect(seen.has(k), `the 30 s from tick ${i} repeats an earlier one`).toBe(false);
+      seen.add(k);
+    }
   });
 });

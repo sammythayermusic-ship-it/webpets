@@ -14,7 +14,7 @@
 // What outranks all of that, in order: dead; food (a lunge, the one thing it will always do); night
 // sleep; a nap; starving (on the floor, barely moving); a startle from a tap on the glass.
 
-import type { FishBehavior, FishInput, FishOutput, PetAnim, WaterBounds } from '../../render/types';
+import type { FishBehavior, FishInput, FishOutput, PetAct, PetAnim, WaterBounds } from '../../render/types';
 import type { HungerLabel, Personality } from '../../sim/types';
 import type { Drives } from '../../sim/needs';
 import { alongArc, approachSpeed, arc, arcHeading, dartSpeed, noise1, type Arc } from '../../sim/motion';
@@ -28,6 +28,28 @@ const TURN_COOLDOWN = 6;
 const TURN_DEAD_ZONE = 0.3;
 /** Ticks a finished meal is celebrated for: an excited lap of the bowl. */
 const CELEBRATE_TICKS = 22;
+/** Away this long (3 s) and the pointer coming back is an ARRIVAL, which earns a look. */
+const ARRIVAL_AWAY_TICKS = 24;
+/** A look at the viewer: two seconds, still, face turned out of the glass. */
+const LOOK_TICKS = 16;
+/** Laps: legs of this many radians round an ellipse this fraction of the swimmable half-extents. */
+const LAP_STEP = 0.95;
+const LAP_RX = 0.85;
+const LAP_RY = 0.45;
+/** Per-leg odds, at full activity, of starting a lap or going to pick at the gravel. */
+const LAP_ODDS = 0.09;
+const FORAGE_ODDS = 0.11;
+/** Gravel picking, ticks: a peck, the pause between pecks, the spit, the hover after. */
+const PECK_TICKS = 4;
+const PECK_GAP = 3;
+const SPIT_TICKS = 3;
+const AFTER_TICKS = 6;
+/** Following the pointer: how close an approach has to be wanted, and the patrol either side of it. */
+const FOLLOW_MIN = 0.5;
+const FOLLOW_OFFSET = 12;
+/** Night rest: drift speed along the bed, px/tick, and how long between new drift targets. */
+const REST_SPEED = 0.35;
+const REST_RETARGET = 48;
 /** Cruise speed of a content, rested fish, px/tick, before pace and activity. */
 const CRUISE = 2.4;
 /** Speed inertia: builds quickly, bleeds slowly — the drag of water. */
@@ -40,9 +62,13 @@ const PAUSE_MAX_TICKS = 18;
 const DART_PEAK = 6;
 const DART_TICKS = 10;
 /** A surface visit: how long it hangs at the top, and the ticks of the gape inside that. */
-const SURFACE_HOLD_TICKS = 8;
-/** Per-tick odds of a surface visit at full surface drive, while content and idle. */
-const SURFACE_ODDS = 0.012;
+const SURFACE_HOLD_TICKS = 12;
+/**
+ * Odds of a surface visit per leg chosen, at full surface drive. Per LEG, not per tick (the comment
+ * used to say tick): at 0.012 a fish that badly wanted the surface went 300 s without a visit once
+ * laps and gravel picking took their share of the legs.
+ */
+const SURFACE_ODDS = 0.06;
 
 /** What the fish does with no needs model wired (tests, a bare scene): a rested, settled fish. */
 const DEFAULT_DRIVES: Drives = { activity: 0.65, approach: 1, hide: 0, nap: false, greet: false, surface: 0 };
@@ -51,11 +77,11 @@ const DEFAULT_DRIVES: Drives = { activity: 0.65, approach: 1, hide: 0, nap: fals
  * Pace, restlessness (how long it hangs between legs) and the odds of a spontaneous dart per leg,
  * per personality. The rest of what a personality does to motion comes through the drives.
  */
-const PACE: Readonly<Record<Personality, { pace: number; hang: number; dartOdds: number }>> = {
-  zen: { pace: 0.8, hang: 1.3, dartOdds: 0.0008 },
-  sarcastic: { pace: 0.95, hang: 1.0, dartOdds: 0.0015 },
-  anxious: { pace: 1.05, hang: 0.8, dartOdds: 0.004 },
-  degen: { pace: 1.25, hang: 0.45, dartOdds: 0.006 },
+const PACE: Readonly<Record<Personality, { pace: number; hang: number; dartOdds: number; lookDelay: number }>> = {
+  zen: { pace: 0.8, hang: 1.3, dartOdds: 0.0008, lookDelay: 6 },
+  sarcastic: { pace: 0.95, hang: 1.0, dartOdds: 0.0015, lookDelay: 12 },
+  anxious: { pace: 1.05, hang: 0.8, dartOdds: 0.004, lookDelay: 2 },
+  degen: { pace: 1.25, hang: 0.45, dartOdds: 0.006, lookDelay: 1 },
 };
 
 function lungeSpeed(label: HungerLabel): number {
@@ -89,7 +115,7 @@ interface Leg {
   speed: number;
   /** A burst: speed follows the dart profile from this tick count rather than the cruise. */
   dartTick: number;
-  kind: 'wander' | 'approach' | 'hide' | 'surface' | 'dart' | 'greet' | 'startle';
+  kind: 'wander' | 'approach' | 'hide' | 'surface' | 'dart' | 'greet' | 'startle' | 'lap' | 'forage' | 'follow';
 }
 
 export function createFishBehavior(): FishBehavior {
@@ -115,6 +141,21 @@ export function createFishBehavior(): FishBehavior {
   /** Ticks of celebration left after a finished meal, and whether its lap is still to start. */
   let celebrate = 0;
   let lapPending = false;
+  /** Someone at the glass: ticks since the pointer was last there, the look it is owed, the look. */
+  let awayTicks = ARRIVAL_AWAY_TICKS;
+  let lookIn = -1;
+  let lookTicks = 0;
+  /** A lap in progress: legs left, which way round, the angle reached. */
+  let lapLegs = 0;
+  let lapDir: 1 | -1 = 1;
+  let lapAngle = 0;
+  /** Gravel picking, once it has reached the bed. */
+  let forage: { phase: 'peck' | 'hold' | 'spit' | 'after'; ticks: number; pecks: number; hold: number } | null = null;
+  /** Night rest: where along the bed it is drifting, and when it picks somewhere else. */
+  let restX = 0;
+  let restIn = 0;
+  /** Which side of the pointer the next follow leg patrols to. */
+  let followSide: 1 | -1 = 1;
 
   const reset = (): void => {
     inited = false;
@@ -136,6 +177,16 @@ export function createFishBehavior(): FishBehavior {
     feedBites = 0;
     celebrate = 0;
     lapPending = false;
+    awayTicks = ARRIVAL_AWAY_TICKS;
+    lookIn = -1;
+    lookTicks = 0;
+    lapLegs = 0;
+    lapDir = 1;
+    lapAngle = 0;
+    forage = null;
+    restX = 0;
+    restIn = 0;
+    followSide = 1;
   };
 
   const init = (bounds: WaterBounds, halfW: number, halfH: number, rng: () => number): void => {
@@ -197,8 +248,9 @@ export function createFishBehavior(): FishBehavior {
       feedTicks = -1;
       feedBites = 0;
     }
-    /** The way the food makes the fish face, this tick (0: no opinion). */
-    let foodFacing: 1 | -1 | 0 = 0;
+    /** The way something makes the fish face this tick: food, or the viewer it is looking at (0: none). */
+    let wantFacing: 1 | -1 | 0 = 0;
+    let act: PetAct | undefined;
 
     // ---- dead: belly-up at the surface, nothing else moves
     if (!input.alive) {
@@ -227,6 +279,9 @@ export function createFishBehavior(): FishBehavior {
       surfaceHold = 0;
       celebrate = 0;
       lapPending = false;
+      forage = null;
+      lapLegs = 0;
+      lookTicks = 0;
       feedTicks = feedTicks < 0 ? 0 : feedTicks + 1;
       const reach = (f: { x: number; y: number }): number =>
         Math.hypot(Math.max(0, Math.abs(f.x - x) - halfW), Math.max(0, Math.abs(f.y - y) - halfH));
@@ -242,7 +297,7 @@ export function createFishBehavior(): FishBehavior {
       const flake = input.flakes[best];
       if (flake !== undefined) {
         const dir: 1 | -1 = Math.abs(flake.x - x) < 2 ? facing : flake.x > x ? 1 : -1;
-        foodFacing = dir;
+        wantFacing = dir;
         const mouthD = Math.hypot(flake.x - (x + facing * FISH_MOUTH_AHEAD), flake.y - y);
         if (dir === facing && mouthD <= FISH_MOUTH_REACH) {
           bite = best;
@@ -260,15 +315,28 @@ export function createFishBehavior(): FishBehavior {
       }
       anim = input.label === 'hungry' || input.label === 'starving' ? 'hungry' : 'idle';
     } else if (input.asleep || drives.nap) {
-      // ---- asleep (night) or napping (exhausted in daylight): settle to the gravel and hold still
+      // ---- asleep (night) or napping (exhausted in daylight): low over the gravel, drifting very
+      // slowly along the bed, as a goldfish rests at night; down quickly first if it is up high
       leg = null;
       surfaceHold = 0;
+      forage = null;
+      lapLegs = 0;
+      lookTicks = 0;
       speed = 0;
       const ty = bounds.floorY - halfH - 2;
-      const t = moveToward(x, y, x, ty, 2);
+      const rcx = bounds.rect.x + bounds.rect.w / 2;
+      const rAmp = Math.max(8, (bounds.rect.w / 2 - halfW) * 0.6);
+      if (restIn <= 0) {
+        restX = clamp(x + (rng() * 2 - 1) * 22, rcx - rAmp, rcx + rAmp);
+        restIn = REST_RETARGET + Math.floor(rng() * REST_RETARGET);
+      } else {
+        restIn -= 1;
+      }
+      const t = moveToward(x, y, restX, ty, y < ty - 4 ? 1.5 : REST_SPEED);
+      nx = t.x;
       ny = t.y;
       anim = 'sleep';
-      lockFacing = true;
+      act = 'rest';
     } else if (input.label === 'starving') {
       // ---- starving: on the floor, barely drifting
       leg = null;
@@ -313,16 +381,97 @@ export function createFishBehavior(): FishBehavior {
         startLeg(cx + across * ampX * 0.85, (yMin + yMax) / 2, DART_PEAK * 1.1, 'dart', across * 14, true, bounds, halfW, halfH);
         pauseTicks = 0;
       }
+      // Someone arriving at the glass: after a moment (the personality's), it stops and looks out.
+      if (!hungry) {
+        if (attract) {
+          if (awayTicks >= ARRIVAL_AWAY_TICKS) lookIn = pers.lookDelay;
+          awayTicks = 0;
+        } else {
+          awayTicks += 1;
+          lookIn = -1;
+        }
+        if (lookIn >= 0 && !(leg !== null && leg.dartTick >= 0)) {
+          if (lookIn === 0) {
+            lookTicks = LOOK_TICKS;
+            leg = null;
+            forage = null;
+            lapLegs = 0;
+            surfaceHold = 0;
+          }
+          lookIn -= 1;
+        }
+      }
+      if (input.tap) {
+        lookTicks = 0;
+        forage = null;
+        lapLegs = 0;
+      }
 
-      if (leg === null && surfaceHold > 0) {
-        // ---- hanging at the surface: a gape in the middle of the hold
+      if (lookTicks > 0) {
+        // ---- looking out at the viewer: still, face turned out of the glass
+        lookTicks -= 1;
+        leg = null;
+        speed = approachSpeed(speed, 0, SPEED_TUNING);
+        act = 'look';
+        if (attract) wantFacing = attract.x >= x ? 1 : -1;
+        if (lookTicks === 0) pauseTicks = 4;
+      } else if (leg === null && forage !== null) {
+        // ---- at the bed: peck, perhaps take a pebble, mouth it while backing off, spit it out
+        forage.ticks += 1;
+        speed = 0;
+        if (forage.phase === 'peck') {
+          const t = forage.ticks % (PECK_TICKS + PECK_GAP);
+          act = t < PECK_TICKS ? 'peck' : 'hover';
+          if (t === PECK_TICKS + PECK_GAP - 1) {
+            forage.pecks -= 1;
+            if (forage.pecks <= 0) {
+              forage.phase = rng() < 0.65 ? 'hold' : 'after';
+              forage.ticks = 0;
+            }
+          }
+        } else if (forage.phase === 'hold') {
+          act = 'mouthful';
+          const back = bounds.clamp(x - facing * 0.4, y - 0.5, halfW, halfH);
+          nx = back.x;
+          ny = back.y;
+          if (forage.ticks >= forage.hold) {
+            forage.phase = 'spit';
+            forage.ticks = 0;
+          }
+        } else if (forage.phase === 'spit') {
+          act = 'spit';
+          if (forage.ticks >= SPIT_TICKS) {
+            forage.phase = 'after';
+            forage.ticks = 0;
+          }
+        } else {
+          act = 'hover';
+          if (forage.ticks >= AFTER_TICKS) {
+            forage = null;
+            pauseTicks = 4;
+          }
+        }
+      } else if (leg === null && surfaceHold > 0) {
+        // ---- hanging at the surface, nose at the waterline: two gulps
         surfaceHold -= 1;
-        if (surfaceHold === SURFACE_HOLD_TICKS - 3 || surfaceHold === SURFACE_HOLD_TICKS - 4) anim = 'eat';
+        const gulping = surfaceHold === SURFACE_HOLD_TICKS - 3 || surfaceHold === SURFACE_HOLD_TICKS - 4 || surfaceHold === 3 || surfaceHold === 2;
+        if (gulping) anim = 'eat';
+        act = gulping ? 'gulp' : 'hover';
         speed = 0;
       } else if (leg === null && pauseTicks > 0) {
-        // ---- hanging between legs
+        // ---- hanging between legs: hovering, the pectorals doing the work; facing the viewer if one is there
         pauseTicks -= 1;
         speed = approachSpeed(speed, 0, SPEED_TUNING);
+        act = 'hover';
+        if (attract && !hungry && clamp(attract.strength * drives.approach, 0, 1) >= FOLLOW_MIN) wantFacing = attract.x >= x ? 1 : -1;
+      } else if (leg === null && lapLegs > 0) {
+        // ---- the next leg of a lap: round the middle ring, curving outward
+        lapLegs -= 1;
+        lapAngle += lapDir * LAP_STEP;
+        const tx = cx + Math.cos(lapAngle) * ampX * LAP_RX;
+        const ty = (yMin + yMax) / 2 + Math.sin(lapAngle) * (yMax - yMin) * LAP_RY;
+        const len = Math.hypot(tx - x, ty - y);
+        startLeg(tx, ty, cruise * 0.95, 'lap', lapDir * len * 0.2, false, bounds, halfW, halfH);
       } else if (leg === null) {
         // ---- choose the next leg
         // The waypoint comes from the seeded NOISE over the leg count, not from the rng: that is what
@@ -341,11 +490,36 @@ export function createFishBehavior(): FishBehavior {
         let ty = y + (aimY - y) * reach;
         let kind: Leg['kind'] = 'wander';
         let dart = rng() < pers.dartOdds * (0.5 + activity);
-        if (!hungry && drives.surface > 0.45 && rng() < SURFACE_ODDS * drives.surface) {
-          // A surface visit: straight up-ish, slow, then a hold with a gape.
+        const follow = !hungry && attract !== null && clamp(attract.strength * drives.approach, 0, 1) >= FOLLOW_MIN;
+        const pick = rng();
+        if (follow && attract) {
+          // Following someone along the glass: a short leg to just beside the pointer, alternating
+          // sides, so it patrols in front of you rather than parking on the spot.
+          followSide = followSide === 1 ? -1 : 1;
+          tx = attract.x + followSide * (FOLLOW_OFFSET + 6 * (n2 + 1));
+          ty = clamp(attract.y + v * 8, yMin, yMax);
+          kind = 'follow';
+          dart = false;
+        } else if (!hungry && drives.surface > 0.45 && rng() < SURFACE_ODDS * drives.surface) {
+          // A surface visit: straight up-ish, slow, then a hold at the waterline with two gulps.
           tx = clamp(x + (rng() * 2 - 1) * 20, cx - ampX, cx + ampX);
-          ty = yMin;
+          ty = bounds.surfaceY + halfH;
           kind = 'surface';
+          dart = false;
+        } else if (!hungry && drives.hide <= 0.3 && pick < LAP_ODDS * (0.4 + activity)) {
+          // A lap: four to seven legs round the middle of the bowl, one way.
+          lapDir = rng() < 0.5 ? 1 : -1;
+          lapAngle = Math.atan2((y - (yMin + yMax) / 2) / Math.max(1, (yMax - yMin) * LAP_RY), (x - cx) / Math.max(1, ampX * LAP_RX)) + lapDir * LAP_STEP;
+          lapLegs = 3 + Math.floor(rng() * 4);
+          tx = cx + Math.cos(lapAngle) * ampX * LAP_RX;
+          ty = (yMin + yMax) / 2 + Math.sin(lapAngle) * (yMax - yMin) * LAP_RY;
+          kind = 'lap';
+          dart = false;
+        } else if (!hungry && pick < (LAP_ODDS + FORAGE_ODDS) * (0.4 + activity)) {
+          // Down to the gravel to pick at it.
+          tx = clamp(x + n * 30, cx - ampX, cx + ampX);
+          ty = bounds.floorY - halfH - 1;
+          kind = 'forage';
           dart = false;
         } else if (!hungry && drives.hide > 0.3) {
           // Keep to the plant and the floor, by as much as the pet wants to hide.
@@ -363,8 +537,10 @@ export function createFishBehavior(): FishBehavior {
         }
         const length = Math.hypot(tx - x, ty - y);
         // The bow of the arc: a fraction of the leg, sign and size from the noise so no two legs match.
-        const bulge = kind === 'surface' ? 0 : n * (hungry ? 0.12 : 0.3) * length;
-        startLeg(tx, ty, dart ? DART_PEAK : cruise * (0.85 + 0.3 * (n2 + 1) * 0.5), kind, bulge, dart, bounds, halfW, halfH);
+        const bulge =
+          kind === 'surface' || kind === 'forage' ? 0 : kind === 'lap' ? lapDir * length * 0.2 : n * (hungry ? 0.12 : kind === 'follow' ? 0.15 : 0.3) * length;
+        const legSpeed = dart ? DART_PEAK : cruise * (kind === 'follow' ? 1.1 : kind === 'lap' ? 0.95 : 0.85 + 0.3 * (n2 + 1) * 0.5);
+        startLeg(tx, ty, legSpeed, kind, bulge, dart, bounds, halfW, halfH);
       }
 
       if (leg !== null) {
@@ -392,6 +568,12 @@ export function createFishBehavior(): FishBehavior {
           leg = null;
           if (done.kind === 'surface') {
             surfaceHold = SURFACE_HOLD_TICKS;
+          } else if (done.kind === 'forage') {
+            forage = { phase: 'peck', ticks: -1, pecks: 2 + Math.floor(rng() * 2), hold: 12 + Math.floor(rng() * 9) };
+          } else if (done.kind === 'lap' && lapLegs > 0) {
+            // straight on into the next leg of the lap
+          } else if (done.kind === 'follow') {
+            pauseTicks = 3 + Math.floor((noise1(seed + 13, legCount * 0.41) + 1) * 3);
           } else {
             // Hang about for a bit, longer when there is nothing to do; a dart ends in a stop.
             const hang = (noise1(seed + 7, legCount * 0.37) + 1) * 0.5;
@@ -400,7 +582,7 @@ export function createFishBehavior(): FishBehavior {
         }
       }
       anim = hungry ? 'hungry' : celebrate > 0 ? 'excited' : 'idle';
-      if (anim === 'idle' && surfaceHold > 0 && (surfaceHold === SURFACE_HOLD_TICKS - 3 || surfaceHold === SURFACE_HOLD_TICKS - 4)) anim = 'eat';
+      if (anim === 'idle' && act === 'gulp') anim = 'eat';
     }
 
     // ---- facing: flips only when the travel direction really has, once per change, holding position
@@ -408,14 +590,15 @@ export function createFishBehavior(): FishBehavior {
     const vx = nx - prevX;
     const vy = ny - prevY;
     const travel = Math.hypot(vx, vy);
-    if (foodFacing !== 0 && turnCooldown === 0 && foodFacing !== facing) {
-      // food decides which way the mouth points, whichever way the body happens to be drifting
-      facing = foodFacing;
+    if (wantFacing !== 0 && turnCooldown === 0 && wantFacing !== facing) {
+      // food (or the viewer it is looking at) decides which way the face points, whichever way the
+      // body happens to be drifting
+      facing = wantFacing;
       turning = true;
       turnCooldown = TURN_COOLDOWN;
       nx = x;
       ny = y;
-    } else if (foodFacing === 0 && !lockFacing && turnCooldown === 0 && travel > 0.05) {
+    } else if (wantFacing === 0 && !lockFacing && turnCooldown === 0 && travel > 0.05) {
       let want: 1 | -1 | 0 = 0;
       if (leg !== null) {
         const h = arcHeading(leg.arc, leg.dist);
@@ -439,7 +622,7 @@ export function createFishBehavior(): FishBehavior {
     y = c.y;
 
     if (eatTicks > 0) anim = 'eat';
-    return { x, y, facing, turning, anim, biteFlakeIndex: bite };
+    return { x, y, facing, turning, anim, biteFlakeIndex: bite, ...(act !== undefined ? { act } : {}) };
   };
 
   return { step, reset };

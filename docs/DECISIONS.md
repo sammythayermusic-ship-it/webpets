@@ -1529,3 +1529,34 @@ art tests measure them at that scale, so the fallback still fits the box the beh
   body box, so it ate flakes that touched its flank. Each bite puffs a few bubbles from the gills.
 - **A finished meal** that it actually ate earns an excited, curving lap across the bowl (`excited`
   joins `PetAnim`). Food it never reached does not.
+
+## 2026-10-31 — Step C plan: swims like a real goldfish
+
+PHASE-NEXT step 2 on C, which Oct 28 started (the needs, the drives, a planner of arcs and darts),
+plus the goldfish behaviours AFTER-BAKEOFF lists. The split stays: the behaviour (pure, 8 Hz, tested)
+decides what the fish is doing and says so; the spine and the live layer decide how that looks.
+
+### the behaviour says what it is doing
+`PetOutput` gains an optional `act` beside `anim`: `hover`, `peck`, `mouthful`, `spit`, `gulp`,
+`look`, `rest`. `anim` stays the coarse state the sprite fallback can draw; `act` is the detail
+only the live fish shows. The idle repertoire becomes a weighted pick of micro-actions, seeded, so
+no two minutes match:
+- **hover**: the pauses between legs, now explicit; the tail almost still, the pectorals sculling.
+- **laps**: three to six legs around the bowl's middle ring, gentle arcs, cruise pace.
+- **gravel picking**: down to the bed, two or three pecks nose-down, often a pebble taken into the
+  mouth, mouthed for a second or two while backing off, then spat out.
+- **surface gulps**: the existing surface visit, nose up at the waterline, two gulps, a small ring.
+- **look**: when someone arrives (the pointer appears after a few seconds away) the fish stops and
+  turns its face toward the viewer, after a personality's delay (degen at once, sarcastic slowly).
+- **follow**: while someone stays and the fish wants company, it patrols just in front of the
+  pointer along the glass, a few px either side, never parking.
+- **rest**: at night (and in a daytime nap) low over the gravel with a very slow drift.
+A test runs ten minutes of idle and asserts no 30-second window of the path repeats.
+
+### the spine and the live layer show it
+Sculling pectorals as their own channel (busy when hovering, folded when cruising or darting);
+nose-down pitch for pecks, nose-up for gulps; a three-quarter yaw toward the camera for `look`;
+fins that fold when the fish is sad, hungry or unwell and spread when it is excited (one eased
+"spirits" value from the mood, applied per fin in the vertex shader); colours a little muted at
+night. The live layer draws the pebble (held at the mouth, then spat out to fall back to the bed)
+and a small ring for each gulp.
