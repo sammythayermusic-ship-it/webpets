@@ -168,6 +168,12 @@ export interface ManifestSprite {
   fps?: number;
   /** Size of the drawn body inside the frame (centered), so behavior can keep it inside the water. */
   body: { w: number; h: number };
+  /**
+   * The bitmap frames are drawn at this fraction of their logical frame (default 1). The fish's frames
+   * are the September art, the fallback for when the live layer cannot run; the goldfish that replaced
+   * it is drawn smaller (FISH_DRAWN_LENGTH), so the fallback is scaled to match it and its body box.
+   */
+  drawScale?: number;
   states: Record<string, ManifestSpriteState>;
 }
 
@@ -177,7 +183,11 @@ export interface Manifest {
   sprites: Record<string, ManifestSprite>; // key species
 }
 
-export type PetAnim = 'idle' | 'walk' | 'eat' | 'hungry' | 'sleep' | 'dead';
+/**
+ * What the behaviour asks the art to play. `excited` is the fish's lap after a finished meal (the
+ * only behaviour that asks for it; the mood can ask for it too, through the expression gate).
+ */
+export type PetAnim = 'idle' | 'walk' | 'eat' | 'hungry' | 'sleep' | 'dead' | 'excited';
 
 /** alive: normal. dead: belly-up + fog, bubbles stop. memorial: empty bowl with a flag (after the death card is dismissed). */
 export type ScenePhase = 'alive' | 'dead' | 'memorial';

@@ -180,7 +180,7 @@ describe('fish frames', () => {
 
   it('is drawn larger than its collision box, and overhangs it by fins rather than by a body', () => {
     const png = load(stateFiles(fish.states['idle'] as never)[0] as string);
-    const scale = png.width / fish.frame[0];
+    const scale = png.width / fish.frame[0] / (fish.drawScale ?? 1);
     const [x0, y0, x1, y1] = alphaBox(png, 0.02) as [number, number, number, number];
     const drawnW = (x1 - x0 + 1) / scale;
     const drawnH = (y1 - y0 + 1) / scale;
@@ -261,9 +261,10 @@ describe('fish frames', () => {
     // clamps a dead fish as high as its body box fits, and the art must not then hang out of the water.
     const files = stateFiles(fish.states['dead'] as never);
     const png = load(files[0] as string);
-    const scale = png.width / fish.frame[0];
+    const ds = fish.drawScale ?? 1;
+    const scale = png.width / fish.frame[0] / ds;
     const [, y0] = alphaBox(png, 0.02) as [number, number, number, number];
-    const anchorY = (fish.states['dead']?.anchor ?? [0, 0])[1];
+    const anchorY = (fish.states['dead']?.anchor ?? [0, 0])[1] * ds;
     const centre = BOWL_WATER_SHAPE.surfaceY + fish.body.h / 2;
     const drawnTop = centre - (png.height / 2 - y0) / scale - anchorY;
     // A fin may brush the surface; a tail may not hang above it by a body's worth.
@@ -370,7 +371,7 @@ describe.each(Object.keys(manifest.sprites))('sprite art: %s', (key) => {
     for (const [name, def] of entries) {
       const files = stateFiles(def);
       const png = load(files[0] as string);
-      const mult = png.width / sp.frame[0];
+      const mult = png.width / sp.frame[0] / (sp.drawScale ?? 1);
       const box = alphaBox(png, 0.01);
       expect(box).not.toBeNull();
       if (!box) return;

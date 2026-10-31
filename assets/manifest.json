@@ -222,9 +222,10 @@
       ],
       "fps": 12,
       "body": {
-        "w": 50,
-        "h": 32
+        "w": 36,
+        "h": 18
       },
+      "drawScale": 0.74,
       "states": {
         "idle": {
           "source": {

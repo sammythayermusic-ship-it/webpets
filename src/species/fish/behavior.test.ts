@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createFishBehavior } from './behavior';
-import { BOWL_WATER_SHAPE, FISH_BODY } from './layout';
+import { BOWL_WATER_SHAPE, FISH_BODY, FISH_MOUTH_AHEAD, FISH_MOUTH_REACH } from './layout';
 import { makeWaterBounds } from '../../render/water';
 import type { FishInput, FishOutput } from '../../render/types';
 import type { HungerLabel, Rng } from '../../sim/types';
@@ -81,10 +81,10 @@ describe('fish behavior', () => {
     expect(outs.every((o) => o.anim === 'idle')).toBe(true);
   });
 
-  it('bites a flake placed within range and reports eat for a few ticks', () => {
+  it('bites a flake at its mouth and reports eat for a few ticks', () => {
     const b = createFishBehavior();
     const first = b.step(input());
-    const flake = { x: first.x + 8, y: first.y - 6 };
+    const flake = { x: first.x + first.facing * (FISH_MOUTH_AHEAD - 2), y: first.y - 3 };
     const o = b.step(input({ flakes: [flake] }));
     expect(o.biteFlakeIndex).toBe(0);
     expect(o.anim).toBe('eat');
@@ -113,11 +113,67 @@ describe('fish behavior', () => {
     const b = createFishBehavior();
     const first = b.step(input());
     const flakes = [
-      { x: first.x + 80, y: first.y },
-      { x: first.x + 10, y: first.y },
+      { x: first.x + first.facing * 80, y: first.y },
+      { x: first.x + first.facing * FISH_MOUTH_AHEAD, y: first.y },
     ];
     const o = b.step(input({ flakes }));
     expect(o.biteFlakeIndex).toBe(1);
+  });
+
+  it('bites with its mouth, not its flank: a flake against its side is not eaten until it turns to it', () => {
+    const b = createFishBehavior();
+    const first = b.step(input());
+    // level with the body, just behind the gills on the far side of where the mouth points
+    const flake = { x: first.x - first.facing * 6, y: first.y };
+    const o = b.step(input({ flakes: [flake] }));
+    expect(o.biteFlakeIndex, 'touching the body is not a bite').toBeNull();
+    let bitten = false;
+    let mouthAtBite = Infinity;
+    for (let i = 0; i < 40 && !bitten; i += 1) {
+      const s = b.step(input({ flakes: [flake] }));
+      if (s.biteFlakeIndex === 0) {
+        bitten = true;
+        mouthAtBite = Math.hypot(s.x + s.facing * FISH_MOUTH_AHEAD - flake.x, s.y - flake.y);
+        expect(s.facing, 'it faces the flake it bites').toBe(flake.x > s.x ? 1 : -1);
+      }
+    }
+    expect(bitten).toBe(true);
+    expect(mouthAtBite).toBeLessThanOrEqual(FISH_MOUTH_REACH);
+  });
+
+  it('darts when food arrives: the first ticks of a chase are faster than the steady lunge', () => {
+    const b = createFishBehavior();
+    const first = b.step(input());
+    const far = { x: first.x < 160 ? bounds.rect.x + bounds.rect.w - 30 : bounds.rect.x + 30, y: first.y };
+    const xs = [first.x];
+    for (let i = 0; i < 12; i += 1) xs.push(b.step(input({ flakes: [far] })).x);
+    const steps = xs.slice(1).map((v, i) => Math.abs(v - (xs[i] as number)));
+    const early = Math.max(...steps.slice(0, 4));
+    const late = steps[steps.length - 1] as number;
+    expect(early).toBeGreaterThan(late);
+  });
+
+  it('celebrates a finished meal: an excited zoom once the last flake is gone', () => {
+    const b = createFishBehavior();
+    const first = b.step(input());
+    const flake = { x: first.x + first.facing * (FISH_MOUTH_AHEAD - 2), y: first.y };
+    expect(b.step(input({ flakes: [flake] })).biteFlakeIndex).toBe(0);
+    const outs: FishOutput[] = [];
+    for (let i = 0; i < 24; i += 1) outs.push(b.step(input()));
+    expect(outs.some((o) => o.anim === 'excited'), 'shows excitement after eating').toBe(true);
+    const travelled = outs.reduce((d, o, i) => (i === 0 ? 0 : d + Math.hypot(o.x - (outs[i - 1] as FishOutput).x, o.y - (outs[i - 1] as FishOutput).y)), 0);
+    expect(travelled, 'and swims a lap of it, not a wiggle in place').toBeGreaterThan(40);
+    expect(outs.every(boxInside)).toBe(true);
+  });
+
+  it('does not celebrate food it never ate', () => {
+    const b = createFishBehavior();
+    const first = b.step(input());
+    const flake = { x: first.x + 60, y: bounds.floorY - 8 };
+    b.step(input({ flakes: [flake] }));
+    const outs: FishOutput[] = [];
+    for (let i = 0; i < 24; i += 1) outs.push(b.step(input()));
+    expect(outs.some((o) => o.anim === 'excited')).toBe(false);
   });
 
   it('dead: floats belly-up as high as the body still fits, and never bites', () => {
@@ -125,7 +181,7 @@ describe('fish behavior', () => {
     for (let i = 0; i < 20; i += 1) b.step(input());
     // The highest legal centre for the body box, which is what "at the surface" has to mean: the
     // water's topmost row is the glass, so a raw surfaceY + 12 hangs the dorsal fin outside the bowl.
-    const expected = bounds.clamp(160, bounds.surfaceY + 12, body.w / 2, body.h / 2);
+    const expected = bounds.clamp(160, bounds.surfaceY, body.w / 2, body.h / 2);
     for (let i = 0; i < 50; i += 1) {
       const o = b.step(input({ alive: false, flakes: [{ x: 162, y: 60 }] }));
       expect(o.y).toBe(Math.round(expected.y));

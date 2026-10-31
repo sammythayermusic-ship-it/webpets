@@ -14,6 +14,8 @@
 // the viewer. The fish swims on a plane of constant depth plus a slow wander, which the behaviour
 // never sees.
 
+import { FISH_DRAWN_LENGTH } from '../../species/fish/layout';
+
 /** Metres per grid px through CAM_bowl: ortho_scale / grid width. */
 export const METRES_PER_GRID_PX = 0.43 / 320;
 
@@ -108,18 +110,13 @@ export function cameraPose(): { position: WorldPoint; pitch: number } {
 }
 
 /**
- * Length of the exported fish mesh nose to tail tip, root space, metres (bbox of HERO_fish_body
- * and HERO_fish_tail in fish-rig.json: 0.0598 - (-0.0605)).
+ * Length of the exported goldfish, snout to tail-lobe tip, root space, metres (`length_m` in
+ * assets/live/goldfish/rig.json, written by gf_build.py).
  */
-export const FISH_MESH_LENGTH_M = 0.1218;
+export const FISH_MESH_LENGTH_M = 0.1228;
 
-/**
- * How long the fish is drawn, grid px. The rendered sprite the simulation was tuned against draws
- * the fish about 59.5 logical px long (see FISH_BODY in src/species/fish/layout.ts: the 50 px body
- * box is "deliberately smaller than the drawn fish, about 59x39"), so the live fish is scaled to the
- * same length and every constant in the behaviour keeps meaning what it meant.
- */
-export const FISH_DRAWN_LENGTH_GRID = 59.5;
+/** How long the fish is drawn, grid px: the fish layout's number, so the body box and the art agree. */
+export const FISH_DRAWN_LENGTH_GRID = FISH_DRAWN_LENGTH;
 
 /** Uniform scale applied to the fish root so the mesh spans FISH_DRAWN_LENGTH_GRID on screen. */
 export function fishScale(): number {

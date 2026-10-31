@@ -8,7 +8,7 @@
  * root space (uToRoot), bent there by the travelling wave and the turn curl, and carried back
  * (uFromRoot) before Three's own modelViewMatrix applies. Root space: +x nose, +y up, +z the fish's
  * left; the goldfish (assets/3d/scripts/gf_shape.py) is rigid ahead of the gills at x = 0.045, hinges
- * its tail at x = -0.026 and ends at the lobe tips, x = -0.0605.
+ * its tail at x = -0.017 and ends at the lobe tips, x = -0.0605.
  *
  * Fins flutter from their OWN hinge: `uFinRoot` is where the fin meets the body (root space) and
  * `uFinLen` its longest ray, both exported with the mesh, so a fin's free edge moves and its root
@@ -51,7 +51,7 @@ vec3 wpBend(vec3 pr, out float slope) {
     dz += side * uFlutter * 0.5 * f * f * (0.6 + 0.4 * sin(uTime * 2.6 + side));
   } else if (uFlutterMode > 2.5) {
     // tail: beyond the hinge the fin lags the body and its tips flex more than its root
-    float ft = clamp((-x - 0.026) / 0.035, 0.0, 1.0);
+    float ft = clamp((-x - 0.017) / 0.044, 0.0, 1.0);
     float edge = clamp((abs(pr.y) - 0.004) / 0.018, 0.0, 1.0);
     dz += uFlutter * 1.4 * ft * sin(arg - 0.9) + uFlutter * edge * ft * sin(arg - 1.8 + pr.y * 60.0);
   }

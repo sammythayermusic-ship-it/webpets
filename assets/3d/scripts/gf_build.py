@@ -128,7 +128,7 @@ def build_body(root):
         f = s / steps
         ang = f * math.pi / 2 * 0.92
         k = math.cos(ang)
-        xs = x0 + 0.0012 * math.sin(ang)
+        xs = x0 + 0.0019 * math.sin(ang)
         start = len(verts)
         for j in range(NT + 1):
             px, py, pz = verts[base + j]
@@ -139,7 +139,7 @@ def build_body(root):
             faces.append((prev + j, prev + j + 1, start + j + 1, start + j))
         prev = start
     tip = len(verts)
-    verts.append((x0 + 0.0012, 0.0, float(G.centre_z(x0))))
+    verts.append((x0 + 0.0019, 0.0, float(G.centre_z(x0))))
     uvs.append((1.0, 0.5))
     for j in range(NT):
         faces.append((prev + j, prev + j + 1, tip))
@@ -180,7 +180,7 @@ def build_eye(root, side):
 def build_mouth(root):
     """Lips: a flattened ring round the snout tip, and a dark throat disc just inside it. One mesh,
     vertex-coloured, so the live layer's gape (a scale about the mesh) opens both together."""
-    x0 = G.X_NOSE + 0.0009
+    x0 = G.X_NOSE + 0.0016
     zc = float(G.centre_z(G.X_NOSE))
     R, rr = 0.0015, 0.00052
     verts, faces, cols = [], [], []

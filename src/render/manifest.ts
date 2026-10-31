@@ -216,6 +216,7 @@ function sprite(v: unknown, path: string): ManifestSprite {
     frame: pair(v['frame'], `${path}.frame`),
     ...(v['fps'] === undefined ? {} : { fps: positive(v['fps'], `${path}.fps`) }),
     body: { w: int(body['w'], `${path}.body.w`), h: int(body['h'], `${path}.body.h`) },
+    ...(v['drawScale'] === undefined ? {} : { drawScale: positive(v['drawScale'], `${path}.drawScale`) }),
     states,
   };
 }

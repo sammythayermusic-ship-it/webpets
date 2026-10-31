@@ -18,6 +18,7 @@ import type { FishBehavior, FishInput, FishOutput, PetAnim, WaterBounds } from '
 import type { HungerLabel, Personality } from '../../sim/types';
 import type { Drives } from '../../sim/needs';
 import { alongArc, approachSpeed, arc, arcHeading, dartSpeed, noise1, type Arc } from '../../sim/motion';
+import { FISH_MOUTH_AHEAD, FISH_MOUTH_REACH } from './layout';
 
 /** Ticks the eat animation is reported after a bite (matches the 4-frame eat strip). */
 const EAT_TICKS = 4;
@@ -25,8 +26,8 @@ const EAT_TICKS = 4;
 const TURN_COOLDOWN = 6;
 /** Horizontal component of the travel direction needed before the fish commits to a new facing. */
 const TURN_DEAD_ZONE = 0.3;
-/** A flake within this many px of the body box is eaten. */
-const BITE_RANGE = 12;
+/** Ticks a finished meal is celebrated for: an excited lap of the bowl. */
+const CELEBRATE_TICKS = 22;
 /** Cruise speed of a content, rested fish, px/tick, before pace and activity. */
 const CRUISE = 2.4;
 /** Speed inertia: builds quickly, bleeds slowly — the drag of water. */
@@ -108,6 +109,12 @@ export function createFishBehavior(): FishBehavior {
   let driftTicks = 0;
   /** Seeds the no-loop noise; drawn once per behaviour so two fish never share a wander. */
   let seed = 0;
+  /** The feed in progress: ticks since the food arrived (-1: none), and how many flakes it has taken. */
+  let feedTicks = -1;
+  let feedBites = 0;
+  /** Ticks of celebration left after a finished meal, and whether its lap is still to start. */
+  let celebrate = 0;
+  let lapPending = false;
 
   const reset = (): void => {
     inited = false;
@@ -125,6 +132,10 @@ export function createFishBehavior(): FishBehavior {
     driftVx = 0.3;
     driftTicks = 0;
     seed = 0;
+    feedTicks = -1;
+    feedBites = 0;
+    celebrate = 0;
+    lapPending = false;
   };
 
   const init = (bounds: WaterBounds, halfW: number, halfH: number, rng: () => number): void => {
@@ -176,6 +187,18 @@ export function createFishBehavior(): FishBehavior {
     const attract = input.attract && input.attract.strength > 0 ? input.attract : null;
     if (turnCooldown > 0) turnCooldown -= 1;
     if (eatTicks > 0) eatTicks -= 1;
+    if (celebrate > 0) celebrate -= 1;
+    // The meal is over when the food is gone. One that was eaten (not just watched dissolve) earns a lap.
+    if (input.flakes.length === 0 && feedTicks >= 0) {
+      if (feedBites > 0 && input.alive) {
+        celebrate = CELEBRATE_TICKS;
+        lapPending = true;
+      }
+      feedTicks = -1;
+      feedBites = 0;
+    }
+    /** The way the food makes the fish face, this tick (0: no opinion). */
+    let foodFacing: 1 | -1 | 0 = 0;
 
     // ---- dead: belly-up at the surface, nothing else moves
     if (!input.alive) {
@@ -197,9 +220,14 @@ export function createFishBehavior(): FishBehavior {
     let lockFacing = false;
 
     if (input.flakes.length > 0) {
-      // ---- food outranks everything: lunge at the nearest flake, measured from the body box
+      // ---- food outranks everything. The fish turns to the nearest flake and takes it with its MOUTH:
+      // a dart when the food lands, then the chase, then a snap. Choosing by where the body box can
+      // reach keeps "nearest" meaning nearest; biting by the mouth is what makes it look like eating.
       leg = null;
       surfaceHold = 0;
+      celebrate = 0;
+      lapPending = false;
+      feedTicks = feedTicks < 0 ? 0 : feedTicks + 1;
       const reach = (f: { x: number; y: number }): number =>
         Math.hypot(Math.max(0, Math.abs(f.x - x) - halfW), Math.max(0, Math.abs(f.y - y) - halfH));
       let best = 0;
@@ -213,13 +241,19 @@ export function createFishBehavior(): FishBehavior {
       });
       const flake = input.flakes[best];
       if (flake !== undefined) {
-        if (bestD <= BITE_RANGE) {
+        const dir: 1 | -1 = Math.abs(flake.x - x) < 2 ? facing : flake.x > x ? 1 : -1;
+        foodFacing = dir;
+        const mouthD = Math.hypot(flake.x - (x + facing * FISH_MOUTH_AHEAD), flake.y - y);
+        if (dir === facing && mouthD <= FISH_MOUTH_REACH) {
           bite = best;
           eatTicks = EAT_TICKS;
+          feedBites += 1;
           speed = 0;
         } else {
-          speed = lungeSpeed(input.label);
-          const t = moveToward(x, y, flake.x, flake.y, speed);
+          // the burst of a fish that has seen food land, settling into the hunger's lunge
+          const burst = input.label === 'starving' ? 0 : dartSpeed(feedTicks, DART_PEAK * 1.15, DART_TICKS);
+          speed = Math.max(lungeSpeed(input.label), burst);
+          const t = moveToward(x, y, flake.x - dir * FISH_MOUTH_AHEAD, flake.y, speed);
           nx = t.x;
           ny = t.y;
         }
@@ -272,6 +306,13 @@ export function createFishBehavior(): FishBehavior {
         pauseTicks = 0;
       }
       if (!drives.greet) greeted = false;
+      // A finished meal: a quick, curving lap across the bowl.
+      if (lapPending && !hungry) {
+        lapPending = false;
+        const across = x >= cx ? -1 : 1;
+        startLeg(cx + across * ampX * 0.85, (yMin + yMax) / 2, DART_PEAK * 1.1, 'dart', across * 14, true, bounds, halfW, halfH);
+        pauseTicks = 0;
+      }
 
       if (leg === null && surfaceHold > 0) {
         // ---- hanging at the surface: a gape in the middle of the hold
@@ -358,7 +399,7 @@ export function createFishBehavior(): FishBehavior {
           }
         }
       }
-      anim = hungry ? 'hungry' : 'idle';
+      anim = hungry ? 'hungry' : celebrate > 0 ? 'excited' : 'idle';
       if (anim === 'idle' && surfaceHold > 0 && (surfaceHold === SURFACE_HOLD_TICKS - 3 || surfaceHold === SURFACE_HOLD_TICKS - 4)) anim = 'eat';
     }
 
@@ -367,7 +408,14 @@ export function createFishBehavior(): FishBehavior {
     const vx = nx - prevX;
     const vy = ny - prevY;
     const travel = Math.hypot(vx, vy);
-    if (!lockFacing && turnCooldown === 0 && travel > 0.05) {
+    if (foodFacing !== 0 && turnCooldown === 0 && foodFacing !== facing) {
+      // food decides which way the mouth points, whichever way the body happens to be drifting
+      facing = foodFacing;
+      turning = true;
+      turnCooldown = TURN_COOLDOWN;
+      nx = x;
+      ny = y;
+    } else if (foodFacing === 0 && !lockFacing && turnCooldown === 0 && travel > 0.05) {
       let want: 1 | -1 | 0 = 0;
       if (leg !== null) {
         const h = arcHeading(leg.arc, leg.dist);

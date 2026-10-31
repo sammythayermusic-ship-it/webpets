@@ -192,21 +192,23 @@ export function createSpritePlayer(
     let dx = 0;
     let dy = 0;
     let sy = 1;
-    let texScale = fallbackBase.texScale;
+    const ds = def.drawScale ?? 1;
+    let texScale = fallbackBase.texScale * ds;
     if (art) {
       sprite.texture = art.textures[frame] ?? fallbackBase.texture;
-      texScale = art.texScale;
+      texScale = art.texScale * ds;
       // Registration first: this state's body sits somewhere in its frame, and every state has to put
       // it in the same place or the simulation's idea of where the pet is stops matching the pixels.
+      // Anchors and offsets are logical px of the FRAME, so they shrink with the drawing.
       const reg = def.states[state]?.anchor;
       if (reg) {
-        dx -= reg[0];
-        dy -= reg[1];
+        dx -= reg[0] * ds;
+        dy -= reg[1] * ds;
       }
       const off = def.states[state]?.offsets?.[frame];
       if (off) {
-        dx += off[0];
-        dy += off[1];
+        dx += off[0] * ds;
+        dy += off[1] * ds;
       }
     } else {
       // Transform fallback: the base frame with a bob / squash / flip.

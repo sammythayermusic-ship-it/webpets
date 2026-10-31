@@ -63,4 +63,23 @@ export const BOWL_PET_ANCHOR: readonly [number, number] = Object.freeze([160, 10
  * fish barely 20 px of vertical travel and kill the figure-eight. 32 keeps the body proper inside the
  * water and lets the fins overlap the glass, which is what the box was always for.
  */
-export const FISH_BODY: Readonly<{ w: number; h: number }> = Object.freeze({ w: 50, h: 32 });
+export const FISH_BODY: Readonly<{ w: number; h: number }> = Object.freeze({ w: 36, h: 18 });
+
+/**
+ * How long the live goldfish is drawn, nose to tail tip, grid px. Sammy asked for a smaller fish with
+ * more room to swim (2026-10-31): 44 is three quarters of the September fish's 59.5, and the body box
+ * above shrank with it (36x18 from 50x32), which gives the body centre 17 px more travel across the
+ * bowl and 14 px more top to bottom. The box still holds the body proper; the fins and most of the
+ * flowing tail overhang it, which is what the box has always allowed. The bitmap sprite frames (the
+ * fallback when there is no live layer) are the September fish's and are drawn larger than this.
+ */
+export const FISH_DRAWN_LENGTH = 44;
+
+/**
+ * Where the mouth is, ahead of the body centre along the facing, grid px. The goldfish's root sits
+ * mid-length (nose at +0.062 m of a 0.123 m mesh), so at 44 px long the mouth is ~22 px ahead. The
+ * fish bites with its MOUTH: a flake within MOUTH_REACH of this point is eaten, so a feed reads as
+ * the fish snapping each flake rather than inhaling food that touched its flank.
+ */
+export const FISH_MOUTH_AHEAD = 22;
+export const FISH_MOUTH_REACH = 7;

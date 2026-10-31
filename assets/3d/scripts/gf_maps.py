@@ -147,11 +147,11 @@ def body_maps(out):
     # toward the tail and the head (pitch follows the local depth). Around: 15 rows a side.
     xs = G.x_of_u(cols)
     depth = G.top(xs) + G.bottom(xs)
-    pitch = 0.00235 * (0.52 + 0.48 * depth / depth.max())
+    pitch = 0.0026 * (0.52 + 0.48 * depth / depth.max())
     dx = np.diff(xs, prepend=xs[0])
     S = np.cumsum(dx / pitch)                   # scale index along x, increases toward the snout
     A = np.broadcast_to(S[None, :], X.shape)
-    ROWS = 15.0
+    ROWS = 14.0
     B = YN * ROWS
 
     best = np.full(X.shape, -1e9)
@@ -195,7 +195,7 @@ def body_maps(out):
 
     # ---- where the scales are: behind the gill cover, ahead of the tail base ----------------------
     opx = G.operculum_x(ZN)
-    scaled = smooth(opx + 0.0003, opx - 0.0012, X)          # 1 behind the cover's edge
+    scaled = smooth(opx + 0.0004, opx - 0.0020, X)          # 1 behind the cover's edge
     head = 1.0 - scaled
     # the cover's free edge: a flap standing a hair proud of the body, a bright lip, a dark gap
     edge_d = (X - opx) / 0.0006
@@ -212,7 +212,9 @@ def body_maps(out):
     nr = np.hypot(X - G.NOSTRIL_X, Z - G.NOSTRIL_Z) / 0.0007
     nostril = np.exp(-(nr ** 2)) * lateral
     # the mouth's corner: a short crease back from the lips
-    mouth_crease = np.exp(-(((Z - (G.centre_z(X) - 0.0006)) / 0.00025) ** 2)) * smooth(0.0570, 0.0595, X) * lateral
+    # ... curving up a little at its corner: the hint of a smile a goldfish's mouth line really has
+    crease_z = G.centre_z(X) - 0.0005 + 0.0011 * np.clip((0.0598 - X) / 0.0035, 0.0, 1.0) ** 1.5
+    mouth_crease = np.exp(-(((Z - crease_z) / 0.00025) ** 2)) * smooth(0.0560, 0.0590, X) * smooth(0.0602, 0.0592, X) * lateral
 
     # ---- lateral line: one pore per scale on the row ~40% down from the back --------------------------
     ll_row_b = 0.40 * ROWS
@@ -220,12 +222,12 @@ def body_maps(out):
     pore = np.exp(-((win_da / 0.16) ** 2 + (win_db / 0.12) ** 2)) * on_ll * scaled
 
     # ---- height (metres) --------------------------------------------------------------------------
-    A_SCALE = 0.00010
+    A_SCALE = 0.00008
     fine = fbm(X * 9000.0, Z * 9000.0, 3, salt=3)
     h = scale_h * A_SCALE * scaled
     h += head * (fine - 0.5) * 0.000012
-    h += flap * 0.00009 * head + (-gill_line * 0.00006)
-    h -= preop * 0.00004
+    h += flap * 0.00004 * head + (-gill_line * 0.00003)
+    h -= preop * 0.00002
     h -= socket * 0.00006
     h -= nostril * 0.00010
     h -= pore * 0.00006
@@ -234,13 +236,13 @@ def body_maps(out):
 
     # ---- colour (linear) -------------------------------------------------------------------------
     stops = [
-        (0.00, lin(186, 48, 10)),
-        (0.18, lin(218, 72, 14)),
-        (0.36, lin(236, 100, 18)),
-        (0.55, lin(243, 124, 26)),
-        (0.74, lin(246, 148, 42)),
-        (0.88, lin(245, 180, 92)),
-        (1.00, lin(238, 200, 140)),
+        (0.00, lin(214, 78, 18)),
+        (0.18, lin(236, 100, 20)),
+        (0.36, lin(246, 124, 26)),
+        (0.55, lin(250, 146, 38)),
+        (0.74, lin(252, 170, 64)),
+        (0.88, lin(250, 206, 136)),
+        (1.00, lin(248, 226, 186)),
     ]
     col = np.zeros(X.shape + (3,))
     for i in range(len(stops) - 1):
@@ -264,17 +266,17 @@ def body_maps(out):
     warm = rnd2 * scaled
     col *= 1.0 - warm[..., None] * np.array([0.0, 0.07, 0.14])
     net = seam * scaled
-    col = col * (1 - 0.42 * net[..., None]) + lin(150, 36, 8) * (0.42 * net[..., None])
+    col = col * (1 - 0.32 * net[..., None]) + lin(176, 52, 12) * (0.32 * net[..., None])
     # each scale's exposed middle is a touch brighter (the guanine shine under the pigment)
     shine = scaled * smooth(0.95, 0.25, win_d) * smooth(-0.6, 0.3, -win_da)
     col *= (1.0 + 0.07 * shine)[..., None]
     # gill cover: a pale lip and the red of the gills in the gap behind it
-    col = col * (1 - 0.35 * gill_line[..., None]) + lin(200, 40, 30) * (0.35 * gill_line[..., None])
-    col *= (1.0 + 0.10 * (flap * head))[..., None]
-    col *= (1.0 - 0.18 * preop)[..., None]
+    col = col * (1 - 0.18 * gill_line[..., None]) + lin(214, 70, 40) * (0.18 * gill_line[..., None])
+    col *= (1.0 + 0.04 * (flap * head))[..., None]
+    col *= (1.0 - 0.07 * preop)[..., None]
     col *= (1.0 - 0.12 * socket)[..., None]
     col *= (1.0 - 0.5 * nostril)[..., None]
-    col *= (1.0 - 0.45 * pore)[..., None]
+    col *= (1.0 - 0.22 * pore)[..., None]
     col *= (1.0 - 0.4 * mouth_crease)[..., None]
     col = col * (1 - under_eye[..., None] * 0.3) + lin(40, 20, 12) * under_eye[..., None] * 0.3
 
@@ -356,14 +358,14 @@ def eye_map(out):
     a = np.arctan2(Y, X)
     fib = fbm(a * 12.0, r * 6.0, 3, salt=21)
     spots = (fbm(X * 9.0, Y * 9.0, 2, salt=23) > 0.68) * smooth(0.55, 0.62, r) * smooth(0.86, 0.78, r)
-    pupil = smooth(0.52, 0.47, r)
+    pupil = smooth(0.62, 0.57, r)
     iris_in = lin(246, 198, 82)
     iris_out = lin(196, 104, 30)
-    t = smooth(0.50, 0.82, r)
+    t = smooth(0.60, 0.84, r)
     col = iris_in * (1 - t[..., None]) + iris_out * t[..., None]
     col *= (0.82 + 0.36 * fib)[..., None]
     col = col * (1 - 0.6 * spots[..., None]) + lin(60, 30, 14) * (0.6 * spots[..., None])
-    limbus = smooth(0.82, 0.92, r)
+    limbus = smooth(0.85, 0.93, r)
     col = col * (1 - limbus[..., None]) + lin(40, 22, 14) * limbus[..., None]
     skin = smooth(0.90, 1.0, r)
     col = col * (1 - skin[..., None]) + lin(230, 110, 30) * skin[..., None]

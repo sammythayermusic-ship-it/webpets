@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEPTH_WANDER_MAX_M,
+  FISH_MESH_LENGTH_M,
   METRES_PER_GRID_PX,
   blenderToWorld,
   cameraFrustum,
@@ -12,7 +13,7 @@ import {
   worldToBlender,
 } from './mapping';
 import geometry from '../../../assets/habitats/fish/bowl/geometry.json';
-import { BOWL_WATER_SHAPE } from '../../species/fish/layout';
+import { BOWL_WATER_SHAPE, FISH_BODY, FISH_DRAWN_LENGTH } from '../../species/fish/layout';
 
 const ART_SCALE = (geometry.resolution[0] ?? 1280) / 320;
 
@@ -80,9 +81,11 @@ describe('grid <-> world mapping through CAM_bowl', () => {
     expect(f.left).toBeCloseTo(-f.right, 12);
   });
 
-  it('scales the fish to the length the sprite was drawn at', () => {
-    expect(fishScale()).toBeGreaterThan(0.6);
-    expect(fishScale()).toBeLessThan(0.72);
+  it('scales the fish so it is drawn at the layout length', () => {
+    // the mesh, scaled, spans FISH_DRAWN_LENGTH grid px through the bowl camera
+    expect((FISH_MESH_LENGTH_M * fishScale()) / METRES_PER_GRID_PX).toBeCloseTo(FISH_DRAWN_LENGTH, 6);
+    // and the body box is smaller than the drawn fish: the fins and tail overhang it, the body does not
+    expect(FISH_BODY.w).toBeLessThan(FISH_DRAWN_LENGTH);
   });
 
   it('bounds the depth wander', () => {

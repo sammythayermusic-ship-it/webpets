@@ -4,37 +4,39 @@
 Frame: the fish ROOT, Blender axes, metres. +x is the nose, +z is up (dorsal), y is lateral. The
 glTF export turns this into the live layer's root space (+x nose, +y up, +z the fish's left), which is
 the frame the spine shader in src/render/live/shaders.ts bends in. Its constants hold for this fish:
-the head is rigid ahead of x = 0.045, the tail hinge is at x = -0.026, the tail tip at x = -0.0605.
+the head is rigid ahead of x = 0.045, the tail hinge is at x = -0.017, the tail tip at x = -0.0605.
 
-Proportions are a common goldfish's, with a tail a little longer than a common's (a comet's leaning):
-standard length (snout to the base of the tail) 0.087 m; body depth 0.37 of it, deepest about 40% of
-the way back from the snout; the caudal peduncle a third of the body's depth; head length 0.27 of the
-standard length; the eye a third of the head's depth, set high and forward.
+Proportions (after Sammy's "realistic, but cuter", 2026-10-31): a fantail-leaning goldfish rather than
+a common one. An egg-shaped body, depth 0.52 of the standard length (snout to tail base, 0.077 m) and
+deepest a little behind the middle; a big head with a short, blunt snout; a large eye set high and
+forward (35% of the head's depth); a broad, flowing tail with rounded lobes and a shallow fork; a tall
+rounded dorsal. Every one of those is a real goldfish trait; together they are the ones that read as
+young and soft, which is most of what "cute" is.
 """
 import math
 
 import numpy as np
 
 X_NOSE = 0.0600          # snout tip (the mouth sits on it)
-X_CAUDAL = -0.0270       # base of the tail: the loft ends here, the caudal fin takes over
+X_CAUDAL = -0.0170       # base of the tail: the loft ends here, the caudal fin takes over
 X_TAIL_TIP = -0.0605     # tips of the tail lobes
-TAIL_HINGE = (-0.026, 0.0, 0.0)
+TAIL_HINGE = (-0.017, 0.0, 0.0)
 SL = X_NOSE - X_CAUDAL   # standard length
 
 # Profile control points along t = (x - X_CAUDAL) / SL: 0 at the tail base, 1 at the snout.
 #            t      top     bottom  half-width
 _PROFILE = [
-    (0.000, 0.0050, 0.0049, 0.0017),
-    (0.080, 0.0057, 0.0055, 0.0021),
-    (0.200, 0.0094, 0.0086, 0.0034),
-    (0.350, 0.0145, 0.0127, 0.0058),
-    (0.500, 0.0174, 0.0146, 0.0075),
-    (0.615, 0.0182, 0.0149, 0.0082),
-    (0.740, 0.0170, 0.0140, 0.0081),
-    (0.840, 0.0145, 0.0118, 0.0074),
-    (0.920, 0.0108, 0.0087, 0.0062),
-    (0.970, 0.0072, 0.0058, 0.0045),
-    (1.000, 0.0031, 0.0027, 0.0022),
+    (0.000, 0.0058, 0.0056, 0.0020),
+    (0.080, 0.0068, 0.0064, 0.0025),
+    (0.200, 0.0118, 0.0108, 0.0045),
+    (0.350, 0.0172, 0.0158, 0.0074),
+    (0.500, 0.0206, 0.0186, 0.0094),
+    (0.620, 0.0212, 0.0190, 0.0100),
+    (0.740, 0.0200, 0.0178, 0.0099),
+    (0.840, 0.0172, 0.0152, 0.0092),
+    (0.920, 0.0132, 0.0116, 0.0080),
+    (0.970, 0.0090, 0.0078, 0.0060),
+    (1.000, 0.0040, 0.0036, 0.0030),
 ]
 
 
@@ -130,18 +132,18 @@ def theta_of_v(v):
 
 
 # ---------------------------------------------------------------------------------------- head
-EYE_X = 0.0478
-EYE_Z = 0.0036
-EYE_R = 0.0042
-NOSTRIL_X = 0.0545
-NOSTRIL_Z = 0.0047
+EYE_X = 0.0500
+EYE_Z = 0.0046
+EYE_R = 0.0052
+NOSTRIL_X = 0.0562
+NOSTRIL_Z = 0.0064
 
 
 def operculum_x(zn):
     """Back edge of the gill cover at normalised height zn (-1 belly .. 1 back): a curve that bows
     toward the tail at mid-height, like the cover's free edge."""
     zn = np.asarray(zn, dtype=np.float64)
-    return 0.0362 - 0.0042 * (1.0 - zn * zn) + 0.0006 * zn
+    return 0.0392 - 0.0042 * (1.0 - zn * zn) + 0.0006 * zn
 
 
 def eye_centre(side):
@@ -180,32 +182,34 @@ def _catmull(points, u):
 
 
 def _dorsal_root(u):
-    x = 0.0235 + (-0.0125 - 0.0235) * u
+    x = 0.0200 + (-0.0080 - 0.0200) * u
     return (x, 0.0, float(top(x) + centre_z(x)) - 0.0007)
 
 
 def _dorsal_edge(u):
     r = _dorsal_root(u)
-    # a goldfish's long-based dorsal: tallest at the front, the top margin sloping almost straight
-    # down to a short last ray near the tail
-    hgt = 0.0138 * (1.0 - 0.76 * u ** 0.7) + 0.0004 * math.sin(math.pi * u)
-    ang = math.radians(26 + 30 * u)
+    # tall and rounded: a sail with a soft top, falling to a short last ray near the tail
+    hgt = 0.0150 * (1.0 - 0.58 * u ** 1.3) + 0.0022 * math.sin(math.pi * u)
+    ang = math.radians(16 + 36 * u)
     return (r[0] - hgt * math.sin(ang), 0.0, r[2] + hgt * math.cos(ang))
 
 
 def _caudal_root(u):
-    zt, zb = 0.0047, -0.0046
-    return (-0.0240 - 0.0012 * math.sin(math.pi * u), 0.0, zt + (zb - zt) * u)
+    zt, zb = 0.0054, -0.0052
+    return (-0.0150 - 0.0012 * math.sin(math.pi * u), 0.0, zt + (zb - zt) * u)
 
 
+# A broad, flowing tail: rounded lobes and a shallow fork, wider than the body is deep.
 _CAUDAL_EDGE = [
-    (-0.0605, 0.0, 0.0218),
-    (-0.0568, 0.0, 0.0146),
-    (-0.0516, 0.0, 0.0075),
-    (-0.0462, 0.0, 0.0010),
-    (-0.0512, 0.0, -0.0058),
-    (-0.0560, 0.0, -0.0127),
-    (-0.0598, 0.0, -0.0198),
+    (-0.0545, 0.0, 0.0238),
+    (-0.0596, 0.0, 0.0182),
+    (-0.0606, 0.0, 0.0105),
+    (-0.0560, 0.0, 0.0030),
+    (-0.0532, 0.0, -0.0005),
+    (-0.0562, 0.0, -0.0042),
+    (-0.0606, 0.0, -0.0112),
+    (-0.0594, 0.0, -0.0186),
+    (-0.0540, 0.0, -0.0236),
 ]
 
 
@@ -214,14 +218,14 @@ def _caudal_edge(u):
 
 
 def _anal_root(u):
-    x = -0.0050 + (-0.0168 + 0.0050) * u
+    x = -0.0040 + (-0.0130 + 0.0040) * u
     return (x, 0.0, float(centre_z(x) - bottom(x)) + 0.0006)
 
 
 def _anal_edge(u):
     r = _anal_root(u)
-    hgt = 0.0098 * (1.0 - 0.68 * u) + 0.0008 * math.sin(math.pi * u)
-    ang = math.radians(38 + 26 * u)
+    hgt = 0.0088 * (1.0 - 0.55 * u) + 0.0014 * math.sin(math.pi * u)
+    ang = math.radians(30 + 26 * u)
     return (r[0] - hgt * math.sin(ang), 0.0, r[2] - hgt * math.cos(ang))
 
 
@@ -237,13 +241,13 @@ def _fan(d0, d1, u):
 
 def _pelvic(side):
     def root(u):
-        x = 0.0128 + (0.0072 - 0.0128) * u
+        x = 0.0150 + (0.0098 - 0.0150) * u
         zb = float(centre_z(x) - bottom(x))
-        return (x, side * 0.0024, zb * 0.93)
+        return (x, side * 0.0030, zb * 0.93)
 
     def edge(u):
         r = root(u)
-        hgt = 0.0122 * (1.0 - 0.45 * u) + 0.0010 * math.sin(math.pi * u)
+        hgt = 0.0118 * (1.0 - 0.40 * u) + 0.0016 * math.sin(math.pi * u)
         d = _fan((-0.40, side * 0.28, -0.88), (-0.88, side * 0.28, -0.40), u)
         return (r[0] + hgt * d[0], r[1] + hgt * d[1], r[2] + hgt * d[2])
 
@@ -252,13 +256,13 @@ def _pelvic(side):
 
 def _pectoral(side):
     def root(u):
-        x = 0.0338 + (0.0310 - 0.0338) * u
-        z = -0.0040 + (-0.0080 + 0.0040) * u
+        x = 0.0366 + (0.0336 - 0.0366) * u
+        z = -0.0056 + (-0.0098 + 0.0056) * u
         return (x, side * float(half_width(x)) * 0.82, z)
 
     def edge(u):
         r = root(u)
-        hgt = 0.0132 * (0.72 + 0.28 * math.sin(math.pi * (0.2 + 0.8 * u)))
+        hgt = 0.0128 * (0.70 + 0.30 * math.sin(math.pi * (0.2 + 0.8 * u)))
         d = _fan((-0.90, side * 0.38, -0.05), (-0.42, side * 0.38, -0.86), u)
         return (r[0] + hgt * d[0], r[1] + hgt * d[1], r[2] + hgt * d[2])
 
