@@ -416,9 +416,11 @@ export function createFishBehavior(): FishBehavior {
         if (attract) wantFacing = attract.x >= x ? 1 : -1;
         if (lookTicks === 0) pauseTicks = 4;
       } else if (leg === null && forage !== null) {
-        // ---- at the bed: peck, perhaps take a pebble, mouth it while backing off, spit it out
+        // ---- at the bed: peck, perhaps take a pebble, mouth it while backing off, spit it out. It
+        // keeps facing the way it pecked: backing off is not swimming the other way.
         forage.ticks += 1;
         speed = 0;
+        lockFacing = true;
         if (forage.phase === 'peck') {
           const t = forage.ticks % (PECK_TICKS + PECK_GAP);
           act = t < PECK_TICKS ? 'peck' : 'hover';

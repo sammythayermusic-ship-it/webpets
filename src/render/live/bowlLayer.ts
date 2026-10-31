@@ -317,7 +317,7 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
 
   // ---- the pebble it picks up and spits out, and the ring of a gulp --------------------------------
   // Sizes in grid px through the bowl camera; the gravel's own pebbles are about this big.
-  const PEBBLE_R = 1.35 * METRES_PER_GRID_PX;
+  const PEBBLE_R = 1.7 * METRES_PER_GRID_PX;
   const PEBBLE_COLOURS = [0x7aa6e0, 0xe59a8a, 0xb38ad8, 0x6fc9b8, 0xf0d9a8, 0xe8a36a];
   const pebble = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), new THREE.MeshStandardMaterial({ roughness: 0.42, metalness: 0 }));
   pebble.scale.set(PEBBLE_R, PEBBLE_R * 0.78, PEBBLE_R * 0.9);
@@ -607,7 +607,7 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       // uniform set below from the canvas size, so the water needs no import from sim constants.
       waterUniforms.uPad.value = (wCss - habitat.grid[0] * cssPerGrid) / 2;
 
-      sharedUniforms.uMute.value = 0.32 * nightT;
+      sharedUniforms.uMute.value = 0.2 * nightT;
       if (parts.length > 0 && root.visible) {
         const s = spine.update({ dtMs, x: px, y: py, facing, anim, rng: opts.rng, act: poseAct, spirits: poseSpirits });
         sharedUniforms.uScull.value = s.scull;
