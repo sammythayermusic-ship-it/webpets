@@ -68,7 +68,7 @@ export const FISH_BODY: Readonly<{ w: number; h: number }> = Object.freeze({ w: 
 /**
  * How long the live goldfish is drawn, nose to tail tip, grid px. Sammy asked for a smaller fish with
  * more room to swim (2026-10-31): 44 is three quarters of the September fish's 59.5, and the body box
- * above shrank with it (36x18 from 50x32), which gives the body centre 17 px more travel across the
+ * above shrank with it (36x18 from 50x32), which gives the body centre 14 px more travel across the
  * bowl and 14 px more top to bottom. The box still holds the body proper; the fins and most of the
  * flowing tail overhang it, which is what the box has always allowed. The bitmap sprite frames (the
  * fallback when there is no live layer) are the September fish's and are drawn larger than this.

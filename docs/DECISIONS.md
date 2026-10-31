@@ -1512,7 +1512,7 @@ mouth line curves up a little at its corner, which a goldfish's really does. War
 cream belly; softer scale edges; the gill cover blended into the body instead of a helmet seam.
 
 ### smaller
-Drawn at 44 grid px (from 59.5) with a 36x18 body box (from 50x32): 17 px more travel across the bowl
+Drawn at 44 grid px (from 59.5) with a 36x18 body box (from 50x32): 14 px more travel across the bowl
 and 14 more top to bottom. The bitmap sprite frames are the September fish, kept as the fallback when
 the live layer cannot run; the manifest's new `drawScale` (0.74) draws them at the same size, and the
 art tests measure them at that scale, so the fallback still fits the box the behaviour clamps.
