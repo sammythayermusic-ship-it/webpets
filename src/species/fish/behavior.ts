@@ -502,7 +502,7 @@ export function createFishBehavior(): FishBehavior {
           ty = clamp(attract.y + v * 8, yMin, yMax);
           kind = 'follow';
           dart = false;
-        } else if (!hungry && drives.surface > 0.45 && rng() < SURFACE_ODDS * drives.surface) {
+        } else if (!hungry && drives.surface > 0.05 && rng() < SURFACE_ODDS * drives.surface) {
           // A surface visit: straight up-ish, slow, then a hold at the waterline with two gulps.
           tx = clamp(x + (rng() * 2 - 1) * 20, cx - ampX, cx + ampX);
           ty = bounds.surfaceY + halfH;

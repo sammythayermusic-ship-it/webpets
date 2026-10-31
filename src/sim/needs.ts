@@ -336,7 +336,9 @@ export function drivesOf(n: NeedsState, t: number, ctx: DrivesContext): Drives {
   const greet = ctx.present && t < n.greetUntil && stress < HIDE_STRESS;
 
   const surface = clamp01(
-    (ctx.hungerLabel === 'hungry' ? 0.8 : ctx.hungerLabel === 'peckish' ? 0.5 : ctx.hungerLabel === 'starving' ? 0.2 : 0.15) *
+    // A well-fed goldfish still mouths at the surface now and then (step C): 0.3, not the 0.15 that
+    // never cleared the behaviour's bar.
+    (ctx.hungerLabel === 'hungry' ? 0.8 : ctx.hungerLabel === 'peckish' ? 0.5 : ctx.hungerLabel === 'starving' ? 0.2 : 0.3) *
       (0.4 + 0.6 * energy),
   );
 
