@@ -29,6 +29,7 @@ import { decayAttention, moodAnim, moodOf, type Mood } from '../sim/mood';
 import { createExpressionGate } from './expression';
 import { createPacer, type Pacer } from './pacer';
 import { createLiveLayer, type LiveLayer, type LiveParticle } from './live/bowlLayer';
+import { spiritsFor } from './live/spine';
 import { loadBitmap } from './assets';
 import type { HabitatScene, Manifest, ManifestHabitat, ManifestSprite, MoveBounds, PetBehavior, SceneEvent, SceneView } from './types';
 import type { Habitat, Species } from '../sim/types';
@@ -291,6 +292,9 @@ export function createScene(
   let lastFacing: 1 | -1 = 1;
   /** Where the next feed lands, grid x, when a click aimed it (see aimFeed). */
   let feedAim: number | null = null;
+  /** What the behaviour last said the pet is doing, and how it feels: for the live fish's body. */
+  let lastAct: string | undefined;
+  let spirits = 1;
   /** How many times anything advanced, and by how much. The only way to tell which clock is driving. */
   let advances = 0;
   let lastDtMs = 0;
@@ -343,6 +347,8 @@ export function createScene(
       ...(pendingTap ? { tap: pendingTap } : {}),
     });
     pendingTap = null;
+    lastAct = out.act;
+    spirits = spiritsFor(mood.label, out.anim, view.label, alive);
     napping = out.anim === 'sleep' && !view.asleep;
     let ate = false;
     if (out.biteFlakeIndex !== null) {
@@ -613,7 +619,7 @@ export function createScene(
         lastDrawn = { x: drawnX, y: drawnY };
         m.player.setPosition(drawnX, drawnY);
         m.player.advance(dtMs, travelled);
-        m.live?.setPose(drawnX, drawnY, lastFacing, m.player.state());
+        m.live?.setPose(drawnX, drawnY, lastFacing, m.player.state(), lastAct, spirits);
         m.flakes.interpolate(t, dtMs);
         m.bubbles.update(dtMs, rng);
         if (m.live) m.live.setParticles(particlesOf(m.flakes.container, flakeParts), particlesOf(m.bubbles.container, bubbleParts));
@@ -774,6 +780,8 @@ export function createScene(
       return {
         petVisible: sprite.visible,
         petAnim: m.player.state(),
+        ...(lastAct ? { petAct: lastAct } : {}),
+        spirits: Math.round(spirits * 100) / 100,
         // The behaviour's own last position, not the live sprite's. The sprite is mid-interpolation
         // between ticks, and mid-flip its measured width passes through ZERO as scale.x sweeps across
         // — a report of a 0px-wide fish would send someone hunting a bug that does not exist.

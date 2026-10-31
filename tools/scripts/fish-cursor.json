@@ -1,0 +1,27 @@
+{
+  "comment": "Step C: someone arrives after an absence and moves along the glass; the fish looks, then follows. Medium, window-local CSS px. 24 s.",
+  "steps": [
+    { "op": "force", "state": "fed" },
+    { "op": "night", "value": false },
+    { "op": "setNeeds", "energy": 0.9, "curiosity": 0.9, "comfort": 0.85, "stress": 0 },
+    { "op": "presence", "present": false },
+    { "op": "pointer", "x": null },
+    { "op": "sleep", "ms": 5000 },
+    { "op": "record", "name": "fish-cursor", "seconds": 24, "fps": 60 },
+    { "op": "sleep", "ms": 1500 },
+    { "op": "presence", "present": true },
+    { "op": "pointer", "x": 200, "y": 236 },
+    { "op": "sleep", "ms": 5000 },
+    { "op": "pointer", "x": 260, "y": 240 },
+    { "op": "sleep", "ms": 2500 },
+    { "op": "pointer", "x": 330, "y": 236 },
+    { "op": "sleep", "ms": 2500 },
+    { "op": "pointer", "x": 400, "y": 240 },
+    { "op": "sleep", "ms": 2500 },
+    { "op": "pointer", "x": 460, "y": 236 },
+    { "op": "sleep", "ms": 5000 },
+    { "op": "presence", "present": false },
+    { "op": "pointer", "x": null },
+    { "op": "sleep", "ms": 5500 }
+  ]
+}

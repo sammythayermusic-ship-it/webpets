@@ -1,0 +1,13 @@
+{
+  "comment": "Step C: night. The fish rests low over the gravel with a slow drift, colours a little muted. 16 s.",
+  "steps": [
+    { "op": "force", "state": "fed" },
+    { "op": "night", "value": true },
+    { "op": "presence", "present": false },
+    { "op": "pointer", "x": null },
+    { "op": "sleep", "ms": 6000 },
+    { "op": "record", "name": "fish-night", "seconds": 16, "fps": 60 },
+    { "op": "sleep", "ms": 16500 },
+    { "op": "night", "value": null }
+  ]
+}

@@ -2,7 +2,8 @@
 //
 // Query: ?view=side|three|front|top (camera), ?night=0..1, ?swim=0|1 (a slow swim loop, else idle),
 // ?bg=#rrggbb, ?t=<seconds> (freeze the clock there, for a repeatable still), ?zoom=<k> and ?cx=<m>
-// (magnify about a point on the fish's length, e.g. cx=0.045 for the head).
+// (magnify about a point on the fish's length, e.g. cx=0.045 for the head), ?act=hover|peck|gulp|look|rest
+// (the behaviour's act) and ?spirits=0.5..1.25 (folded .. fanned fins).
 
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -18,6 +19,8 @@ const frozen = q.has('t') ? Number(q.get('t')) : null;
 const bg = q.get('bg');
 const zoom = Number(q.get('zoom') ?? 1) || 1;
 const cx = Number(q.get('cx') ?? 0) || 0;
+const act = q.get('act') ?? undefined;
+const spirits = q.has('spirits') ? Number(q.get('spirits')) : undefined;
 if (bg) document.body.style.background = bg;
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -84,7 +87,7 @@ void loadFishModel(renderer, shared).then((model) => {
     last = now;
     clock = frozen ?? clock + dt / 1000;
     if (swim) x = 160 + Math.sin(clock * 0.6) * 40;
-    const s = spine.update({ dtMs: frozen === null ? dt : 16, x, y: 120, facing: 1, anim: swim ? 'idle' : 'idle', rng: Math.random });
+    const s = spine.update({ dtMs: frozen === null ? dt : 16, x, y: 120, facing: 1, anim: 'idle', rng: Math.random, ...(act ? { act } : {}), ...(spirits !== undefined ? { spirits } : {}) });
     shared.uTime.value = clock;
     shared.uAmp.value = s.amp;
     shared.uK.value = s.k;
@@ -92,8 +95,11 @@ void loadFishModel(renderer, shared).then((model) => {
     shared.uTurn.value = s.turn;
     shared.uSway.value = s.sway;
     shared.uFlutter.value = s.flutter;
+    shared.uScull.value = s.scull;
+    shared.uSpread.value = s.spread;
     shared.uGlow.value.copy(key.color).multiplyScalar(key.intensity / DAY.key[1]);
     shared.uKeyView.value.copy(KEY_DIR).transformDirection(camera.matrixWorldInverse);
+    model.root.rotation.set(s.roll, s.yaw, s.pitch, 'YZX');
     model.root.updateMatrixWorld(true);
     rootInv.copy(model.root.matrixWorld).invert();
     for (const part of model.parts) {

@@ -22,6 +22,14 @@ export interface SpineInput {
   anim: string;
   /** Uniform random in [0, 1), for the idle gulps. */
   rng: () => number;
+  /**
+   * What the behaviour says the fish is doing (PetAct): hover, peck, mouthful, spit, gulp, look, rest.
+   * Each has a body: a hover sculls the pectorals with the tail almost still, a peck tips the nose
+   * down, a gulp tips it up, a look turns the face toward the viewer.
+   */
+  act?: string;
+  /** How the fish feels, 0.5 (unwell) .. 1.2 (excited): folds or spreads the fins. 1 when absent. */
+  spirits?: number;
 }
 
 export interface SpineState {
@@ -49,6 +57,10 @@ export interface SpineState {
   speed: number;
   /** Beat frequency, Hz. */
   beatHz: number;
+  /** Pectoral sculling, 0 (folded against the body) .. 1 (working hard, hovering). */
+  scull: number;
+  /** Fin spread: below 1 folded (sad, unwell), above 1 spread wide (excited). */
+  spread: number;
 }
 
 /** Amplitude at rest and the gain per grid px/s of speed; capped so a dart does not flap flat. */
@@ -75,6 +87,10 @@ const PITCH_MAX = 0.5;
 /** An idle gulp every 4..9 s. */
 const GULP_MIN_MS = 4000;
 const GULP_SPREAD_MS = 5000;
+/** A look: how far the face turns toward the camera, rad (a three-quarter view, not a full stare). */
+const LOOK_YAW = 0.95;
+const SCULL_TAU = 260;
+const SPREAD_TAU = 700;
 
 function ease(v: number, target: number, dtMs: number, tauMs: number): number {
   const a = 1 - Math.exp(-dtMs / tauMs);
@@ -83,6 +99,28 @@ function ease(v: number, target: number, dtMs: number, tauMs: number): number {
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
+}
+
+/**
+ * How the fish feels, as a fin spread for the spine: folded when unwell, hungry or low, held out when
+ * content, fanned wide when excited. Mood label as `src/sim/mood.ts` names it.
+ */
+export function spiritsFor(mood: string, anim: string, hunger: string, alive: boolean): number {
+  if (!alive || anim === 'dead') return 0.5;
+  if (anim === 'excited') return 1.22;
+  if (hunger === 'starving') return 0.55;
+  const byMood: Record<string, number> = {
+    excited: 1.2,
+    happy: 1.1,
+    curious: 1.06,
+    content: 1,
+    sleepy: 0.86,
+    lonely: 0.8,
+    grumpy: 0.8,
+    miserable: 0.62,
+  };
+  const s = byMood[mood] ?? 1;
+  return hunger === 'hungry' ? Math.min(s, 0.75) : s;
 }
 
 export interface Spine {
@@ -108,6 +146,10 @@ export function createSpine(): Spine {
   let lastAnim = '';
   let gulpIn = GULP_MIN_MS + GULP_SPREAD_MS * 0.5;
   let gulpClock = -1;
+  let scull = 0.5;
+  let spread = 1;
+  let lastAct = '';
+  let actClock = 0;
   let s: SpineState = {
     amp: AMP_REST,
     k: WAVE_NUMBER,
@@ -121,6 +163,8 @@ export function createSpine(): Spine {
     flutter: 0,
     speed: 0,
     beatHz: BEAT_REST_HZ,
+    scull: 0.5,
+    spread: 1,
   };
 
   const yawFor = (facing: FacingSign): number => (facing === 1 ? 0 : Math.PI);
@@ -149,6 +193,11 @@ export function createSpine(): Spine {
       const hungry = input.anim === 'hungry';
       const eating = input.anim === 'eat';
       const lively = input.anim === 'excited' || input.anim === 'happy';
+      const act = dead ? '' : (input.act ?? '');
+      if (act !== lastAct) actClock = 0;
+      else actClock += dt;
+      lastAct = act;
+      const hovering = act === 'hover' || act === 'look' || act === 'peck' || act === 'mouthful' || act === 'spit' || act === 'gulp';
 
       // ---- velocity and speed, from the drawn positions
       if (last === null || dt === 0) {
@@ -178,10 +227,19 @@ export function createSpine(): Spine {
         amp = Math.max(amp, AMP_REST * 1.6);
         beat = Math.max(beat, BEAT_REST_HZ * 1.5);
       }
+      if (act === 'rest') {
+        amp = AMP_REST * 0.4;
+        beat = 0.5;
+      } else if (hovering && speed < 8) {
+        // a hover: the pectorals hold the fish in place, the tail barely moves
+        amp = AMP_REST * 0.35;
+        beat = 0.8;
+      }
       phase = (phase + 2 * Math.PI * beat * dtS) % (2 * Math.PI * 1000);
 
       // ---- yaw: a real turn, and the body curls into it while it lasts
-      const yawTarget = yawFor(input.facing);
+      // a look turns the face toward the camera (the nose swings out of the glass), three-quarters
+      const yawTarget = act === 'look' ? (input.facing === 1 ? -LOOK_YAW : Math.PI + LOOK_YAW) : yawFor(input.facing);
       // shortest way round: targets are 0 and pi, so this only matters for the direction of spin,
       // which is chosen to turn through the viewer (nose swings toward the camera) every time.
       const before = yaw;
@@ -192,7 +250,11 @@ export function createSpine(): Spine {
       // ---- pitch: nose follows the direction of travel (screen y is down, so negate)
       let pitchTarget = 0;
       if (dead) pitchTarget = 0;
-      else if (asleep) pitchTarget = -0.12;
+      else if (act === 'peck') pitchTarget = -0.62;
+      else if (act === 'mouthful') pitchTarget = -0.12;
+      else if (act === 'gulp') pitchTarget = 0.5;
+      else if (act === 'look') pitchTarget = 0.06;
+      else if (asleep || act === 'rest') pitchTarget = -0.12;
       else if (hungry) pitchTarget = -0.08;
       else if (speed > 4) {
         const along = Math.max(Math.abs(vx), 8);
@@ -207,7 +269,16 @@ export function createSpine(): Spine {
       // ---- mouth: a bite plays two gapes; idle fish gulp now and then
       if (eating && lastAnim !== 'eat') eatClock = 0;
       lastAnim = input.anim;
-      if (eatClock >= 0) {
+      if (act === 'peck') {
+        // each peck: a quick open and close as the nose meets the gravel
+        const t = Math.min(1, actClock / 380);
+        mouthTarget = t > 0.35 ? Math.sin(((t - 0.35) / 0.65) * Math.PI) * 0.8 : 0;
+      } else if (act === 'mouthful') {
+        // a pebble held in the lips, mouthed
+        mouthTarget = 0.32 + 0.1 * Math.sin(actClock / 110);
+      } else if (act === 'spit') {
+        mouthTarget = actClock < 160 ? 1 : 0.2;
+      } else if (eatClock >= 0) {
         eatClock += dt;
         const t = eatClock / 560;
         mouthTarget = t >= 1 ? 0 : 0.5 - 0.5 * Math.cos(t * Math.PI * 4);
@@ -231,10 +302,17 @@ export function createSpine(): Spine {
       }
       mouth = ease(mouth, mouthTarget, dt, MOUTH_TAU);
 
-      const sway = asleep ? 0.0025 : hungry ? 0.0015 : dead ? 0.002 : 0;
+      const sway = asleep || act === 'rest' ? 0.0025 : hungry ? 0.0015 : dead ? 0.002 : 0;
       const flutter = dead ? 0.0004 : asleep ? 0.0008 : 0.0016 + speed * 0.00004;
 
-      s = { amp, k: WAVE_NUMBER, phase, turn, yaw, pitch, roll, mouth, sway, flutter, speed, beatHz: beat };
+      // ---- pectorals: busy when hovering, easy while cruising, folded back in a dart
+      const scullTarget = dead ? 0 : hovering ? 1 : act === 'rest' || asleep ? 0.35 : clamp(0.75 - speed / 40, 0, 0.6);
+      scull = ease(scull, scullTarget, dt, SCULL_TAU);
+      // ---- fins folded or spread, with the mood (and fully folded in death)
+      const spreadTarget = dead ? 0.5 : clamp(input.spirits ?? 1, 0.5, 1.25);
+      spread = ease(spread, spreadTarget, dt, SPREAD_TAU);
+
+      s = { amp, k: WAVE_NUMBER, phase, turn, yaw, pitch, roll, mouth, sway, flutter, speed, beatHz: beat, scull, spread };
       return s;
     },
     state() {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSpine, type SpineInput, type SpineState } from './spine';
+import { createSpine, spiritsFor, type SpineInput, type SpineState } from './spine';
 
 const rng = (): number => 0.5;
 
@@ -95,5 +95,73 @@ describe('procedural spine', () => {
     expect(spine.state().yaw).toBe(Math.PI);
     const s = spine.update({ dtMs: 16, rng, x: 50, y: 50, facing: -1, anim: 'idle' });
     expect(Math.abs(s.turn)).toBeLessThan(1e-9);
+  });
+});
+
+describe('body language (step C)', () => {
+  const still = (act?: string, spirits?: number, facing: 1 | -1 = 1) => (): Omit<SpineInput, 'dtMs' | 'rng'> => ({
+    x: 100,
+    y: 100,
+    facing,
+    anim: 'idle',
+    ...(act ? { act } : {}),
+    ...(spirits !== undefined ? { spirits } : {}),
+  });
+
+  it('hovers on its pectorals: they scull hard while the tail almost stops', () => {
+    const hover = createSpine();
+    hover.reset(100, 100, 1);
+    const h = run(hover, 120, still('hover'));
+    const cruise = createSpine();
+    cruise.reset(100, 100, 1);
+    const c = run(cruise, 120, (i) => ({ x: 100 + i * 0.5, y: 100, facing: 1, anim: 'idle' }));
+    expect(h.scull).toBeGreaterThan(0.9);
+    expect(c.scull).toBeLessThan(h.scull);
+    expect(h.amp).toBeLessThan(c.amp);
+  });
+
+  it('pecks nose-down, gulps nose-up, and opens the mouth for each', () => {
+    const peck = createSpine();
+    peck.reset(100, 100, 1);
+    let maxMouth = 0;
+    let s = peck.state();
+    for (let i = 0; i < 40; i += 1) {
+      s = peck.update({ dtMs: 16, rng, ...still('peck')() });
+      maxMouth = Math.max(maxMouth, s.mouth);
+    }
+    expect(s.pitch).toBeLessThan(-0.4);
+    expect(maxMouth).toBeGreaterThan(0.4);
+    const gulp = createSpine();
+    gulp.reset(100, 100, 1);
+    expect(run(gulp, 60, still('gulp')).pitch).toBeGreaterThan(0.3);
+  });
+
+  it('turns its face toward the viewer to look, whichever way it was facing', () => {
+    for (const facing of [1, -1] as const) {
+      const sp = createSpine();
+      sp.reset(100, 100, facing);
+      const s = run(sp, 90, still('look', undefined, facing));
+      // nose direction in the camera frame: z toward the viewer is -sin(yaw)
+      expect(-Math.sin(s.yaw), `facing ${facing}`).toBeGreaterThan(0.6);
+    }
+  });
+
+  it('reads its spirits off the mood: folded when unwell or hungry, fanned when excited', () => {
+    expect(spiritsFor('content', 'idle', 'full', false)).toBe(0.5);
+    expect(spiritsFor('excited', 'idle', 'full', true)).toBeGreaterThan(1.15);
+    expect(spiritsFor('happy', 'excited', 'full', true)).toBeGreaterThan(1.2);
+    expect(spiritsFor('happy', 'idle', 'hungry', true)).toBeLessThanOrEqual(0.75);
+    expect(spiritsFor('content', 'idle', 'starving', true)).toBeLessThan(0.6);
+    expect(spiritsFor('miserable', 'idle', 'full', true)).toBeLessThan(0.7);
+    expect(spiritsFor('content', 'idle', 'full', true)).toBe(1);
+  });
+
+  it('folds its fins when low and spreads them when excited', () => {
+    const low = createSpine();
+    low.reset(100, 100, 1);
+    const high = createSpine();
+    high.reset(100, 100, 1);
+    expect(run(low, 200, still(undefined, 0.6)).spread).toBeLessThan(0.7);
+    expect(run(high, 200, still(undefined, 1.2)).spread).toBeGreaterThan(1.1);
   });
 });

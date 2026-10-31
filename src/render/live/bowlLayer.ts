@@ -17,6 +17,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import type { ManifestHabitat, ScenePhase } from '../types';
 import { createFishUniforms, loadFishModel, type FishModel, type FishPart } from './fishModel';
 import { METRES_PER_GRID_PX, cameraFrustum, cameraPose, depthWander, fishScale, gridToWorld } from './mapping';
+import { FISH_MOUTH_AHEAD } from '../../species/fish/layout';
 import { createSpine, type FacingSign, type Spine, type SpineState } from './spine';
 import { WATER_FRAGMENT, WATER_VERTEX } from './shaders';
 
@@ -58,8 +59,11 @@ export interface LiveLayer {
   /** Resolves once the fish is loaded; the water draws from the first frame regardless. */
   readonly ready: Promise<void>;
   resize(wCss: number, hCss: number, dpr: number, cssPerGrid: number): void;
-  /** Called every rendered frame with the interpolated pose. */
-  setPose(x: number, y: number, facing: FacingSign, anim: string): void;
+  /**
+   * Called every rendered frame with the interpolated pose, the behaviour's act (PetAct: hover, peck,
+   * mouthful, spit, gulp, look, rest) and the fish's spirits (0.5 unwell .. 1.2 excited).
+   */
+  setPose(x: number, y: number, facing: FacingSign, anim: string, act?: string, spirits?: number): void;
   /** Snap: first placement or a new pet. */
   resetPose(x: number, y: number, facing: FacingSign): void;
   setPhase(phase: ScenePhase): void;
@@ -77,7 +81,7 @@ export interface LiveLayer {
    */
   setParticles(flakes: readonly LiveParticle[], bubbles: readonly LiveParticle[]): void;
   /** Food landing on the surface at grid x: a flat ring across the water and a fizz of tiny bubbles. */
-  splash(gx: number): void;
+  splash(gx: number, strength?: number): void;
   /** A gulp at grid (gx, gy): a few small bubbles out of the gills, rising and fading. */
   puff(gx: number, gy: number): void;
   /** Advance the clocks by `dtMs` and draw. The caller has already drawn the back plates. */
@@ -311,6 +315,81 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
     }
   };
 
+  // ---- the pebble it picks up and spits out, and the ring of a gulp --------------------------------
+  // Sizes in grid px through the bowl camera; the gravel's own pebbles are about this big.
+  const PEBBLE_R = 1.35 * METRES_PER_GRID_PX;
+  const PEBBLE_COLOURS = [0x7aa6e0, 0xe59a8a, 0xb38ad8, 0x6fc9b8, 0xf0d9a8, 0xe8a36a];
+  const pebble = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), new THREE.MeshStandardMaterial({ roughness: 0.42, metalness: 0 }));
+  pebble.scale.set(PEBBLE_R, PEBBLE_R * 0.78, PEBBLE_R * 0.9);
+  pebble.visible = false;
+  pebble.renderOrder = 2;
+  fishScene.add(pebble);
+  let pebbleState: 'none' | 'held' | 'falling' | 'resting' = 'none';
+  let pebbleClock = 0;
+  const pebbleVel = new THREE.Vector3();
+  const mouthAt = new THREE.Vector3();
+  const forward = new THREE.Vector3();
+  const rootQuat = new THREE.Quaternion();
+  let poseAct = '';
+  let poseSpirits = 1;
+  let propAct = '';
+  /** World height of the gravel under a world point, at that point's depth. */
+  const bedY = (p: THREE.Vector3): number => {
+    const gx = habitat.grid[0] / 2 + p.x / METRES_PER_GRID_PX;
+    return gridToWorld(gx, habitat.waterShape.floorY + 2, -p.z).y + PEBBLE_R * 0.5;
+  };
+  const updateProps = (dt: number, mouthOpen: number): void => {
+    const m = model?.mouth;
+    if (m) {
+      m.object.getWorldPosition(mouthAt);
+      (model?.root ?? root).getWorldQuaternion(rootQuat);
+      forward.set(1, 0, 0).applyQuaternion(rootQuat);
+    }
+    if (poseAct !== propAct) {
+      if (poseAct === 'mouthful' && pebbleState !== 'held') {
+        pebbleState = 'held';
+        pebble.material.color.setHex(PEBBLE_COLOURS[Math.floor(opts.rng() * PEBBLE_COLOURS.length)] ?? 0xf0d9a8);
+        pebble.visible = true;
+      } else if (pebbleState === 'held' && poseAct !== 'mouthful') {
+        // spat out: forward and a little up, then it sinks; dropped (anything else) it just sinks
+        pebbleState = 'falling';
+        pebbleVel.copy(forward).multiplyScalar(poseAct === 'spit' ? 0.05 : 0.008);
+        pebbleVel.y += poseAct === 'spit' ? 0.012 : 0;
+      }
+      if (poseAct === 'gulp') {
+        // the lips break the surface: a small ring, and a bubble let go
+        splashAt(px + facing * FISH_MOUTH_AHEAD, 0.4);
+        spawnPuffs(px + facing * (FISH_MOUTH_AHEAD - 3), py - 2, 1, 1);
+      }
+      propAct = poseAct;
+    }
+    if (pebbleState === 'held') {
+      pebble.position.copy(mouthAt).addScaledVector(forward, PEBBLE_R * (0.6 + 0.4 * mouthOpen));
+    } else if (pebbleState === 'falling') {
+      pebbleVel.y -= 0.09 * dt;
+      pebbleVel.multiplyScalar(Math.exp(-2.4 * dt));
+      pebble.position.addScaledVector(pebbleVel, dt);
+      const floor = bedY(pebble.position);
+      if (pebble.position.y <= floor) {
+        pebble.position.y = floor;
+        pebbleState = 'resting';
+        pebbleClock = 0;
+      }
+    } else if (pebbleState === 'resting') {
+      // back among the others: it settles in over a second and a half
+      pebbleClock += dt;
+      const k = Math.max(0, 1 - pebbleClock / 1.5);
+      pebble.scale.set(PEBBLE_R * k, PEBBLE_R * 0.78 * k, PEBBLE_R * 0.9 * k);
+      if (k <= 0) {
+        pebbleState = 'none';
+        pebble.visible = false;
+        pebble.scale.set(PEBBLE_R, PEBBLE_R * 0.78, PEBBLE_R * 0.9);
+      }
+    }
+  };
+  // set below, once the water uniforms exist
+  let splashAt: (gx: number, strength: number) => void = () => undefined;
+
   // ---- water pass --------------------------------------------------------------------------------
   const plateTexture = (bmp: ImageBitmap): THREE.Texture => {
     const t = new THREE.Texture(bmp);
@@ -379,6 +458,11 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
     uWallAlpha: { value: WALL_ALPHA },
   };
   let tapSlot = 0;
+  splashAt = (gx, strength) => {
+    const slot = waterUniforms.uTaps.value[tapSlot % 4];
+    if (slot) slot.set(gx, surface.y, clock, strength);
+    tapSlot += 1;
+  };
   const waterMat = new THREE.ShaderMaterial({
     vertexShader: WATER_VERTEX,
     fragmentShader: WATER_FRAGMENT,
@@ -458,11 +542,13 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       waterUniforms.uCssPerGrid.value = cssPerGrid;
       resizeTarget();
     },
-    setPose(x, y, f, a) {
+    setPose(x, y, f, a, act, spirits) {
       px = x;
       py = y;
       facing = f;
       anim = a;
+      poseAct = act ?? '';
+      poseSpirits = spirits ?? 1;
     },
     resetPose(x, y, f) {
       px = x;
@@ -499,12 +585,12 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       if (slot) slot.set(gx, gy, clock, 0);
       tapSlot += 1;
     },
-    splash(gx) {
+    splash(gx, strength = 1) {
       // the ring is centred on the surface ellipse's middle row, where the pinch lands in depth
       const slot = waterUniforms.uTaps.value[tapSlot % 4];
-      if (slot) slot.set(gx, surface.y, clock, 1);
+      if (slot) slot.set(gx, surface.y, clock, strength);
       tapSlot += 1;
-      spawnPuffs(gx, habitat.waterShape.surfaceY + 10, 5, 6);
+      if (strength >= 0.8) spawnPuffs(gx, habitat.waterShape.surfaceY + 10, 5, 6);
     },
     puff(gx, gy) {
       spawnPuffs(gx, gy, 3, 1.5);
@@ -521,8 +607,11 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       // uniform set below from the canvas size, so the water needs no import from sim constants.
       waterUniforms.uPad.value = (wCss - habitat.grid[0] * cssPerGrid) / 2;
 
+      sharedUniforms.uMute.value = 0.32 * nightT;
       if (parts.length > 0 && root.visible) {
-        const s = spine.update({ dtMs, x: px, y: py, facing, anim, rng: opts.rng });
+        const s = spine.update({ dtMs, x: px, y: py, facing, anim, rng: opts.rng, act: poseAct, spirits: poseSpirits });
+        sharedUniforms.uScull.value = s.scull;
+        sharedUniforms.uSpread.value = s.spread;
         // depth: the slow wander, eased so a reset does not pop
         depth = depthWander(clock);
         depthEase += (depth - depthEase) * Math.min(1, dtMs / 400);
@@ -545,6 +634,7 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
           mouth.object.scale.set(1 + 0.12 * s.mouth, 1 + 0.2 * s.mouth, 1 + 0.2 * s.mouth);
           mouth.object.updateMatrixWorld(true);
         }
+        updateProps(dtMs / 1000, s.mouth);
         // the thin-edge glow and the light through the fins follow the key light, day or night
         sharedUniforms.uGlow.value.copy(key.color).multiplyScalar(key.intensity / DAY.key[1]);
         keyView.copy(KEY_DIR).transformDirection(camera.matrixWorldInverse);
@@ -588,6 +678,8 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       waterQuad.geometry.dispose();
       model?.dispose();
       for (const sp of [...flakePool, ...bubblePool, ...puffPool]) sp.material.dispose();
+      pebble.geometry.dispose();
+      pebble.material.dispose();
       flakeTex.dispose();
       bubbleTex.dispose();
       renderer.dispose();

@@ -27,9 +27,33 @@ uniform float uFlutterMode;
 uniform float uTime;
 uniform vec3 uFinRoot;
 uniform float uFinLen;
+uniform float uScull;
+uniform float uSpread;
 varying vec3 vRootPos;
 
-vec3 wpBend(vec3 pr, out float slope) {
+// Fins folded (uSpread < 1: sad, unwell) or fanned out (> 1: excited), about each fin's own root.
+vec3 wpFold(vec3 pr) {
+  vec3 v = pr - uFinRoot;
+  if (uFlutterMode > 0.5 && uFlutterMode < 1.5) {
+    // dorsal and anal: a fan that closes back along the body, or stands up
+    float h = v.y;
+    v.y = h * uSpread;
+    v.x -= abs(h) * (1.0 - uSpread) * 0.8;
+  } else if (uFlutterMode > 1.5 && uFlutterMode < 2.5) {
+    // pectorals and pelvics: tucked against the flank, or held out
+    float lat = v.z;
+    v.z = lat * pow(uSpread, 1.6);
+    v.x -= abs(lat) * (1.0 - uSpread) * 0.7;
+  } else if (uFlutterMode > 2.5) {
+    // the tail: lobes drawn together, or fanned
+    float ft = clamp((-pr.x - 0.017) / 0.044, 0.0, 1.0);
+    v.y *= mix(1.0, uSpread, ft);
+  }
+  return uFinRoot + v;
+}
+
+vec3 wpBend(vec3 pr0, out float slope) {
+  vec3 pr = uFlutterMode > 0.5 ? wpFold(pr0) : pr0;
   float x = pr.x;
   // Amplitude envelope: nothing ahead of the gills, quadratic to the tail tip.
   float s = clamp((0.045 - x) / 0.105, 0.0, 1.0);
@@ -44,11 +68,12 @@ vec3 wpBend(vec3 pr, out float slope) {
     // dorsal / anal: the free edge trails the beat, a ripple running back along the fin
     dz += uFlutter * 0.9 * f * f * sin(arg - 1.2 + pr.x * 220.0);
   } else if (uFlutterMode > 1.5 && uFlutterMode < 2.5) {
-    // paired fins: the tips scull, the left and right half a beat apart
+    // paired fins: the tips scull, the left and right half a beat apart; hard and quick when the
+    // fish hovers (uScull 1), lazily while it cruises, hardly at all when they are folded for a dart
     float side = sign(uFinRoot.z);
-    float scull = sin(uTime * 5.2 + side * 1.4 + pr.x * 90.0);
-    dy += uFlutter * 0.9 * f * f * scull;
-    dz += side * uFlutter * 0.5 * f * f * (0.6 + 0.4 * sin(uTime * 2.6 + side));
+    float scull = sin(uTime * 18.8 + side * 1.4 + pr.x * 90.0);
+    dy += (uFlutter * 0.3 + uScull * 0.0022) * f * f * scull;
+    dz += side * f * f * (uFlutter * 0.5 * (0.6 + 0.4 * sin(uTime * 2.6 + side)) + uScull * 0.0012 * (0.5 + 0.5 * sin(uTime * 18.8 + side + 0.8)));
   } else if (uFlutterMode > 2.5) {
     // tail: beyond the hinge the fin lags the body and its tips flex more than its root
     float ft = clamp((-x - 0.017) / 0.044, 0.0, 1.0);
@@ -115,6 +140,16 @@ export const FISH_FRAGMENT_PARS = /* glsl */ `
 varying vec3 vRootPos;
 uniform vec3 uGlow;
 uniform vec3 uKeyView;
+uniform float uMute;
+`;
+
+/** Every part, last of all: colours a little muted in the dark, as eyes see them at night. */
+export const FISH_MUTE = /* glsl */ `
+#include <dithering_fragment>
+{
+  float l = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(l), uMute);
+}
 `;
 
 /**
@@ -154,7 +189,7 @@ uniform float uRipple;       // ripple strength, grid px
 uniform float uPhase;        // 'alive' 1, 'dead' 0.35: dead water goes still
 uniform vec2 uPointer;       // grid px, or (-1e4, -1e4)
 uniform vec2 uParallax;      // grid px, the front plates' slide; the bg follows a third of it
-uniform vec4 uTaps[4];       // rings: grid px x, y, the clock time it started (-1e4: none), kind (0 a tap on the glass, 1 food landing on the surface)
+uniform vec4 uTaps[4];       // rings: grid px x, y, the clock time it started (-1e4: none), w: 0 a tap on the glass, above 0 a ring on the surface of that strength
 uniform float uWallAlpha;    // how much of the desk the water hides where there is only back wall (day)
 
 // --- value noise (cheap, smooth) -----------------------------------------------------------------
@@ -216,7 +251,10 @@ vec2 wpTapRipple(vec2 g, float t, out float crest) {
   crest = 0.0;
   for (int i = 0; i < 4; i++) {
     float age = t - uTaps[i].z;
-    float onSurface = step(0.5, uTaps[i].w);
+    // w: 0 a tap on the glass; above 0 a ring on the surface, of that strength (1 a pinch landing,
+    // less for a gulp)
+    float onSurface = step(0.01, uTaps[i].w);
+    float strength = mix(1.0, uTaps[i].w, onSurface);
     if (age < 0.0 || age > mix(2.4, 2.8, onSurface)) continue;
     vec2 d = g - uTaps[i].xy;
     d.y *= mix(1.0, uSurface.z / max(uSurface.w, 1.0), onSurface);
@@ -224,7 +262,7 @@ vec2 wpTapRipple(vec2 g, float t, out float crest) {
     float front = age * mix(48.0, 34.0, onSurface);
     float x = r - front;
     float env = exp(-x * x / 60.0) * exp(-age * 1.5) * smoothstep(0.0, 0.08, age);
-    float w = sin(x * 0.75) * env;
+    float w = sin(x * 0.75) * env * strength;
     n += (d / max(r, 1e-3)) * w * 2.8;
     crest += max(w, 0.0) * mix(1.0, 1.6, onSurface);
   }

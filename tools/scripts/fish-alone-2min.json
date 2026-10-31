@@ -1,0 +1,13 @@
+{
+  "comment": "Step C: two minutes of the fish left alone at Medium, rested and settled, nobody at the glass.",
+  "steps": [
+    { "op": "force", "state": "fed" },
+    { "op": "night", "value": false },
+    { "op": "setNeeds", "energy": 0.9, "curiosity": 0.4, "comfort": 0.85, "stress": 0 },
+    { "op": "presence", "present": false },
+    { "op": "pointer", "x": null },
+    { "op": "sleep", "ms": 1500 },
+    { "op": "record", "name": "fish-alone-2min", "seconds": 120, "fps": 60 },
+    { "op": "sleep", "ms": 121000 }
+  ]
+}

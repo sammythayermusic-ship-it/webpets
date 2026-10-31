@@ -13,6 +13,7 @@ import {
   FISH_BODY_EMISSIVE,
   FISH_FIN_EMISSIVE,
   FISH_FRAGMENT_PARS,
+  FISH_MUTE,
   FISH_NORMAL_BEGIN,
   FISH_VERTEX_BEGIN,
   FISH_VERTEX_PARS,
@@ -34,6 +35,11 @@ export interface FishSharedUniforms {
   uGlow: THREE.IUniform<THREE.Color>;
   /** Direction TO the key light, in view space. */
   uKeyView: THREE.IUniform<THREE.Vector3>;
+  /** Pectoral sculling, 0..1, and fin spread (below 1 folded, above 1 fanned): from the spine. */
+  uScull: THREE.IUniform<number>;
+  uSpread: THREE.IUniform<number>;
+  /** How far the colours are muted toward grey, 0..1 (night). */
+  uMute: THREE.IUniform<number>;
 }
 
 export function createFishUniforms(): FishSharedUniforms {
@@ -47,6 +53,9 @@ export function createFishUniforms(): FishSharedUniforms {
     uTime: { value: 0 },
     uGlow: { value: new THREE.Color(1, 1, 1) },
     uKeyView: { value: new THREE.Vector3(0, 1, 0) },
+    uScull: { value: 0.5 },
+    uSpread: { value: 1 },
+    uMute: { value: 0 },
   };
 }
 
@@ -173,7 +182,9 @@ function inject(mat: THREE.MeshPhysicalMaterial, kind: Kind, flutter: FlutterMod
       .replace('#include <common>', `#include <common>\n${FISH_VERTEX_PARS}`)
       .replace('#include <beginnormal_vertex>', FISH_NORMAL_BEGIN)
       .replace('#include <begin_vertex>', FISH_VERTEX_BEGIN);
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>\n${FISH_FRAGMENT_PARS}`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\n${FISH_FRAGMENT_PARS}`)
+      .replace('#include <dithering_fragment>', FISH_MUTE);
     if (kind === 'body') shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', FISH_BODY_EMISSIVE);
     if (kind === 'fin') shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', FISH_FIN_EMISSIVE);
   };
