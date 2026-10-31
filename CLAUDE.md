@@ -55,7 +55,9 @@ npm run tauri build       # unsigned bundle at src-tauri/target/release/bundle/m
 npm run install:app       # build + install (see below)
 npm run build:harness     # verification build with the harness compiled in (docs/HARNESS.md); never ship it
 ```
-**Build the Rust side outside iCloud:** `export CARGO_TARGET_DIR=$HOME/.cache/webpets/target` before any `tauri build`
+**Keep build output and dependencies outside iCloud.** `node_modules` is a symlink to `~/.cache/webpets/nm-<worktree>/node_modules`
+(install there with `npm ci` beside a copy of package.json and package-lock.json, then `ln -s`). And
+`export CARGO_TARGET_DIR=$HOME/.cache/webpets/target` before any `tauri build`
 or `cargo` command. The repo is on the iCloud Desktop with the disk near full, and macOS evicts `src-tauri/target`
 (thousands of files) to the cloud between builds, which turns a one-minute build into a stall. The bundle then lands
 in `$CARGO_TARGET_DIR/release/bundle/macos/`; `scripts/install-app.sh` still expects `src-tauri/target`, so copy by

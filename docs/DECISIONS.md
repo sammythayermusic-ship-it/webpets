@@ -1560,3 +1560,22 @@ fins that fold when the fish is sad, hungry or unwell and spread when it is exci
 "spirits" value from the mood, applied per fin in the vertex shader); colours a little muted at
 night. The live layer draws the pebble (held at the mouth, then spat out to fall back to the bed)
 and a small ring for each gulp.
+
+## 2026-10-31 — Step C built: what changed on the way
+
+- **Facing is held while picking at the gravel.** The first two-minute recording showed the fish
+  flipping round while it mouthed a pebble: backing off reads as swimming the other way, and the
+  facing rule turns toward travel. The forage phases lock the facing.
+- **A content fish visits the surface.** The needs model gave a full fish a surface drive of at most
+  0.15 and the behaviour required 0.45, so only a peckish, rested fish ever gulped; and the odds
+  were per leg though the comment said per tick. Full base 0.3; any drive above 0.05 counts, scaled
+  by itself; 6% per leg at full drive. A rested, fed fish now goes up every few minutes.
+- **Night muting at 0.2, not 0.32**: at 0.32 the moonlit goldfish went maroon.
+- **The pebble** is 1.7 grid px (1.35 was hard to see at Medium) and comes in the gravel's colours.
+- **node_modules moved out of iCloud too.** Mid-step macOS evicted ~8,700 files of it and `tsc`
+  sat at 0% CPU waiting on downloads. Dependencies are installed in `~/.cache/webpets/nm-hybrid`
+  and `node_modules` is a symlink to it; Vite, Vitest, tsc, Playwright and the Tauri build all work
+  through the link. The evicted copy was renamed into the untracked `.claude/` folder rather than
+  deleted (a delete would have to download it first).
+- What the recordings could not stage: the near plant sometimes hides the pecking and the look,
+  which is the bowl being a bowl. The stills for those come from the first recording.
