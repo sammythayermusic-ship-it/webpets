@@ -35,6 +35,7 @@ export type TrayAction =
   | 'size-l'
   | 'mute'
   | 'notifications'
+  | 'talk'
   | 'daynight-auto'
   | 'daynight-day'
   | 'daynight-night'
@@ -51,6 +52,8 @@ export interface TrayMenuState {
   scale: Scale;
   muted: boolean;
   notificationsMuted: boolean;
+  /** The pet's speech bubbles are off. */
+  talkMuted: boolean;
   dayNight: 'auto' | 'day' | 'night';
   launchAtLogin: boolean;
   alwaysOnTop: boolean;
@@ -180,6 +183,15 @@ export interface Platform {
   window: WindowApi;
   tray: TrayApi;
   notify(title: string, body: string): Promise<void>;
+  /** Claude-written lines. The API key stays in Rust (src-tauri/src/voice.rs); only the prompt and the line cross. */
+  voice: {
+    status(): Promise<{ hasKey: boolean }>;
+    write(system: string, user: string): Promise<{ text: string | null; usd: number }>;
+  };
+  /** Seconds since the last key press and since any input at all (src-tauri/src/idle.rs). */
+  inputIdle(): Promise<{ keys: number; any: number }>;
+  /** Open a plain https link in the default browser (a fact's source). */
+  openLink(url: string): Promise<void>;
   autostart: {
     isEnabled(): Promise<boolean>;
     setEnabled(on: boolean): Promise<void>;

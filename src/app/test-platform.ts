@@ -108,6 +108,12 @@ export function createFakePlatform(seedFiles: Record<string, unknown> = {}): Fak
       setMenuState: async (_s: TrayMenuState) => undefined,
       onAction: (_cb: (a: TrayAction) => void) => () => undefined,
     },
+    voice: {
+      status: async () => ({ hasKey: false }),
+      write: async () => ({ text: null, usd: 0 }),
+    },
+    inputIdle: async () => ({ keys: Number.MAX_VALUE, any: 0 }),
+    openLink: async () => {},
     notify: async (title, body) => {
       p.notifications.push({ title, body });
     },

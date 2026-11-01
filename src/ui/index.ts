@@ -2,7 +2,7 @@
 
 export { mountHud } from './hud';
 export { mountDevPanel, type DevPanelHandleExt } from './devPanel';
-export { mountSpeech, type SpeechHandleExt, type SpeechPool } from './speech';
+export { mountSpeech, BRAIN_FILE, type SaidLine, type SpeechHandleExt } from './speech';
 export { mountFeederDialog, type FeederDialogHandle } from './feederDialog';
 export { mountMontage, type MontageHandle } from './montage';
 export { mountMemorial, type MemorialHandle } from './memorial';

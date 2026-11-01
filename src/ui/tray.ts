@@ -61,6 +61,9 @@ export function wireTray(deps: TrayDeps): () => void {
       case 'notifications':
         a.setNotificationsMuted(!s.settings.notificationsMuted);
         return;
+      case 'talk':
+        a.setTalkMuted(!s.settings.talkMuted);
+        return;
       case 'daynight-auto':
         a.setDayNight('auto');
         return;
@@ -131,6 +134,7 @@ export function wireTray(deps: TrayDeps): () => void {
       scale: s.settings.scale,
       muted: s.settings.muted,
       notificationsMuted: s.settings.notificationsMuted,
+      talkMuted: s.settings.talkMuted,
       dayNight: s.settings.dayNight,
       launchAtLogin: s.settings.launchAtLogin,
     alwaysOnTop: s.settings.alwaysOnTop,

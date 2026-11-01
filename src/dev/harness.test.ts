@@ -41,6 +41,7 @@ function fakeActions(): AppActions {
     setScale: vi.fn(async () => undefined),
     setMuted: vi.fn(),
     setNotificationsMuted: vi.fn(),
+    setTalkMuted: vi.fn(),
     setDayNight: vi.fn(),
     setLaunchAtLogin: vi.fn(async () => undefined),
     setLayering: vi.fn(async () => undefined),

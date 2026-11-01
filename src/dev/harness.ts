@@ -7,6 +7,8 @@
 // that matters: every effect goes through `ctx` (the app) or `io` (files, clock, sleep), so the unit
 // tests drive it with fakes and never touch Tauri.
 
+import type { Reaction } from '../brain/talk';
+import type { SpeechHandleExt } from '../ui/speech';
 import type { AppStore, ForcedState } from '../app/types';
 import type { Stimulus } from '../sim/needs';
 import type { WindowApi } from '../platform/types';
@@ -41,6 +43,7 @@ export interface HarnessContext {
   scene: Pick<HabitatScene, 'snapshot' | 'debugState' | 'fps' | 'setPointer' | 'tap' | 'feedSpot' | 'aimFeed'>;
   devPanel: DevPanelHandle & Partial<{ open(): void; close(): void }>;
   hud?: Pick<HudHandle, 'setVisible'>;
+  speech?: Pick<SpeechHandleExt, 'say' | 'react' | 'transcript' | 'setTimeScale'>;
 }
 
 /** Everything outside the app that a command touches: output files, the clock, and waiting. */
@@ -159,6 +162,13 @@ async function opState(ctx: HarnessContext): Promise<unknown> {
     present: s.present,
     drives: s.actions.drives(false),
   };
+}
+
+const REACTIONS: ReadonlySet<string> = new Set(['fed', 'meal', 'tap', 'hungry', 'starving', 'feeder', 'welcome-back']);
+
+function needSpeech(ctx: HarnessContext): NonNullable<HarnessContext['speech']> {
+  if (!ctx.speech) throw new Error('speech is not mounted');
+  return ctx.speech;
 }
 
 const STIMULI: ReadonlySet<string> = new Set(['pointer', 'tap', 'feed', 'bite']);
@@ -356,6 +366,7 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
       const y = num(cmd, 'y');
       actions.poke('tap');
       ctx.scene.tap(x, y);
+      ctx.speech?.react('tap');
       return { x, y };
     }
     case 'drop': {
@@ -388,6 +399,27 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
       actions.setPresence(present);
       return { present, needs: ctx.store.getState().needs };
     }
+    case 'say': {
+      // Put a line in the bubble now, bypassing the brain (for stills of the bubble itself).
+      const text = str(cmd, 'text');
+      needSpeech(ctx).say(text);
+      return { text };
+    }
+    case 'talk': {
+      // Something happens to the pet, as far as the brain is concerned: it may or may not answer.
+      const moment = str(cmd, 'moment');
+      if (!REACTIONS.has(moment)) throw new Error(`talk: "moment" must be one of ${[...REACTIONS].join(', ')}`);
+      needSpeech(ctx).react(moment as Reaction);
+      return { moment, last: needSpeech(ctx).transcript().slice(-1)[0] ?? null };
+    }
+    case 'talkSpeed': {
+      // Run the talk clock k times faster, so an hour of chatter fits in a recording.
+      const k = num(cmd, 'k');
+      needSpeech(ctx).setTimeScale(k);
+      return { k };
+    }
+    case 'transcript':
+      return { lines: needSpeech(ctx).transcript() };
     case 'snapshot':
       return opSnapshot(cmd, ctx, io);
     case 'stats':

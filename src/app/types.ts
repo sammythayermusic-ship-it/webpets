@@ -43,6 +43,10 @@ export interface SettingsDoc {
   scale: Scale;
   muted: boolean;
   notificationsMuted: boolean;
+  /** The pet's speech bubbles are off (tray: Pet talks). */
+  talkMuted: boolean;
+  /** Daily cap on Claude-written lines, US dollars; 0 turns them off. */
+  dailyCapUsd: number;
   dayNight: DayNightMode;
   launchAtLogin: boolean;
   /**
@@ -124,6 +128,7 @@ export interface AppActions {
   setScale(s: Scale): Promise<void>;
   setMuted(b: boolean): void;
   setNotificationsMuted(b: boolean): void;
+  setTalkMuted(b: boolean): void;
   setDayNight(m: DayNightMode): void;
   setLaunchAtLogin(b: boolean): Promise<void>;
   /** Change any of the window layering flags; the rest keep their current values. */

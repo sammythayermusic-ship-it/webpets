@@ -1,10 +1,11 @@
 // What a species has to provide. Pure declarations: no Pixi, no DOM, no imports from render/ui
 // implementations — only the shared contract types.
 
-import type { Habitat, Personality, Rect, Species } from '../sim/types';
+import type { Habitat, Rect, Species } from '../sim/types';
+import type { Voice } from '../brain/types';
 import type { Domain, MoveBounds, PetBehavior } from '../render/types';
 
-/** The speech pools every species owes, keyed by the moment that triggers them. */
+/** The hamster's Phase 0 speech pools, adapted into its `Voice` until Step G gives it a full library. */
 export type LinePool = 'idle' | 'fed' | 'hungry' | 'starving' | 'wake';
 
 /**
@@ -59,7 +60,8 @@ export interface SpeciesModule {
   readonly defaultHabitat: Habitat;
   /** Fresh state machine per mount; never shared between scenes. */
   createBehavior(): PetBehavior;
-  readonly lines: Readonly<Record<Personality, Readonly<Record<LinePool, readonly string[]>>>>;
+  /** What it says and when (src/brain): lines per personality per moment, facts with sources. */
+  readonly voice: Voice;
 }
 
 /** Built from a {@link Domain} by the render layer; the behaviour only ever sees this. */

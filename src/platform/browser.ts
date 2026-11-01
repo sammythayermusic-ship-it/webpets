@@ -30,6 +30,7 @@ const MENU_ITEMS: ReadonlyArray<{ action: TrayAction; label: string }> = [
   { action: 'size-m', label: 'Size: Medium' },
   { action: 'size-l', label: 'Size: Large' },
   { action: 'mute', label: 'Mute' },
+  { action: 'talk', label: 'Pet talks' },
   { action: 'notifications', label: 'Notifications' },
   { action: 'daynight-auto', label: 'Day/Night: Auto' },
   { action: 'daynight-day', label: 'Day/Night: Day' },
@@ -234,6 +235,8 @@ export function createBrowserPlatform(): Platform {
         return s.muted;
       case 'notifications':
         return !s.notificationsMuted;
+      case 'talk':
+        return !s.talkMuted;
       case 'daynight-auto':
         return s.dayNight === 'auto';
       case 'daynight-day':
@@ -412,6 +415,17 @@ export function createBrowserPlatform(): Platform {
     notify: (title: string, body: string): Promise<void> => {
       notifications.push({ title, body });
       console.info(`[notify] ${title} — ${body}`);
+      return Promise.resolve();
+    },
+    // No Keychain in a browser: the pet speaks from its built-in library, which is what Playwright tests.
+    voice: {
+      status: () => Promise.resolve({ hasKey: false }),
+      write: () => Promise.resolve({ text: null, usd: 0 }),
+    },
+    // Nobody is typing in a test page.
+    inputIdle: () => Promise.resolve({ keys: Number.MAX_VALUE, any: 0 }),
+    openLink: (url: string): Promise<void> => {
+      if (url.startsWith('https://')) window.open(url, '_blank', 'noopener');
       return Promise.resolve();
     },
     autostart: {

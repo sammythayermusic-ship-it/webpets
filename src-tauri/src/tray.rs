@@ -22,6 +22,7 @@ pub const ACTION_SIZE_M: &str = "size-m";
 pub const ACTION_SIZE_L: &str = "size-l";
 pub const ACTION_MUTE: &str = "mute";
 pub const ACTION_NOTIFICATIONS: &str = "notifications";
+pub const ACTION_TALK: &str = "talk";
 pub const ACTION_DAYNIGHT_AUTO: &str = "daynight-auto";
 pub const ACTION_DAYNIGHT_DAY: &str = "daynight-day";
 pub const ACTION_DAYNIGHT_NIGHT: &str = "daynight-night";
@@ -40,6 +41,7 @@ pub struct TrayMenuState {
     pub scale: u8,
     pub muted: bool,
     pub notifications_muted: bool,
+    pub talk_muted: bool,
     pub day_night: String,
     pub launch_at_login: bool,
     pub always_on_top: bool,
@@ -59,6 +61,7 @@ pub struct TrayMenu {
     pub size_l: CheckMenuItem<Wry>,
     pub mute: CheckMenuItem<Wry>,
     pub notifications: CheckMenuItem<Wry>,
+    pub talk: CheckMenuItem<Wry>,
     pub daynight_auto: CheckMenuItem<Wry>,
     pub daynight_day: CheckMenuItem<Wry>,
     pub daynight_night: CheckMenuItem<Wry>,
@@ -91,6 +94,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<TrayMenu> {
     let size = Submenu::with_id_and_items(app, "size", "Size", true, &[&size_s, &size_m, &size_l])?;
     let mute = check(app, ACTION_MUTE, "Mute", false)?;
     let notifications = check(app, ACTION_NOTIFICATIONS, "Notifications", true)?;
+    let talk = check(app, ACTION_TALK, "Pet talks", true)?;
     let daynight_auto = check(app, ACTION_DAYNIGHT_AUTO, "Auto", true)?;
     let daynight_day = check(app, ACTION_DAYNIGHT_DAY, "Day", false)?;
     let daynight_night = check(app, ACTION_DAYNIGHT_NIGHT, "Night", false)?;
@@ -126,6 +130,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<TrayMenu> {
             &PredefinedMenuItem::separator(app)?,
             &size,
             &mute,
+            &talk,
             &notifications,
             &daynight,
             &visible_on,
@@ -148,6 +153,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<TrayMenu> {
         size_l,
         mute,
         notifications,
+        talk,
         daynight_auto,
         daynight_day,
         daynight_night,
@@ -248,6 +254,7 @@ pub fn set_menu_state(app: &AppHandle, s: &TrayMenuState) -> Result<(), String> 
     }
     e(m.mute.set_checked(s.muted))?;
     e(m.notifications.set_checked(!s.notifications_muted))?;
+    e(m.talk.set_checked(!s.talk_muted))?;
     e(m.daynight_auto.set_checked(s.day_night == "auto"))?;
     e(m.daynight_day.set_checked(s.day_night == "day"))?;
     e(m.daynight_night.set_checked(s.day_night == "night"))?;

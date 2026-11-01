@@ -1602,6 +1602,38 @@ moment, a pet card, milestones). What I decided from it:
   have an API key (NEEDS-SAMMY). Claude lines are an optional extra through one provider
   interface, so a server can replace the Keychain key later without touching the pet.
 
+## 2026-10-31 — Step D plan: the pet talks, through one shared brain
+
+- **`src/brain/` is the shared module** Step G asks for: pure, imports only `src/sim` types
+  (`purity.test.ts`). `say.ts` picks what to say, `talk.ts` decides when, `writer.ts` builds the
+  request for a Claude line, filters what comes back and keeps the daily spend. A species brings
+  only a `Voice` (lines per personality per moment, facts with sources, fact frames);
+  `src/ui/talk.ts` glues the brain to the bubble.
+- **Moments**: thought, fed, meal, hungry, starving, tap, visit, welcome-back, lonely, morning,
+  night, feeder. Facts are thoughts with a source; each personality has its own way of bringing one
+  up ("Fun fact, since you did not ask: …"), so a hundred facts sound like four characters, not
+  one encyclopedia.
+- **Never repeats itself**: lines have ids from a hash of their text (stable when the file is
+  reordered); the last 80 are remembered across launches, and every fact is told once before any
+  is told again.
+- **When it talks**: chatty while you are at the bowl (a hello after 3+ minutes away, welcome back
+  after 2+ hours, good morning on the first visit before noon, then a thought every 45–120 s, at
+  most four a visit); now and then when you are not (every 15–35 minutes); "it's quiet in here"
+  after three hours alone, at most every three hours; goodnight once as it settles; asleep after
+  that. No two bubbles within 20 s, at most 8 an hour, nothing volunteered while you type
+  (`idle.rs` reads the window server's seconds-since-last-key counter: no key logging, no
+  permission), nothing at all when muted. Replies to what you just did (a meal, a knock) skip the
+  hourly cap; hunger may cut a short gap.
+- **Claude-written lines** are an extra for 40% of thoughts when a key is set, the Mac is online
+  and today's spend is under the cap ($0.25 default). The key is a Keychain generic password
+  (service `com.sammythayer.webpets`, account `anthropic`) read only by Rust (`voice.rs`); the
+  webview sends the prompt and gets back the line and its cost. Claude Opus 5.5 at low effort,
+  with the API's default refusal fallbacks; a line is about half a US cent. The prompt makes the
+  pet kind, in character, and forbids facts or claims about the world (facts only come from the
+  sourced library); `cleanLine` rejects links, emoji, hashtags, anything mentioning AI, and
+  anything too long, and a library line is said instead.
+- **Tap a fact to see its source**: `links.rs` opens only plain https links to a real host.
+
 ## 2026-10-31 — Free food built: the money system is gone
 
 What the notes above decided, as built, and the calls made on the way:

@@ -6,7 +6,7 @@ import type { AppState, AppStore } from './app';
 import { createPlatform } from './platform';
 import type { Platform, PointerState } from './platform';
 import { createScene, loadManifest } from './render';
-import type { HabitatScene } from './render';
+import type { HabitatScene, Rect } from './render';
 import {
   computeHitRegions,
   initAudio,
@@ -208,15 +208,18 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   // 3. UI components and wiring.
   let hud: HudHandle | null = null;
   let devPanel: DevPanelHandle | null = null;
+  let speechRects: { getRects(): Rect[] } | null = null;
   const refreshHitRegions = (): void => {
     if (!hud || !devPanel) return; // components call requestHitRegions while mounting
-    platform.window.setHitRegions(computeHitRegions(scene, hud, devPanel)).catch(logRejected('setHitRegions'));
+    const others = speechRects ? [speechRects] : [];
+    platform.window.setHitRegions(computeHitRegions(scene, hud, devPanel, others)).catch(logRejected('setHitRegions'));
   };
   const deps = { store, platform, scene, audio, requestHitRegions: refreshHitRegions };
   hud = mountHud(ui, deps);
   const grip = mountResizeGrip(ui, deps);
   devPanel = mountDevPanel(ui, deps);
   const speech = mountSpeech(ui, deps);
+  speechRects = speech;
   const feederDialog = mountFeederDialog(ui, deps);
   const montage = mountMontage(ui, deps);
   mountMemorial(ui, deps);
@@ -332,6 +335,7 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
     }
     store.getState().actions.poke('tap');
     scene.tap(e.clientX, e.clientY);
+    speech.react('tap');
   });
   canvas?.addEventListener('mousemove', (e: MouseEvent) => {
     canvas.style.cursor = press === null && scene.feedSpot(e.clientX, e.clientY) !== null ? 'pointer' : '';
@@ -384,7 +388,7 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   if (import.meta.env.VITE_WEBPETS_HARNESS === '1') {
     const devPanelHandle = devPanel;
     void import('./dev/harness').then((mod) =>
-      mod.installHarness({ store, platform, scene, devPanel: devPanelHandle, hud: hudHandle }),
+      mod.installHarness({ store, platform, scene, devPanel: devPanelHandle, hud: hudHandle, speech }),
     );
   }
 
@@ -392,7 +396,8 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   const { recentEvents, pet } = store.getState();
   if (recentEvents.length > 0) {
     await montage.play(recentEvents, pet.name);
-    speech.sayFrom('wake');
+    // The feeder kept it going while you were away: that is what it wants to tell you first.
+    speech.react(recentEvents.some((e) => e.type === 'auto-fed') ? 'feeder' : 'welcome-back');
   }
 
   return { store, scene };

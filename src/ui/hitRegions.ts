@@ -39,11 +39,18 @@ export function computeHitRegions(
   scene: Pick<HabitatScene, 'habitatHitRect'>,
   hud: Pick<HudHandle, 'getRects'>,
   devPanel: Pick<DevPanelHandle, 'getRect'>,
+  others: ReadonlyArray<{ getRects(): Rect[] }> = [],
 ): Rect[] {
   const regions: Rect[] = [roundRect(scene.habitatHitRect())];
   for (const r of hud.getRects()) {
     const rr = roundRect(r);
     if (rr.w > 0 && rr.h > 0) regions.push(rr);
+  }
+  for (const o of others) {
+    for (const r of o.getRects()) {
+      const rr = roundRect(r);
+      if (rr.w > 0 && rr.h > 0) regions.push(rr);
+    }
   }
   const dev = devPanel.getRect();
   if (dev) {

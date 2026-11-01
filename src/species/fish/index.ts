@@ -6,5 +6,4 @@ export {
   BOWL_WATER_RECT,
   BOWL_WATER_SHAPE,
 } from './layout';
-export { FISH_LINES } from './lines';
-export type { FishLinePool } from './lines';
+export { FISH_VOICE } from './voice';

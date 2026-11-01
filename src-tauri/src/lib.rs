@@ -9,8 +9,11 @@ mod commands;
 mod harness;
 mod hittest;
 mod identity;
+mod idle;
+mod links;
 mod state;
 mod tray;
+mod voice;
 mod window;
 
 use std::path::Path;
@@ -124,6 +127,10 @@ pub fn run() {
             commands::autostart_get,
             commands::autostart_set,
             commands::quit_app,
+            idle::input_idle,
+            links::open_link,
+            voice::voice_status,
+            voice::voice_write,
             #[cfg(feature = "harness")]
             harness::harness_poll,
             #[cfg(feature = "harness")]

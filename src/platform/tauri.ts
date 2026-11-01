@@ -142,6 +142,12 @@ export function createTauriPlatform(): Platform {
         }),
     },
     notify: (title: string, body: string) => invoke<void>('notify', { title, body }),
+    voice: {
+      status: () => invoke<{ hasKey: boolean }>('voice_status'),
+      write: (system: string, user: string) => invoke<{ text: string | null; usd: number }>('voice_write', { system, user }),
+    },
+    inputIdle: () => invoke<{ keys: number; any: number }>('input_idle'),
+    openLink: (url: string) => invoke<void>('open_link', { url }),
     autostart: {
       isEnabled: () => invoke<boolean>('autostart_get'),
       setEnabled: (on: boolean) => invoke<void>('autostart_set', { on }),

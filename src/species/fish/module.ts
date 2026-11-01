@@ -7,7 +7,7 @@
 import type { SpeciesModule } from '../types';
 import { createFishBehavior } from './behavior';
 import { BOWL_OPAQUE_RECT, BOWL_PET_ANCHOR, BOWL_WATER_SHAPE, FISH_BODY } from './layout';
-import { FISH_LINES } from './lines';
+import { FISH_VOICE } from './voice';
 
 export const FISH_MODULE: SpeciesModule = {
   species: 'fish',
@@ -25,5 +25,5 @@ export const FISH_MODULE: SpeciesModule = {
     },
   },
   createBehavior: createFishBehavior,
-  lines: FISH_LINES,
+  voice: FISH_VOICE,
 };
