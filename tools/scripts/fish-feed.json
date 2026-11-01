@@ -3,7 +3,6 @@
   "steps": [
     { "op": "force", "state": "hungry" },
     { "op": "night", "value": false },
-    { "op": "setBalance", "n": 1000 },
     { "op": "pointer", "x": null },
     { "op": "sleep", "ms": 1200 },
     { "op": "record", "name": "fish-feed", "seconds": 16, "fps": 60 },

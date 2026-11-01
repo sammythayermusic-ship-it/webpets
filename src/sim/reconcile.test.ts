@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { reconcile } from './reconcile';
-import { depositPantry } from './feed';
+import { fillPantry } from './feed';
 import { hungerAt, zeroAt } from './hunger';
-import { LocalLedger } from './ledger';
+import { PANTRY_CAPACITY } from './constants';
 import { B, H, fresh } from './test-helpers';
 import type { PetState, SimEvent } from './types';
 
@@ -10,14 +10,10 @@ const autoFed = (e: SimEvent): e is Extract<SimEvent, { type: 'auto-fed' }> => e
 
 describe('reconcile', () => {
   it('11. pantry auto-feed timing over a 10-day gap with 1000', () => {
-    // Ten days is nineteen meals now, not eight. The whole starting stake is deposited because at two
-    // meals a day 500 buys exactly ten days -- it would survive, but with 25 left, and a scenario that
-    // finishes on the last coin tests the arithmetic rather than the behaviour.
-    const ledger = new LocalLedger(1000);
-    const dep = depositPantry(fresh(), 1000, B, ledger);
-    expect(dep.moved).toBe(1000);
-    expect(dep.events).toEqual([]);
-    const r = reconcile(dep.state, B + 240 * H);
+    // Ten days is nineteen meals. A feeder the user fills holds three days (PANTRY_CAPACITY); 1000 is a
+    // dev-set pantry, because the auto-feed rule does not care how the food got there and a long run
+    // tests the arithmetic of the walk. 500 would also survive the ten days, but end on its last meal.
+    const r = reconcile({ ...fresh(), pantry: 1000 }, B + 240 * H);
     expect(r.events).toHaveLength(19);
     r.events.forEach((e, k) => {
       expect(autoFed(e)).toBe(true);
@@ -29,8 +25,7 @@ describe('reconcile', () => {
     });
     expect(r.state.pantry).toBe(525);
     expect(r.state.meals).toBe(19);
-    expect(r.state.feedBurned).toBe(475);
-    expect(ledger.balance()).toBe(0);
+    expect(r.state.foodEaten).toBe(475);
     expect(r.state.alive).toBe(true);
     expect(hungerAt(r.state, B + 240 * H)).toBeCloseTo(50, 6);
   });
@@ -127,7 +122,7 @@ describe('reconcile', () => {
     expect(r.events.filter((e) => e.type === 'hungry')).toHaveLength(1);
   });
 
-  it('18. hungry not emitted at a fed crossing; emitted when pantry < cost', () => {
+  it('18. hungry not emitted at a fed crossing; emitted when the feeder holds less than a meal', () => {
     const fed = reconcile({ ...fresh(), pantry: 25 }, B + 20 * H);
     expect(fed.events.map((e) => e.type)).toEqual(['auto-fed']);
     const poor = reconcile({ ...fresh(), pantry: 24 }, B + 20 * H);
@@ -136,53 +131,46 @@ describe('reconcile', () => {
   });
 
   it('19. no retroactive feed', () => {
-    const ledger = new LocalLedger(1000);
     const a = reconcile(fresh(), B + 20 * H);
     expect(a.events).toEqual([{ type: 'hungry', at: B + 16.8 * H }]);
-    const d = depositPantry(a.state, 100, B + 20 * H, ledger);
-    expect(d.moved).toBe(100);
+    const d = fillPantry(a.state, B + 20 * H);
     expect(d.events).toHaveLength(1);
     const e = d.events[0];
     expect(e && autoFed(e)).toBe(true);
     if (!e || !autoFed(e)) return;
     expect(e.at).toBe(B + 20 * H);
     expect(e.hungerAfter).toBeCloseTo(66.6667, 3);
-    expect(d.state.pantry).toBe(75);
-    expect(ledger.balance()).toBe(900);
+    expect(d.state.pantry).toBe(PANTRY_CAPACITY - 25);
     expect(d.events.filter((x) => x.type === 'hungry')).toHaveLength(0);
   });
 
-  it('20. deposit rescue', () => {
-    const ledger = new LocalLedger(1000);
+  it('20. fill rescue', () => {
     const a = reconcile(fresh(), B + 28 * H);
     expect(a.events.map((e) => e.type)).toEqual(['hungry', 'starving']);
-    const d = depositPantry(a.state, 25, B + 28 * H, ledger);
-    expect(d.moved).toBe(25);
-    expect(d.events).toEqual([{ type: 'auto-fed', at: B + 28 * H, pantryAfter: 0, hungerAfter: 50 }]);
+    const d = fillPantry(a.state, B + 28 * H);
+    expect(d.events).toEqual([{ type: 'auto-fed', at: B + 28 * H, pantryAfter: PANTRY_CAPACITY - 25, hungerAfter: 50 }]);
     expect(d.state.alive).toBe(true);
     const r = reconcile(d.state, B + 38 * H);
     expect(r.state.alive).toBe(true);
     expect(zeroAt(d.state)).toBe(B + 40 * H);
   });
 
-  it('21. deposit too late', () => {
-    const ledger = new LocalLedger(1000);
+  it('21. fill too late', () => {
     const dead = reconcile(fresh(), B + 36 * H).state;
     expect(dead.alive).toBe(false);
-    const d = depositPantry(dead, 500, B + 37 * H, ledger);
-    expect(d.moved).toBe(0);
-    expect(ledger.balance()).toBe(1000);
+    const d = fillPantry(dead, B + 37 * H);
     expect(d.events).toEqual([]);
     expect(d.state).toBe(dead);
+    expect(d.state.pantry).toBe(0);
   });
 
-  it('22. deposit below cost', () => {
-    const ledger = new LocalLedger(1000);
-    const d = depositPantry(fresh(), 10, B + 20 * H, ledger);
-    expect(d.moved).toBe(10);
-    expect(d.events.filter(autoFed)).toHaveLength(0);
-    expect(d.state.pantry).toBe(10);
-    expect(ledger.balance()).toBe(990);
+  it('22. fill tops the feeder up to capacity and never takes food out', () => {
+    const part = fillPantry({ ...fresh(), pantry: 50 }, B + H);
+    expect(part.state.pantry).toBe(PANTRY_CAPACITY);
+    expect(part.events.filter(autoFed)).toHaveLength(0);
+    // Only the dev panel can overfill it; filling leaves an overfull feeder as it is.
+    const over = fillPantry({ ...fresh(), pantry: 1000 }, B + H);
+    expect(over.state.pantry).toBe(1000);
   });
 
   it('23. hungerAtLastFed <= 30 (dev-injected) feeds at from', () => {
@@ -236,10 +224,9 @@ describe('reconcile', () => {
     const r = reconcile(dead, B + 500 * H);
     expect(r.state).toBe(dead);
     expect(r.events).toEqual([]);
-    const ledger = new LocalLedger(1000);
-    const d = depositPantry(dead, 100, B + 500 * H, ledger);
-    expect(d.moved).toBe(0);
-    expect(ledger.balance()).toBe(1000);
+    const d = fillPantry(dead, B + 500 * H);
+    expect(d.state).toBe(dead);
+    expect(d.events).toEqual([]);
   });
 
   it('reconcile at now === lastReconciledAt applies a feed at from but emits no crossing events', () => {

@@ -512,7 +512,7 @@ export function createScene(
           : makeFloorBounds({ rect: domain.rect, standY: domain.standY });
       // Bubbles, the glass sheen and the death fog are water PHYSICS, not geometry that happens to be
       // elliptical -- bubbles rise from a floor to a surface and pop, and a fog needs a volume to fill.
-      // On land there is no sensible parameterisation of them, so they are absent rather than degenerate.
+      // On land there is no sensible parameterisation of them, so they are absent rather than faked.
       const aquatic = domain.kind === 'water';
       // The scene is the one module that legitimately knows both clocks, so it passes the tick length
       // in rather than the player importing PET_FPS: a flip then covers exactly the tick the behaviour
@@ -531,7 +531,7 @@ export function createScene(
       lastDrawn = null;
       layers.slots.pet.addChild(player.sprite);
       // The DOMAIN, not the manifest's waterShape. Those two only coincide for the fish: the cage
-      // carries a degenerate ellipse purely to satisfy the schema, and feeding read it literally.
+      // carries a flattened ellipse purely to satisfy the schema, and feeding read it literally.
       const flakes = createFlakes(domain, bounds);
       layers.slots.food.addChild(flakes.container);
       const bubbles = createBubbles(habitat.waterShape, bounds);

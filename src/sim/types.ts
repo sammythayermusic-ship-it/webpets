@@ -2,7 +2,7 @@
 
 export type Species = 'fish' | 'hamster' | 'frog' | 'chicken';
 export type Habitat = 'bowl' | 'tank' | 'cage' | 'terrarium' | 'pond' | 'jar' | 'brooder' | 'coop';
-export type Personality = 'sarcastic' | 'anxious' | 'zen' | 'degen';
+export type Personality = 'sarcastic' | 'anxious' | 'zen' | 'hyper';
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 export type HungerLabel = 'full' | 'peckish' | 'hungry' | 'starving';
 
@@ -24,38 +24,27 @@ export interface PetState {
   bornAt: number; // ms epoch
   lastFedAt: number; // ms epoch
   hungerAtLastFed: number; // 0..100, hunger value right after the last feed
-  pantry: number; // $FEED locked in the habitat feeder
+  pantry: number; // food in the habitat's holiday feeder; it auto-feeds the pet one MEAL_SIZE at a time
   meals: number;
-  feedBurned: number;
+  foodEaten: number; // MEAL_SIZE per meal, manual or from the feeder
   alive: boolean;
   diedAt?: number;
   speciesData: Record<string, number>; // wheelKm, cricketsCaught, eggs, etc.
   /**
    * Everything before this timestamp has already been applied (auto-feeds, events).
-   * reconcile() only walks forward from here, so pantry deposits made after a hunger
-   * crossing are not applied retroactively, and reconcile is idempotent.
+   * reconcile() only walks forward from here, so a feeder filled after a hunger
+   * crossing does not feed retroactively, and reconcile is idempotent.
    */
   lastReconciledAt: number;
 }
 
-/** Phase 0: LocalLedger (a number). Phase 2: ChainLedger. All amounts are whole $FEED. */
-export interface Ledger {
-  balance(): number;
-  /** Destroy n from the wallet (feeding). Throws RangeError unless n is a non-negative integer <= balance. */
-  burn(n: number): void;
-  /** Move n out of the wallet into the pantry. Throws RangeError unless n is a non-negative integer <= balance. */
-  debit(n: number): void;
-  /** Move n back into the wallet from the pantry. Throws RangeError unless n is a non-negative integer. */
-  credit(n: number): void;
-}
-
 export interface SimConstants {
-  DECAY_PER_HOUR: number; // 100 / 60 -> full to empty in 60 h
-  FEED_COST: number; // 25
-  FEED_GAIN: number; // 45
+  DECAY_PER_HOUR: number; // 100 / 24 -> full to empty in a day
+  MEAL_SIZE: number; // 25: the food one meal takes from the feeder (and adds to foodEaten)
+  FEED_GAIN: number; // 50: hunger points one meal restores
   MAX_HUNGER: number; // 100
   PANTRY_TRIGGER: number; // 30 -> auto-feed when hunger reaches this
-  DEATH_AFTER_ZERO_HOURS: number; // 24
+  DEATH_AFTER_ZERO_HOURS: number; // 12
 }
 
 /** Events reconcile() reports, in chronological order, each stamped with the exact time it happened. */
@@ -71,18 +60,12 @@ export interface ReconcileResult {
   events: SimEvent[];
 }
 
-export type FeedFailure = 'dead' | 'insufficient-balance';
+/** Feeding is free; the only thing that can stop a meal is a dead pet. */
+export type FeedFailure = 'dead';
 /** Every mutator reconciles first; `events` carries the catch-up events (and any auto-feed at `now`) in order. */
 export type FeedResult =
   | { ok: true; state: PetState; events: SimEvent[] }
   | { ok: false; state: PetState; events: SimEvent[]; reason: FeedFailure };
-
-export interface PantryResult {
-  state: PetState;
-  /** Whole $FEED actually moved (deposit clamps to the wallet balance; 0 for a dead pet). */
-  moved: number;
-  events: SimEvent[];
-}
 
 export interface GraveRecord {
   pet: PetState;

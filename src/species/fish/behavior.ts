@@ -81,7 +81,7 @@ const PACE: Readonly<Record<Personality, { pace: number; hang: number; dartOdds:
   zen: { pace: 0.8, hang: 1.3, dartOdds: 0.0008, lookDelay: 6 },
   sarcastic: { pace: 0.95, hang: 1.0, dartOdds: 0.0015, lookDelay: 12 },
   anxious: { pace: 1.05, hang: 0.8, dartOdds: 0.004, lookDelay: 2 },
-  degen: { pace: 1.25, hang: 0.45, dartOdds: 0.006, lookDelay: 1 },
+  hyper: { pace: 1.25, hang: 0.45, dartOdds: 0.006, lookDelay: 1 },
 };
 
 function lungeSpeed(label: HungerLabel): number {
@@ -478,7 +478,7 @@ export function createFishBehavior(): FishBehavior {
         // ---- choose the next leg
         // The waypoint comes from the seeded NOISE over the leg count, not from the rng: that is what
         // makes the wander a path rather than a lottery (and keeps it from collapsing when a caller
-        // hands over a degenerate rng). The rng only decides the rare things: a dart, a surface visit.
+        // hands over a constant rng). The rng only decides the rare things: a dart, a surface visit.
         const n = noise1(seed, legCount * 0.73);
         const n2 = noise1(seed + 101, legCount * 0.61);
         const u = noise1(seed + 3, legCount * 0.83);

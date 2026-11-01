@@ -163,7 +163,7 @@ export const FISH_LINES: Record<Personality, Record<FishLinePool, readonly strin
       'I dreamt of a larger bowl.',
     ],
   },
-  degen: {
+  hyper: {
     idle: [
       'gm bowl. gm plant. gm.',
       'Bowl is up 0% today. HODL.',

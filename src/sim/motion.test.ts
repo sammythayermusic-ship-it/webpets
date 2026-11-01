@@ -96,7 +96,7 @@ describe('arc', () => {
     for (const l of lens) expect(Math.abs(l - mean) / mean).toBeLessThan(0.12);
   });
 
-  it('clamps outside the ends and survives a degenerate arc', () => {
+  it('clamps outside the ends and survives a zero-length arc', () => {
     const k = arc({ x: 10, y: 10 }, { x: 10, y: 10 }, 15);
     expect(k.length).toBe(0);
     expect(alongArc(k, 5)).toEqual({ x: 10, y: 10 });

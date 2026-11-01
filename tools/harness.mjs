@@ -22,7 +22,7 @@ function usage(code) {
   const out = code === 0 ? console.log : console.error;
   out('usage: node tools/harness.mjs <op> [json-args] [--app-data DIR] [--no-wait] [--timeout S]');
   out('       node tools/harness.mjs script path/to/steps.json');
-  out('ops: state feed skip setHunger setPantry setBalance force night scale species hide show devPanel');
+  out('ops: state feed skip setHunger setPantry force night scale species hide show devPanel');
   out('     resetClock pointer snapshot stats record sleep script   (arguments in docs/HARNESS.md)');
   process.exit(code);
 }

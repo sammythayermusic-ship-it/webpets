@@ -17,7 +17,7 @@ function signature here is binding. The shared type files are the source of trut
 | `src/species/fish/**` | render | Pure behavior state machine + bowl layout + speech line pools (`lines.ts`). No Pixi imports in `behavior.ts`. |
 | `tools/gen_placeholders.py`, `assets/manifest.json`, `assets/habitats/**` | render | Synthetic layers, stamped with the full word PLACEHOLDER; `PH` in the stamp colour only inside `pantry_fill`, which is too narrow for the word. Asserted by `src/render/placeholderStamps.test.ts`. |
 | `tools/gen_bg.py`, `tools/gen_fish.py`, `assets/sprites/fish/**` | render | Real art derived from `assets/reference/habitats-hires/fish-bowl.png`: the bowl `bg` and the fish strips. Carries no stamp; asserted by `src/render/bgArt.test.ts` and `src/render/spriteStrips.test.ts`. |
-| `src/ui/**`, `src/audio/**` | ui | DOM HUD, dev panel, speech bubbles, pantry dialog, montage, memorial card, tray wiring, audio hooks. |
+| `src/ui/**`, `src/audio/**` | ui | DOM HUD, dev panel, speech bubbles, holiday-feeder dialog, montage, memorial card, tray wiring, audio hooks. |
 | `src/main.ts` | integration | Boot sequence and all cross-module wiring. Written last. |
 | `vite.config.ts`, `index.html`, `package.json`, `tsconfig.json`, `vitest.config.ts` | integration | Already configured; changes require a contract edit. |
 | `tests/e2e/**`, `playwright.config.ts`, `README.md` | integration | Playwright smoke + acceptance recording in browser mode. |
@@ -271,6 +271,14 @@ key is read as a rung of the three-rung ladder it replaced.
 different window size in each; `normalizeSettings` migrates a v1 document by preserving on-screen size
 (`2 → 1`, `3 → 2`, `4 → 2`) and carries every other field forward. Only an unknown version falls back to defaults.
 
+`pet.json`'s document is **version 3**: `{ version, pet, latches, needs? }`. Version 2 added the twice-a-day clock;
+version 3 made food free. `migratePetDoc` upgrades any older document on load: version 1 is re-anchored at the hunger
+it was showing (see "The rate is versioned" below), and versions 1 and 2 drop their food `balance`, rename the pet's
+`feedBurned` to `foodEaten`, and give the fourth personality its new name, `hyper` (same behaviour). The upgraded
+document is written back.
+`graveyard.json` is **version 2**: version 1 records carry the same old pet shape and are upgraded on load, never
+dropped.
+
 Store files (Tauri store plugin, app-data dir): `pet.json`, `settings.json`, `graveyard.json`. TS reads/writes them
 through `platform.store` (`PersistApi`: `load(file)`, `set(file, data)`, `save(file)`) which only ever touches the
 key `"doc"`; `src/app/persistence.ts` calls `set` (plugin `store.set('doc', data)`) immediately on every save and
@@ -304,53 +312,52 @@ The scheduler calls `tick()` (reconcile at `now()`) on boot, every 30 s, on `vis
 hungerAt(state, now, c = DEFAULT_CONSTANTS): number   // 0 for dead pets; else clamp(hungerAtLastFed - decay * max(0, now - lastFedAt)/HOUR_MS, 0, MAX)
 hungerLabel(h): HungerLabel                           // full if h > 60; peckish if 30 < h <= 60; hungry if 0 < h <= 30; starving if h === 0
 zeroAt(state, c): number                              // alive: lastFedAt + hungerAtLastFed / DECAY_PER_HOUR * HOUR_MS (ignores pantry); dead: diedAt - 24 h
-projectedDeathAt(state, now, c): number               // dead: diedAt; alive: simulate auto-feeds from now until pantry < FEED_COST, then zeroAt + 24 h
+projectedDeathAt(state, now, c): number               // dead: diedAt; alive: simulate auto-feeds from now until pantry < MEAL_SIZE, then zeroAt + DEATH_AFTER_ZERO_HOURS
 reconcile(state, now, c): ReconcileResult             // see rules below; no-op (unchanged state, []) when now <= lastReconciledAt or the pet is dead
-feed(state, now, ledger, c): FeedResult               // reconcile first; validate; burn; t = max(now, lastReconciledAt); hungerAtLastFed = min(MAX, hungerAt(t) + gain); lastFedAt = lastReconciledAt = t; meals++; feedBurned += cost
-depositPantry(state, n, now, ledger, c): PantryResult // reconcile first; dead → moved 0, ledger untouched; moved = min(floor(n), balance) (0 for n <= 0 / NaN); ledger.debit(moved); reconcile again at max(now, lastReconciledAt) (may auto-feed there)
-withdrawPantry(state, now, ledger, c): PantryResult   // reconcile first (alive only); moved = pantry; allowed on dead pets; ledger.credit(moved)
-pantryDays(pantry, c): number                         // (pantry / FEED_COST) * (FEED_GAIN / DECAY_PER_HOUR) / 24
+feed(state, now, c): FeedResult                      // free; reconcile first; dead → { ok: false, reason: 'dead' } (the only FeedFailure); t = max(now, lastReconciledAt); hungerAtLastFed = min(MAX, hungerAt(t) + gain); lastFedAt = lastReconciledAt = t; meals++; foodEaten += MEAL_SIZE
+fillPantry(state, now, c): ReconcileResult            // free; reconcile first; dead (or dies in that catch-up) → returned unfilled; pantry = max(pantry, PANTRY_CAPACITY); reconcile again at max(now, lastReconciledAt) (may auto-feed there)
+pantryDays(pantry, c): number                         // (pantry / MEAL_SIZE) * (FEED_GAIN / DECAY_PER_HOUR) / 24; PANTRY_CAPACITY (150) is 3 days
 ageMs(state, now): number                             // (diedAt ?? now) - bornAt
 formatAge(ms): string                                 // "3d 4h" (floor), minimum "0d 0h"
 newPet(now, rng, opts?: { species?; name? }): PetState // id "#0001".."#9999" from rng; name from a species pool; rarity 70/20/8/2; personality uniform; lastReconciledAt = lastFedAt = bornAt = now; hunger 100; pantry 0; no diedAt key
 toGraveRecord(state, now): GraveRecord
-class LocalLedger implements Ledger { constructor(balance: number); toJSON(): number }
 ```
 
-Invariants: `lastReconciledAt >= lastFedAt` always. Every mutator first reconciles to `now`, performs all validation
-on the reconciled state, calls exactly one Ledger method as its last side effect, then builds the new state; if the
-ledger throws, the mutator rethrows. Mutators never move the pet's clock backwards: when `now < lastReconciledAt`
-(dev `resetClock` after a skip, or a system clock correction) reconcile is a no-op and `feed` / `depositPantry` act at
-`max(now, lastReconciledAt)`, so a manual feed raises the hunger the pet has already reached (the store shows hunger
-at that same time) instead of burning $FEED for a gain that decays away before real time catches up. `balance + pantry + feedBurned` is conserved across all operations (the store's
-`newPet` withdraws the pantry before replacing the pet). `pantry`, `balance`, `meals`, `feedBurned` are non-negative
-integers; hunger is the only float. Dead states are built by setting `alive: false` and adding `diedAt`; alive states
-never carry a `diedAt` key. `LocalLedger.burn/debit/credit` throw `RangeError` unless `Number.isInteger(n) && n >= 0`,
-and burn/debit additionally when `n > balance()`; a throw leaves the balance unchanged.
+Invariants: `lastReconciledAt >= lastFedAt` always. Food is free: there is no balance, and nothing a mutator does can
+fail for want of food. Every mutator first reconciles to `now`, then builds the new state. Mutators never move the
+pet's clock backwards: when `now < lastReconciledAt` (dev `resetClock` after a skip, or a system clock correction)
+reconcile is a no-op and `feed` / `fillPantry` act at `max(now, lastReconciledAt)`, so a manual feed raises the hunger
+the pet has already reached (the store shows hunger at that same time) instead of spending the meal on a gain that
+decays away before real time catches up. `foodEaten === meals * MEAL_SIZE`; only `fillPantry` and the dev panel put
+food in the pantry and only auto-feeds take it out, so outside the dev panel `0 <= pantry <= PANTRY_CAPACITY`.
+`pantry`, `meals`, `foodEaten` are non-negative integers; hunger is the only float. Dead states are built by setting
+`alive: false` and adding `diedAt`; alive states never carry a `diedAt` key.
 
 Auto-feed rule: walking forward from `from = lastReconciledAt`, the next auto-feed time is
 `t* = max(from, lastFedAt + (hungerAtLastFed - PANTRY_TRIGGER) / DECAY_PER_HOUR * HOUR_MS)`, applied only if
-`t* <= now`, the pet is alive at `t*` (i.e. `t* < zeroAt + 24 h`), and `pantry >= FEED_COST`. The trigger is inclusive
+`t* <= now`, the pet is alive at `t*` (i.e. `t* < zeroAt + 24 h`), and `pantry >= MEAL_SIZE`. The trigger is inclusive
 (`hunger <= 30`, deliberate: identical instant with continuous decay; a pet exactly at 30 is fed). Each auto-feed sets
-`lastFedAt = t*`, `hungerAtLastFed = min(MAX, hungerAt(t*) + FEED_GAIN)`, `pantry -= FEED_COST`, `meals++`,
-`feedBurned += FEED_COST`, emits `auto-fed`. Repeat until no feed fits. Auto-feeds are applied for
-`from <= t* <= now` (inclusive at `from`, so a deposit feeds at `now`; a feed at `from` cannot repeat because it moves
+`lastFedAt = t*`, `hungerAtLastFed = min(MAX, hungerAt(t*) + FEED_GAIN)`, `pantry -= MEAL_SIZE`, `meals++`,
+`foodEaten += MEAL_SIZE`, emits `auto-fed`. Repeat until no feed fits. Auto-feeds are applied for
+`from <= t* <= now` (inclusive at `from`, so filling the feeder feeds at `now`; a feed at `from` cannot repeat because it moves
 the next crossing into the future). `hungry` (crossing 30 with no auto-feed there), `starving` (zero), `dying-soon`
 (zero + 18 h) and `died` (zero + 24 h, sets `alive = false`, `diedAt`) are emitted only for event times `e` with
 `from < e <= now` (half-open). Result sets `lastReconciledAt = now`. `reconcile(reconcile(s, t).state, t)` returns a
 deep-equal state and `[]` for every `t`, including event times. Timestamps for the default constants are integer ms;
 round emitted timestamps with overridden constants.
 
-Reference numbers (the pet eats twice a day): fresh pet at 100 with 1000 in the pantry, 10 days away →
-auto-feeds at 16.8 h then every 12 h (80 → 30): 19 feeds, pantry 525, hunger 50 at 240 h, alive. Full to empty
-is 24 h; death at 36 h with an empty pantry. A meal is exactly half the bar, which is why the manual and
-auto-feed cycles are both 12 h.
+Reference numbers (the pet eats twice a day): fresh pet at 100 with a full feeder (150, six meals), away →
+auto-feeds at 16.8 h then every 12 h (80 → 30), the last at 76.8 h; at 72 h it is alive at hunger 50 with one meal
+left; hungry at 88.8 h, starving at 96 h, dead at 108 h. With 1000 in the pantry (dev panel), 10 days away: 19 feeds,
+pantry 525, hunger 50 at 240 h, alive. Full to empty is 24 h; death at 36 h with an empty feeder. A meal is exactly
+half the bar, which is why the manual and auto-feed cycles are both 12 h.
 
 The rate is versioned. Hunger is derived from an anchor and never stored, so changing `DECAY_PER_HOUR` or
 `FEED_GAIN` re-simulates every saved pet at the new speed — a fish showing 65 % can reappear dead. Any such
 change needs a `PetDoc` version bump plus a `migratePetDoc` case that re-anchors the pet at its currently
 displayed hunger and sets `lastReconciledAt = now` (which is what suppresses the retroactive event burst).
-Version 2 is the twice-a-day clock; version 1 was a 45-point meal on a 60-hour bar.
+Version 2 is the twice-a-day clock; version 1 was a 45-point meal on a 60-hour bar. Version 3 (free food) is a
+rename only and re-anchors nothing.
 
 The sim builder implements the test list in `docs/SIM-TESTS.md` first.
 
@@ -381,14 +388,15 @@ boot sequence against the species on disk, which is the path already under test.
 ## App store (`src/app/store.ts`, Zustand vanilla, no React)
 
 `createAppStore(platform: Platform): AppStore` implementing `AppState`/`AppActions` from `src/app/types.ts`.
-- `boot()`: load docs (defaults on first run: new pet, `STARTING_BALANCE`), consume `pendingSkipMs`, reconcile at
+- `boot()`: load docs (defaults on first run: new pet with an empty feeder), migrate `pet.json` (`migratePetDoc`), consume `pendingSkipMs`, reconcile at
   `now()`; if the covered span (`now − pet.lastReconciledAt` before the reconcile) exceeds 60 s set `recentEvents`.
 - `tick()`: reconcile; route events to `notifications.decide` and to `lastFeedEvent` (every `auto-fed` event with
   `at > previous lastReconciledAt` and within the last 60 s becomes `{ at, kind: 'auto', seq }`; older ones are only
   listed in `recentEvents`). Manual `feed()` sets `{ at: now, kind: 'manual', seq }`.
-- `feed()`, `depositPantry`, `withdrawPantry` route their returned `events` exactly like `tick()` events.
-- `acknowledgeDeath()` sets `latches.deathAcknowledgedFor = pet.id`. `newPet()`: withdraw pantry → bury (if dead and
-  not yet in the graveyard) → mint → clear latches.
+- `feed()` (free; fails only for a dead pet) and `fillPantry()` (free; fills the holiday feeder to `PANTRY_CAPACITY`)
+  route their returned `events` exactly like `tick()` events.
+- `acknowledgeDeath()` sets `latches.deathAcknowledgedFor = pet.id`. `newPet()`: reconcile → bury (if dead and
+  not yet in the graveyard) → mint (empty feeder) → clear latches.
 - `setScale` → `platform.window.setScale` then persist. `setHidden(b)` → hide/show, runtime only.
 - `quit()` → flush all pending saves → `platform.quit()`.
 - `dev.*` per the doc comments in `DevActions`.
@@ -396,16 +404,16 @@ boot sequence against the species on disk, which is the path already under test.
 
 `src/app/view.ts`: `toSceneView(s: AppState, prefersReducedMotion: boolean): SceneView` with
 `phase = alive ? 'alive' : latches.deathAcknowledgedFor === pet.id ? 'memorial' : 'dead'`,
-`pantryFraction = clamp(pantry / PANTRY_VISUAL_MAX, 0, 1)`, `pantryLow = pantry > 0 && pantryDays(pantry) < PANTRY_LOW_DAYS`,
-`asleep = night && alive`; and `toHudModel(s): { name, id, hungerPct, label, pantry, pantryDays, balance, alive, age, canFeed }`.
+`pantryFraction = clamp(pantry / PANTRY_CAPACITY, 0, 1)`, `pantryLow = pantry > 0 && pantryDays(pantry) < PANTRY_LOW_DAYS` (1 day),
+`asleep = night && alive`; and `toHudModel(s): { name, id, hungerPct, label, pantry, pantryDays, alive, age, canFeed }` with `canFeed = alive`.
 `src/app/daynight.ts`: `isNightAt(now): boolean` = local hour < 7 or >= 19 (no location); `night = dayNight === 'night'
 || (dayNight === 'auto' && isNightAt(now))`, overridden by `nightOverride`.
 
 `src/app/notifications.ts`: pure `decide(prev: PetState, next: PetState, events: SimEvent[], now: number,
 latches: NotificationLatches, c = DEFAULT_CONSTANTS): { toasts: { title; body }[]; latches: NotificationLatches }`.
-Copy: "<name> is hungry." (event `hungry`), "<name> is starving. 24h to live." (`starving`), "<name> has 6 hours."
-(`dying-soon`), "<name> has died." (`died`), "Pantry is almost empty." (when `pantry > 0 && pantryDays < 2 &&
-hunger < 60` and `latches.pantryLowFiredForPantry !== pantry`; the latch resets to null when pantry rises to >= 2 days).
+Copy: "<name> is hungry." (event `hungry`), "<name> is starving. 12h to live." (`starving`, from `DEATH_AFTER_ZERO_HOURS`), "<name> has 6 hours."
+(`dying-soon`), "<name> has died." (`died`), "The feeder is almost empty." (when `pantry > 0 && pantryDays < PANTRY_LOW_DAYS (1) &&
+hunger < 60` and `latches.pantryLowFiredForPantry !== pantry`; the latch resets to null when the feeder rises to >= 1 day).
 The scheduler calls `platform.notify` for each toast unless `settings.notificationsMuted`.
 
 ## Render API (`src/render/index.ts`)
@@ -458,7 +466,7 @@ lives in the renderer, which is why every behaviour test still reasons in whole 
 mountHud(root, deps): HudHandle
 mountDevPanel(root, deps): DevPanelHandle
 mountSpeech(root, deps): SpeechHandle & { relayout(): void }   // max 1 per 15 s, silent when dead; relayout() re-anchors a visible bubble after a scale change
-mountPantryDialog(root, deps): { open(): void }
+mountFeederDialog(root, deps): { open(): void }   // the holiday feeder: days of food, a free FILL IT UP, "It feeds <name> while you're away."
 mountMontage(root, deps): { play(events: SimEvent[], name: string): Promise<void> }
 mountMemorial(root, deps): { setDead(pet: PetState | null): void }   // DOM card only (name, id, age, meals, "New pet"); dismiss → actions.acknowledgeDeath()
 wireTray(deps): () => void                        // TrayAction → actions; chip repaint on hunger/label/alive change; setMenuState on settings change; tooltip "<name> · <label> · <pct>%"
@@ -466,13 +474,14 @@ initAudio(): AudioApi                             // Howler; every file optional
 computeHitRegions(scene, hud, devPanel): Rect[]   // habitat hit rect + visible HUD rects + dev panel rect
 ```
 
-Caption: `PANTRY 475 $FEED · 21 DAYS` where days = `floor(pantryDays)`. FEED button label `FEED 25`, disabled when
-dead or balance < 25. Modal cards (pantry dialog, memorial) are `max(120, min(240, habitatHitRect.w - 8))` px wide,
+Caption: `FEEDER · 3 DAYS` where days = `floor(pantryDays)`; under a day `FEEDER · 1 MEAL`; with less than a meal
+`FEEDER EMPTY`. FEED button label `FEED` (title "Feed"), disabled only when dead. Tray item "Holiday feeder…" (action
+`pantry`) opens the feeder dialog. Modal cards (feeder dialog, memorial) are `max(120, min(240, habitatHitRect.w - 8))` px wide,
 centred in `habitatHitRect`; `.modal .line` rows wrap (`white-space: normal; overflow-wrap: anywhere`) because
-Press Start 2P advances 8 px per glyph and a 26+ char line is wider than the card at S. The pantry hint is
-`PANTRY_HINT` = `Auto-feeds 25 at hunger 30` (26 chars = 208 px, one line at M/L). HUD hunger ring colors: full green, peckish yellow, hungry orange, starving red.
-Dev panel (⌥⌘D): +1h / +12h / +3d, set hunger / pantry / balance, force state, day/night, species/habitat (disabled
-except fish/bowl), FPS meter (`scene.fps()`), "Simulate 10-day absence with 500 in pantry" (dry run, prints events),
+names are unbounded and the text is proportional. The feeder dialog's figure (`3 DAYS OF FOOD`, `1 MEAL LEFT`,
+`EMPTY`) fits one line at M/L; its hint `It feeds <name> while you're away.` takes at most two. HUD hunger ring colors: full green, peckish yellow, hungry orange, starving red.
+Dev panel (⌥⌘D): +1h / +12h / +3d, set hunger / pantry (any amount, even past `PANTRY_CAPACITY`), force state, day/night, species/habitat (disabled
+except fish/bowl), FPS meter (`scene.fps()`), "Simulate 10-day absence with 1000 in pantry" (dry run, prints events),
 "Skip 3d on next launch" (`dev.skipOnNextLaunch`), reset clock.
 
 ## Boot sequence (`src/main.ts`)
@@ -480,7 +489,7 @@ except fish/bowl), FPS meter (`scene.fps()`), "Simulate 10-day absence with 500 
 1. `platform = createPlatform()`; `store = createAppStore(platform)`; `await store.getState().actions.boot()`.
 2. `manifest = await loadManifest()`; `scene = createScene(manifest)`; `await scene.mount(#app, settings.scale)`
    (creates the canvas; main creates `#ui` after it). `audio = initAudio()`.
-3. Mount HUD, dev panel, speech, pantry dialog, montage, memorial; `wireTray`; subscribe `toSceneView` → `scene.setView`,
+3. Mount HUD, dev panel, speech, feeder dialog, montage, memorial; `wireTray`; subscribe `toSceneView` → `scene.setView`,
    `lastFeedEvent` → `scene.feed()` + `audio.play('feed')`, `settings.scale` → `scene.setScale`, `hud.relayout()`,
    `speech.relayout()`, `refreshHitRegions()`; `platform.window.onMoved(g => scene.setResolution(g.scaleFactor))`; pointer wiring per the
    rules above; keyboard; `contextmenu`; drag.
@@ -494,6 +503,7 @@ except fish/bowl), FPS meter (`scene.fps()`), "Simulate 10-day absence with 500 
 - "Skip until dead": from a fresh pet, hungry at 16.8 h, starving at 24 h, dead at 36 h. The dev panel only
   offers +1H / +12H / +3D, so the walk into the hungry band is +12H then +1H ×5 (17 h); then +12H (29 h,
   starving); then +3D (dead).
-- "Load 1000, skip 10 days": assert pantry 525 and 19 `auto-fed` events. 500 also survives the ten days but
-  ends on its last 25, which makes the assertion about arithmetic rather than behaviour.
+- "Holiday feeder": open it from the tray, FILL IT UP (free) shows 3 DAYS OF FOOD and the caption `FEEDER · 3 DAYS`.
+- "Load 1000, skip 10 days" (dev panel PANTRY): assert pantry 525 and 19 `auto-fed` events. 500 also survives the
+  ten days but ends on its last meal, which makes the assertion about arithmetic rather than behaviour.
 - "Quit, fake the clock, relaunch → montage": use "Skip 3d on next launch", quit, relaunch (browser: reload).

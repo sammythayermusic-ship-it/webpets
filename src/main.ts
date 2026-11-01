@@ -15,7 +15,7 @@ import {
   mountHud,
   mountMemorial,
   mountMontage,
-  mountPantryDialog,
+  mountFeederDialog,
   mountSpeech,
   wireTray,
   mountResizeGrip,
@@ -217,11 +217,11 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   const grip = mountResizeGrip(ui, deps);
   devPanel = mountDevPanel(ui, deps);
   const speech = mountSpeech(ui, deps);
-  const pantryDialog = mountPantryDialog(ui, deps);
+  const feederDialog = mountFeederDialog(ui, deps);
   const montage = mountMontage(ui, deps);
   mountMemorial(ui, deps);
   grip.relayout();
-  wireTray({ ...deps, devPanel, pantryDialog });
+  wireTray({ ...deps, devPanel, feederDialog });
   installKeys({ store, devPanel });
   audio.setAmbient(initial.pet.species, true);
   audio.setMuted(initial.settings.muted);

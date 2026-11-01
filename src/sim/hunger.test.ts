@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { hungerAt, hungerLabel, pantryDays, projectedDeathAt, zeroAt } from './hunger';
 import { feed } from './feed';
 import { reconcile } from './reconcile';
-import { LocalLedger } from './ledger';
 import { B, H, fresh } from './test-helpers';
 import type { PetState } from './types';
 
@@ -35,7 +34,7 @@ describe('hunger', () => {
     const s = fresh();
     expect(zeroAt(s)).toBe(B + 24 * H);
     // Fed at 18 h, when hunger reads 25: the meal takes it to 75, which is another 18 h of runway.
-    const r = feed(s, B + 18 * H, new LocalLedger(1000));
+    const r = feed(s, B + 18 * H);
     expect(r.ok).toBe(true);
     expect(r.state.hungerAtLastFed).toBeCloseTo(75, 9);
     expect(zeroAt(r.state)).toBe(B + 36 * H);
@@ -59,7 +58,7 @@ describe('hunger', () => {
   });
 
   it('5. pantryDays', () => {
-    // Two meals a day at 25 each: a day costs 50, so the pantry buys exactly pantry/50 days.
+    // Two meals a day at 25 each: a day is 50 of food, so the pantry holds exactly pantry/50 days.
     expect(pantryDays(500)).toBeCloseTo(10, 9);
     expect(pantryDays(475)).toBeCloseTo(9.5, 9);
     expect(pantryDays(0)).toBe(0);

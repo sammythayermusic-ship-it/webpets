@@ -3,9 +3,10 @@
 // through immediately for the first save in a window and bursts are coalesced into one trailing write 500 ms
 // later. flush() drains everything pending. All store calls for a file are sequenced through one promise chain.
 import type { PersistApi } from '../platform/types';
-import type { GraveyardDoc, PetDoc, SettingsDoc } from './types';
+import type { GraveyardDoc, NotificationLatches, PetDoc, SettingsDoc } from './types';
 import { clampScale, DEFAULT_SCALE, HOUR_MS, MAX_SCALE, MIN_SCALE, SCALE_L, SCALE_M, SCALE_S, type Scale } from '../sim/constants';
-import type { PetState } from '../sim/types';
+import type { NeedsState } from '../sim/needs';
+import type { GraveRecord, Personality, PetState } from '../sim/types';
 
 export const PET_FILE = 'pet.json';
 export const SETTINGS_FILE = 'settings.json';
@@ -15,8 +16,39 @@ export const SAVE_THROTTLE_MS = 500;
 /** Current `SettingsDoc.version`. Bumped to 2 when the scale ladder moved from 2/3/4 to 1/2/3. */
 export const SETTINGS_VERSION = 2;
 
-/** Current `PetDoc.version`. Bumped to 2 when a meal went from 27 hours to 12. See `migratePetDoc`. */
-export const PET_VERSION = 2;
+/**
+ * Current `PetDoc.version`. Bumped to 2 when a meal went from 27 hours to 12, and to 3 when food became
+ * free (the `balance` went, `feedBurned` became `foodEaten`, the personality `LEGACY_HYPER` became `hyper`).
+ * See `migratePetDoc`.
+ */
+export const PET_VERSION = 3;
+
+/** Current `GraveyardDoc.version`. Bumped to 2 when the buried pets' `feedBurned` became `foodEaten`. */
+export const GRAVEYARD_VERSION = 2;
+
+/** What versions 1 and 2 called the `hyper` personality (same behaviour); the only place the old name survives. */
+export const LEGACY_HYPER = 'degen';
+
+/** A pet as versions 1 and 2 saved it: `feedBurned` where `foodEaten` is now, and `LEGACY_HYPER` for `hyper`. */
+export type LegacyPetState = Omit<PetState, 'foodEaten' | 'personality'> & {
+  feedBurned: number;
+  personality: Personality | typeof LEGACY_HYPER;
+};
+
+/**
+ * `pet.json` versions 1 and 2. Version 1 predates the twice-a-day hunger clock; both carry a food
+ * `balance` beside the pet, from when food was bought. Read only, never written.
+ */
+export interface LegacyPetDoc {
+  version: 1 | 2;
+  pet: LegacyPetState;
+  balance?: number;
+  latches: NotificationLatches;
+  needs?: NeedsState;
+}
+
+/** Whatever a recognised `pet.json` holds: the current document or one `migratePetDoc` upgrades. */
+export type StoredPetDoc = PetDoc | LegacyPetDoc;
 
 /**
  * The hunger rate a version-1 document was written under: a 45-point meal against a 60-hour bar.
@@ -43,7 +75,7 @@ export function defaultSettings(): SettingsDoc {
 }
 
 export function defaultGraveyard(): GraveyardDoc {
-  return { version: 1, records: [] };
+  return { version: GRAVEYARD_VERSION, records: [] };
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -55,8 +87,8 @@ const isBool = (v: unknown): v is boolean => typeof v === 'boolean';
 const isScale = (v: unknown): v is Scale =>
   typeof v === 'number' && Number.isInteger(v) && v >= MIN_SCALE && v <= MAX_SCALE;
 
-export function isPetState(v: unknown): v is PetState {
-  if (!isRecord(v)) return false;
+/** Every pet field that has not changed name across document versions. */
+function isPetCore(v: Record<string, unknown>): boolean {
   return (
     isStr(v['id']) &&
     isStr(v['name']) &&
@@ -69,7 +101,6 @@ export function isPetState(v: unknown): v is PetState {
     isNum(v['hungerAtLastFed']) &&
     isNum(v['pantry']) &&
     isNum(v['meals']) &&
-    isNum(v['feedBurned']) &&
     isBool(v['alive']) &&
     (v['diedAt'] === undefined || isNum(v['diedAt'])) &&
     isRecord(v['speciesData']) &&
@@ -77,15 +108,45 @@ export function isPetState(v: unknown): v is PetState {
   );
 }
 
-export function isPetDoc(v: unknown): v is PetDoc {
-  if (!isRecord(v) || (v['version'] !== 1 && v['version'] !== PET_VERSION)) return false;
-  if (!isPetState(v['pet'])) return false;
-  if (!isNum(v['balance']) || !Number.isInteger(v['balance']) || v['balance'] < 0) return false;
-  const l = v['latches'];
+export function isPetState(v: unknown): v is PetState {
+  return isRecord(v) && isPetCore(v) && isNum(v['foodEaten']);
+}
+
+export function isLegacyPetState(v: unknown): v is LegacyPetState {
+  return isRecord(v) && isPetCore(v) && isNum(v['feedBurned']);
+}
+
+function isLatches(l: unknown): l is NotificationLatches {
   if (!isRecord(l)) return false;
   const p = l['pantryLowFiredForPantry'];
   const d = l['deathAcknowledgedFor'];
   return (p === null || isNum(p)) && (d === null || isStr(d));
+}
+
+/** A current (version 3) document. */
+export function isPetDoc(v: unknown): v is PetDoc {
+  return isRecord(v) && v['version'] === PET_VERSION && isPetState(v['pet']) && isLatches(v['latches']);
+}
+
+/** A version 1 or 2 document. Its `balance` is not checked: it is dropped on upgrade. */
+export function isLegacyPetDoc(v: unknown): v is LegacyPetDoc {
+  return (
+    isRecord(v) &&
+    (v['version'] === 1 || v['version'] === 2) &&
+    isLegacyPetState(v['pet']) &&
+    isLatches(v['latches'])
+  );
+}
+
+/** Anything `loadPet` will hand to `migratePetDoc`. */
+export function isStoredPetDoc(v: unknown): v is StoredPetDoc {
+  return isPetDoc(v) || isLegacyPetDoc(v);
+}
+
+/** The free-food rename, for any pet saved before it: `feedBurned` -> `foodEaten`, `LEGACY_HYPER` -> `hyper`. */
+export function upgradePetState(pet: LegacyPetState): PetState {
+  const { feedBurned, personality, ...rest } = pet;
+  return { ...rest, personality: personality === LEGACY_HYPER ? 'hyper' : personality, foodEaten: feedBurned };
 }
 
 /**
@@ -158,16 +219,35 @@ export function normalizeSettings(v: unknown): SettingsDoc {
   };
 }
 
+/**
+ * Version 1 records carry pets in the pre-free-food shape; they are upgraded rather than filtered out,
+ * which is what a plain `isPetState` check would have done to every pet ever buried.
+ */
 export function normalizeGraveyard(v: unknown): GraveyardDoc {
-  if (!isRecord(v) || v['version'] !== 1 || !Array.isArray(v['records'])) return defaultGraveyard();
-  const records = v['records'].filter(
-    (r: unknown) => isRecord(r) && isPetState(r['pet']) && isNum(r['diedAt']) && isNum(r['ageMs']) && isNum(r['buriedAt']),
-  ) as GraveyardDoc['records'];
-  return { version: 1, records };
+  if (!isRecord(v) || (v['version'] !== 1 && v['version'] !== GRAVEYARD_VERSION) || !Array.isArray(v['records'])) {
+    return defaultGraveyard();
+  }
+  const records: GraveRecord[] = [];
+  for (const r of v['records'] as unknown[]) {
+    if (!isRecord(r)) continue;
+    const { diedAt, ageMs, buriedAt } = r;
+    if (!isNum(diedAt) || !isNum(ageMs) || !isNum(buriedAt)) continue;
+    const pet = r['pet'];
+    if (isPetState(pet)) records.push({ pet, diedAt, ageMs, buriedAt });
+    else if (isLegacyPetState(pet)) records.push({ pet: upgradePetState(pet), diedAt, ageMs, buriedAt });
+  }
+  return { version: GRAVEYARD_VERSION, records };
 }
 
 /**
- * Carries a pet across the twice-a-day retune without changing the hunger it is showing.
+ * Brings any stored document up to the current version. Identity on a current document, so a no-op
+ * migration never marks the file dirty.
+ *
+ * Version 2 -> 3 (free food) is a rename only: the food `balance` is dropped, `feedBurned` becomes
+ * `foodEaten`, and the `LEGACY_HYPER` personality becomes `hyper` (same behaviour, new name). The pantry, now
+ * the holiday feeder, keeps whatever food it held.
+ *
+ * Version 1 -> 2 carries a pet across the twice-a-day retune without changing the hunger it is showing.
  *
  * Hunger is never stored. It is derived from the anchor `(hungerAtLastFed, lastFedAt)` every time it is
  * read, so making the clock 2.5x faster silently re-simulates every existing pet at the new speed: an
@@ -183,21 +263,25 @@ export function normalizeGraveyard(v: unknown): GraveyardDoc {
  * the OLD rules is re-anchored at zero and given the new death window rather than being killed on load:
  * an upgrade should never be the thing that ends a pet. A pet that is ALREADY dead is untouched.
  */
-export function migratePetDoc(doc: PetDoc, now: number): PetDoc {
+export function migratePetDoc(doc: StoredPetDoc, now: number): PetDoc {
   if (doc.version === PET_VERSION) return doc;
-  const pet = doc.pet;
-  if (!pet.alive) return { ...doc, version: PET_VERSION };
-  const hours = Math.max(0, now - pet.lastFedAt) / HOUR_MS;
-  const legacyHunger = Math.max(0, Math.min(100, pet.hungerAtLastFed - LEGACY_V1_DECAY_PER_HOUR * hours));
+  let pet = doc.pet;
+  if (doc.version === 1 && pet.alive) {
+    const hours = Math.max(0, now - pet.lastFedAt) / HOUR_MS;
+    const legacyHunger = Math.max(0, Math.min(100, pet.hungerAtLastFed - LEGACY_V1_DECAY_PER_HOUR * hours));
+    pet = { ...pet, hungerAtLastFed: legacyHunger, lastFedAt: now, lastReconciledAt: now };
+  }
   return {
-    ...doc,
     version: PET_VERSION,
-    pet: { ...pet, hungerAtLastFed: legacyHunger, lastFedAt: now, lastReconciledAt: now },
+    pet: upgradePetState(pet),
+    latches: doc.latches,
+    ...(doc.needs === undefined ? {} : { needs: doc.needs }),
   };
 }
 
 export interface Persistence {
-  loadPet(): Promise<PetDoc | null>;
+  /** The document as stored, any recognised version; the store runs `migratePetDoc` on it at boot. */
+  loadPet(): Promise<StoredPetDoc | null>;
   loadSettings(): Promise<SettingsDoc>;
   loadGraveyard(): Promise<GraveyardDoc>;
   savePet(doc: PetDoc): void;
@@ -266,7 +350,7 @@ export function createPersistence(store: PersistApi, throttleMs: number = SAVE_T
         console.warn('[persistence] load pet.json failed', err);
       }
       if (raw === null || raw === undefined) return null;
-      if (!isPetDoc(raw)) {
+      if (!isStoredPetDoc(raw)) {
         console.warn('[persistence] pet.json is not a recognised PetDoc; starting fresh');
         return null;
       }

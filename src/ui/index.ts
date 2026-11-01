@@ -3,7 +3,7 @@
 export { mountHud } from './hud';
 export { mountDevPanel, type DevPanelHandleExt } from './devPanel';
 export { mountSpeech, type SpeechHandleExt, type SpeechPool } from './speech';
-export { mountPantryDialog, type PantryDialogHandle } from './pantryDialog';
+export { mountFeederDialog, type FeederDialogHandle } from './feederDialog';
 export { mountMontage, type MontageHandle } from './montage';
 export { mountMemorial, type MemorialHandle } from './memorial';
 export { wireTray, type TrayDeps } from './tray';

@@ -19,7 +19,7 @@ describe('pet', () => {
     expect(p.hungerAtLastFed).toBe(100);
     expect(p.pantry).toBe(0);
     expect(p.meals).toBe(0);
-    expect(p.feedBurned).toBe(0);
+    expect(p.foodEaten).toBe(0);
     expect(p.alive).toBe(true);
     expect('diedAt' in p).toBe(false);
     expect(p.species).toBe('fish');
@@ -35,7 +35,7 @@ describe('pet', () => {
     expect(NAME_POOLS.chicken).toContain(c.name);
 
     const rarity: Record<Rarity, number> = { common: 0, rare: 0, epic: 0, legendary: 0 };
-    const pers: Record<Personality, number> = { sarcastic: 0, anxious: 0, zen: 0, degen: 0 };
+    const pers: Record<Personality, number> = { sarcastic: 0, anxious: 0, zen: 0, hyper: 0 };
     const ids = new Set<number>();
     const r2 = mulberry32(2024);
     const N = 10_000;

@@ -3,7 +3,6 @@
   "steps": [
     { "op": "force", "state": "fed" },
     { "op": "night", "value": false },
-    { "op": "setBalance", "n": 1000 },
     { "op": "setPantry", "n": 200 },
     { "op": "setNeeds", "energy": 1, "curiosity": 1, "comfort": 0.8, "stress": 0 },
     { "op": "presence", "present": false },

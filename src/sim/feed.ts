@@ -1,23 +1,19 @@
-import type { FeedResult, Ledger, PantryResult, PetState, SimConstants } from './types';
-import { DEFAULT_CONSTANTS } from './constants';
+import type { FeedResult, PetState, ReconcileResult, SimConstants } from './types';
+import { DEFAULT_CONSTANTS, PANTRY_CAPACITY } from './constants';
 import { hungerFrom } from './math';
 import { reconcile } from './reconcile';
 
 /**
- * Manual feed: reconcile to `now`, validate on the reconciled state, burn FEED_COST (the only ledger call), then
- * hungerAtLastFed = min(MAX, hunger + gain), lastFedAt = lastReconciledAt = t, meals++, feedBurned += cost, where
- * t = max(now, lastReconciledAt). When the clock went backwards (dev.resetClock after a skip, or a system clock
- * correction) reconcile is a no-op and the pet has already reached the hunger at lastReconciledAt, so the gain is
- * applied on top of that hunger rather than on the anchor re-evaluated at `now` (which would burn $FEED for a gain
- * that decays away before it is ever shown).
+ * Manual feed. Food is free, so the only check is that the pet is alive. Reconcile to `now`, then
+ * hungerAtLastFed = min(MAX, hunger + gain), lastFedAt = lastReconciledAt = t, meals++, foodEaten += MEAL_SIZE,
+ * where t = max(now, lastReconciledAt). When the clock went backwards (dev.resetClock after a skip, or a system
+ * clock correction) reconcile is a no-op and the pet has already reached the hunger at lastReconciledAt, so the
+ * gain is applied on top of that hunger rather than on the anchor re-evaluated at `now` (which would spend the
+ * meal on a gain that decays away before it is ever shown).
  */
-export function feed(state: PetState, now: number, ledger: Ledger, c: SimConstants = DEFAULT_CONSTANTS): FeedResult {
+export function feed(state: PetState, now: number, c: SimConstants = DEFAULT_CONSTANTS): FeedResult {
   const r = reconcile(state, now, c);
   if (!r.state.alive) return { ok: false, state: r.state, events: r.events, reason: 'dead' };
-  if (ledger.balance() < c.FEED_COST) {
-    return { ok: false, state: r.state, events: r.events, reason: 'insufficient-balance' };
-  }
-  ledger.burn(c.FEED_COST);
   const s = r.state;
   const t = effectiveNow(s, now);
   const hunger = hungerFrom(s.hungerAtLastFed, s.lastFedAt, t, c);
@@ -27,7 +23,7 @@ export function feed(state: PetState, now: number, ledger: Ledger, c: SimConstan
     lastFedAt: t,
     lastReconciledAt: t,
     meals: s.meals + 1,
-    feedBurned: s.feedBurned + c.FEED_COST,
+    foodEaten: s.foodEaten + c.MEAL_SIZE,
   };
   return { ok: true, state: next, events: r.events };
 }
@@ -38,39 +34,15 @@ function effectiveNow(state: PetState, now: number): number {
 }
 
 /**
- * Move up to n whole $FEED from the wallet into the pantry. Reconciles first; a dead pet moves 0 and leaves the
- * ledger untouched. moved = min(floor(n), balance) (0 for n <= 0 / NaN). Reconciles again at
- * max(now, lastReconciledAt) so an immediate auto-feed applies.
+ * Fill the holiday feeder, for free: pantry = max(pantry, PANTRY_CAPACITY), so it never takes food out of a feeder
+ * the dev panel overfilled. Reconciles first; a dead pet (including one that dies during that catch-up) is
+ * returned as reconciled, unfilled. Reconciles again at max(now, lastReconciledAt) so a hungry pet is fed at once,
+ * even when the clock went backwards.
  */
-export function depositPantry(
-  state: PetState,
-  n: number,
-  now: number,
-  ledger: Ledger,
-  c: SimConstants = DEFAULT_CONSTANTS,
-): PantryResult {
+export function fillPantry(state: PetState, now: number, c: SimConstants = DEFAULT_CONSTANTS): ReconcileResult {
   const r1 = reconcile(state, now, c);
-  if (!r1.state.alive) return { state: r1.state, moved: 0, events: r1.events };
-  const wanted = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
-  const available = Math.max(0, Math.floor(ledger.balance()));
-  const moved = Math.min(wanted, available);
-  ledger.debit(moved);
-  const funded: PetState = { ...r1.state, pantry: r1.state.pantry + moved };
-  // Reconcile at max(now, lastReconciledAt) so the deposit can auto-feed even when the clock went backwards.
-  const r2 = reconcile(funded, effectiveNow(funded, now), c);
-  return { state: r2.state, moved, events: [...r1.events, ...r2.events] };
-}
-
-/** Move the whole pantry back into the wallet. Allowed on dead pets (otherwise $FEED would be stranded). */
-export function withdrawPantry(
-  state: PetState,
-  now: number,
-  ledger: Ledger,
-  c: SimConstants = DEFAULT_CONSTANTS,
-): PantryResult {
-  const r = reconcile(state, now, c);
-  const moved = r.state.pantry;
-  ledger.credit(moved);
-  const next: PetState = { ...r.state, pantry: 0 };
-  return { state: next, moved, events: r.events };
+  if (!r1.state.alive) return r1;
+  const filled: PetState = { ...r1.state, pantry: Math.max(r1.state.pantry, PANTRY_CAPACITY) };
+  const r2 = reconcile(filled, effectiveNow(filled, now), c);
+  return { state: r2.state, events: [...r1.events, ...r2.events] };
 }

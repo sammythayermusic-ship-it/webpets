@@ -6,8 +6,8 @@ gets hungry on a clock that never pauses, eats when you feed it, and dies if it 
 enough. Built with Tauri 2, Vite, TypeScript and PixiJS 8; the art is soft 3D rendered from a Blender
 scene that lives in the repo.
 
-There is no cryptocurrency, token, wallet or blockchain in WebPets, and there will not be one. The
-food is a number in a file.
+There is no cryptocurrency, token, coin or blockchain in WebPets, and there will not be one. Food is
+free: feed the pet regularly, and fill its holiday feeder before you go away.
 
 ## Prerequisites
 
@@ -59,26 +59,28 @@ verification only.
 
 ## Using the pet
 
-- Hover the habitat for the bar: hunger ring, name, Feed, size buttons, minimize. The caption below
-  shows the pantry (food stored in the habitat that feeds the pet while you are away) and how many days
-  it covers.
+- Hover the habitat for the bar: hunger ring, name, Feed, size buttons, minimize. Feeding is free.
+  The caption below shows the holiday feeder (food stored in the habitat that feeds the pet on its own
+  while you are away) and how many days it covers, for example `FEEDER · 3 DAYS` or `FEEDER EMPTY`.
+- Holiday feeder… in the menu opens the feeder: "Fill it up" fills it to three days of food, for free.
+  The pet eats from it whenever it gets hungry, and you get a notification when it is almost empty.
 - Drag the habitat to move it; it snaps to screen edges and remembers its spot per monitor. Resize from
   the handle at its top-left corner, the `+`/`−` buttons, the tray's Size menu, or `⌘=` / `⌘−`.
   The size is continuous between 0.5× and 4× of the habitat's logical 320×240 grid; Small, Medium and
   Large in the menu are 0.75×, 2× and 3×.
 - Menu bar icon: the pet with its hunger ring. Left-click shows or hides the window; right-click opens
-  the menu (Feed, Pantry, Size, Mute, Notifications, Day/Night, Visible on, Launch at login, Dev panel,
+  the menu (Feed, Holiday feeder, Size, Mute, Notifications, Day/Night, Visible on, Launch at login, Dev panel,
   New pet, Minimize, Quit). `⌘⇧P` shows or hides the pet from any app.
 - Day and night follow the clock (night from 19:00 to 07:00) unless you pin one in the menu.
 - The dev panel (tray menu, or `⌥⌘D` when the window has focus; `⇧⌥⌘D` if macOS claims the first):
-  skip time, set hunger, pantry and balance, force a state, switch species and habitat, see the frame
+  skip time, set hunger and the feeder's contents, force a state, switch species and habitat, see the frame
   rate and the pet's needs, simulate a ten-day absence, reset the clock.
 
 ## Where data lives
 
 ```
 ~/Library/Application Support/com.sammythayer.webpets/
-  pet.json           the living pet (hunger anchor, pantry, needs, last-fed times)
+  pet.json           the living pet (hunger anchor, feeder, needs, last-fed times)
   settings.json      size, mute, notifications, day/night, layering, window positions
   graveyard.json     pets that have died
   boot-report.json   what the last launch measured: build, layering, frame rate, visibility

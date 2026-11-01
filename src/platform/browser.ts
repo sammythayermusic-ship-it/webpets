@@ -25,7 +25,7 @@ const TRAY_CSS_PX = 22;
 
 const MENU_ITEMS: ReadonlyArray<{ action: TrayAction; label: string }> = [
   { action: 'feed', label: 'Feed' },
-  { action: 'pantry', label: 'Pantry…' },
+  { action: 'pantry', label: 'Holiday feeder…' },
   { action: 'size-s', label: 'Size: Small' },
   { action: 'size-m', label: 'Size: Medium' },
   { action: 'size-l', label: 'Size: Large' },

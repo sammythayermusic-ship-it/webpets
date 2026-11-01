@@ -117,7 +117,7 @@ export function alongArc(arcDef: Arc, dist: number): Vec {
   return bezier(arcDef.a, arcDef.c, arcDef.b, u);
 }
 
-/** The travel direction at `dist` along the arc, as a unit vector (the chord direction for a degenerate arc). */
+/** The travel direction at `dist` along the arc, as a unit vector (the chord direction for a zero-length arc). */
 export function arcHeading(arcDef: Arc, dist: number): Vec {
   const eps = Math.max(0.5, arcDef.length / ARC_SAMPLES);
   const p = alongArc(arcDef, dist - eps / 2);

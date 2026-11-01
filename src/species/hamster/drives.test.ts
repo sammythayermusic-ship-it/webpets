@@ -108,8 +108,8 @@ describe('hamster drives', () => {
     expect(travelled(lively)).toBeGreaterThan(travelled(tired) * 1.4);
   });
 
-  it('a degen covers more bedding than a zen hamster', () => {
-    const by = (p: 'zen' | 'degen'): number => travelled(run(1200, () => ({ personality: p }), 11));
-    expect(by('degen')).toBeGreaterThan(by('zen') * 1.2);
+  it('a hyper covers more bedding than a zen hamster', () => {
+    const by = (p: 'zen' | 'hyper'): number => travelled(run(1200, () => ({ personality: p }), 11));
+    expect(by('hyper')).toBeGreaterThan(by('zen') * 1.2);
   });
 });

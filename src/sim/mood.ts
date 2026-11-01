@@ -66,7 +66,7 @@ const TEMPERAMENT: Readonly<Record<Personality, { valenceBias: number; arousalBi
   zen: { valenceBias: 0.22, arousalBias: -0.12, swing: 0.7, sociability: 0.8 },
   sarcastic: { valenceBias: -0.05, arousalBias: 0.02, swing: 0.95, sociability: 0.7 },
   anxious: { valenceBias: -0.12, arousalBias: 0.16, swing: 1.25, sociability: 1.15 },
-  degen: { valenceBias: 0.08, arousalBias: 0.2, swing: 1.3, sociability: 1.3 },
+  hyper: { valenceBias: 0.08, arousalBias: 0.2, swing: 1.3, sociability: 1.3 },
 };
 
 /** Attention reaches full presence after this long with the pointer around. */

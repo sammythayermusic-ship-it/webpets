@@ -80,9 +80,9 @@ const ERRANDS: readonly Errand[] = [
     maxTicks: 44,
     urge: 0.008,
     anim: 'eat',
-    // Cosmetic only. The hopper IS the pantry, which is the $FEED store with a conservation invariant
-    // (balance + pantry + feedBurned is constant, pinned by a test), so a hamster that actually
-    // consumed seed while miming would break the economy. It mimes.
+    // Cosmetic only. The hopper IS the pantry (the holiday feeder), and the sim alone takes food from
+    // it, one meal per auto-feed; a hamster that actually consumed seed while miming would empty the
+    // feeder behind the sim's back. It mimes.
     available: (i) => i.pantryFraction > 0,
   },
   {
@@ -106,7 +106,7 @@ const PACE: Readonly<Record<Personality, { pace: number; hang: number }>> = {
   zen: { pace: 0.85, hang: 1.3 },
   sarcastic: { pace: 1.0, hang: 1.0 },
   anxious: { pace: 1.1, hang: 0.8 },
-  degen: { pace: 1.2, hang: 0.5 },
+  hyper: { pace: 1.2, hang: 0.5 },
 };
 
 /** How far toward something interesting a wander target can be pulled, at full strength. */

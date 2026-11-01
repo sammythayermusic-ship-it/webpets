@@ -11,9 +11,10 @@ what holds still, a live Three.js pass between them for what moves (the fish, th
 WebGL context. Quality bar: "it has to look like Apple made it"; realistic yet cyber; something you would leave
 open just to watch.
 
-**No crypto, no NFTs, no wallets, no blockchain, no coin — at any phase.** `$FEED` is plain in-app food (a number
-in `pet.json`). Blueprint Phases 2 and 3 are shelved. Open questions, keep the code able to go either way: how
-the app makes money, whether food costs anything, whether a pet can die for good.
+**No crypto, no NFTs, no blockchain, no coin, no currency — at any phase.** Food is free: you feed the pet
+regularly, and a free holiday feeder (`pantry` in code; one button fills it to three days) feeds it while you are
+away. There is no balance and nothing to buy. Blueprint Phases 2 and 3 are shelved. Open questions, keep the code
+able to go either way: how the app makes money, whether a pet can die for good.
 
 ## Read first
 1. `docs/AFTER-BAKEOFF.md` — the current brief: C won, a real goldfish, and the pets get a brain (talk, get to know
@@ -34,7 +35,7 @@ the app makes money, whether food costs anything, whether a pet can die for good
 - The 320×240 habitat grid is LOGICAL coordinates, not pixels: it defines behaviour, water bounds and hit regions at any art resolution. Art is pre-rendered 3D at an integer multiple of it, filtered linearly with mipmaps, and the multiple is derived from the texture, never declared. Never name an asset with an `@2x` style suffix.
 - The window scale is continuous, counted in EIGHTHS of the grid (4 to 32, i.e. 0.5×–4×; 8 is 1×; fresh installs start at 6) so every size is whole pixels in TypeScript and Rust. `src/sim/constants.ts` is the one place the formula lives; `src-tauri/src/window.rs` mirrors it and `contract_sync` (Rust) plus `tests/unit/contract-sync.test.ts` pin them together.
 - The simulation ticks at 8 Hz (`PET_FPS`); animation runs at the art's own rate and the drawn position is interpolated between ticks. Sim math uses timestamps, never elapsed timers.
-- Never handle seed phrases, keys or wallets. No blockchain dependencies, ever.
+- Never handle seed phrases or private keys. No blockchain dependencies, ever.
 - When art is missing, generate labelled placeholder PNGs at the correct size and keep going (`tools/gen_placeholders.py`). Do not ask for art.
 - Verify in the BUILT, INSTALLED `.app`, not just `tauri dev` or a browser. Packaged-only failures are the history of this repo (blank habitat, 1 fps, stale copy running).
 - No paid generation in Blender (`bl_generate_*`, `bl_image_to_3d`). Never save over a `.blend` in place; write a copy (`resave.py`, timestamped checkpoints).
@@ -84,12 +85,12 @@ Generators and tools:
   then `python3 c_finish.py <stage> assets/habitats/fish/bowl`.
 
 ## Layout
-- `src/sim/` — pure rules: hunger, reconcile, feed, pantry, mood, pet, ledger, constants, types. `src/sim/constants.ts` holds every tunable (feeding twice a day: 50-point meal, 24 h bar, death 12 h after zero).
+- `src/sim/` — pure rules: hunger, reconcile, feed (and `fillPantry`, the free holiday feeder), mood, pet, constants, types. `src/sim/constants.ts` holds every tunable (feeding twice a day: 50-point meal, 24 h bar, death 12 h after zero).
 - `src/app/` — Zustand vanilla store, persistence (store plugin), 30 s scheduler, notification decisions, `view.ts` (state to scene view), day/night.
 - `src/platform/` — `types.ts` interface; `tauri.ts` (real), `browser.ts` (mock for dev and Playwright), `geometry.ts`.
 - `src/render/` — PixiJS scene, layers, sprite player, sequencer, water bounds, food, fx, expression, tray chip, asset and manifest loading, `pacer.ts`; `live/` is the hybrid's Three.js layer (`bowlLayer.ts`: the fish, the water pass; `spine.ts`, `mapping.ts`, `shaders.ts`), loading `assets/live/fish.glb`.
 - `src/species/` — `index.ts` registry (fish, hamster); `fish/` and `hamster/` each have `behavior.ts` (pure state machine), `layout.ts`, `lines.ts` (speech pools), `module.ts`; hamster adds `terrarium.ts`.
-- `src/ui/` — DOM HUD, tray wiring, speech bubbles, pantry dialog, montage, memorial, resize grip, dev panel, hit regions, keys, `styles.css`.
+- `src/ui/` — DOM HUD, tray wiring, speech bubbles, holiday-feeder dialog (`feederDialog.ts`), montage, memorial, resize grip, dev panel, hit regions, keys, `styles.css`.
 - `src/audio/` — audio hooks only (Howler; missing files are skipped). Sound is deliberately out of scope beyond hooks.
 - `src/dev/` — dev-only diagnostics (`diag.ts`, `harness.ts`). `src/main.ts` — boot and all cross-module wiring, and the boot report.
 - `src-tauri/src/` — Rust shell: `window.rs` (size, snap, layering), `tray.rs`, `hittest.rs` (click-through poller), `commands.rs`, `clock.rs`, `identity.rs` (which binary is running), `state.rs`, `lib.rs`, `harness.rs` (cargo feature `harness` only).

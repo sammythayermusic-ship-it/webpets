@@ -324,10 +324,10 @@ def main() -> None:
                     {"name": "fx", "z": 0},
                 ],
                 # `water`/`waterShape` are still required by the manifest schema. A cage fills them
-                # with its walkable span flattened to one row -- a degenerate ellipse -- because the
+                # with its walkable span flattened to one row -- a flat ellipse -- because the
                 # movement domain the behaviour actually uses comes from the species module, not from
                 # here. Stage 4 replaces both with a proper `domain` union; until then this is the
-                # honest degenerate case rather than an invented body of water.
+                # honest flat case rather than an invented body of water.
                 "water": {"x": floor["x"], "y": stand_y, "w": floor["w"], "h": 1},
                 "waterShape": {"cx": floor["x"] + floor["w"] // 2, "cy": stand_y,
                                "rx": floor["w"] // 2, "ry": 1,

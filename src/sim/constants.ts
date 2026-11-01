@@ -12,7 +12,7 @@ export const DEFAULT_CONSTANTS: Readonly<SimConstants> = Object.freeze({
   // It used to be a 45-point meal against a 60-hour bar -- a 27-hour cycle, so a bit less than once a
   // day, and a fresh pet survived three and a half days of silence. See docs/DECISIONS.md.
   DECAY_PER_HOUR: 100 / 24,
-  FEED_COST: 25,
+  MEAL_SIZE: 25,
   FEED_GAIN: 50,
   MAX_HUNGER: 100,
   PANTRY_TRIGGER: 30, // inclusive: auto-feed fires when hunger <= 30 (Blueprint says "drops below"; identical instant with continuous decay)
@@ -39,14 +39,18 @@ export const DAY_MS = 24 * HOUR_MS;
 /** Hours before death at which the 'dying-soon' event fires. */
 export const DYING_SOON_HOURS = 6;
 
-/** Pantry is "almost empty" below this many days of runway. */
-export const PANTRY_LOW_DAYS = 2;
+/**
+ * The holiday feeder holds three days of food: three days, two meals a day, MEAL_SIZE each (150).
+ * One "Fill it up" sets the pantry to this, for free. It is the one number to change if the feeder
+ * should hold more, less, or nothing at all.
+ */
+export const PANTRY_CAPACITY = 3 * 2 * DEFAULT_CONSTANTS.MEAL_SIZE;
 
-/** Notification "pantry almost empty" only fires while hunger is below this. */
+/** The feeder is "almost empty" below this many days of food. */
+export const PANTRY_LOW_DAYS = 1;
+
+/** Notification "the feeder is almost empty" only fires while hunger is below this. */
 export const PANTRY_LOW_HUNGER_MAX = 60;
-
-/** Starting local $FEED balance for a fresh install. */
-export const STARTING_BALANCE = 1000;
 
 /** Habitat grid and window layout. */
 export const GRID_W = 320;
@@ -110,8 +114,6 @@ export function windowSizeForScale(scale: Scale): { width: number; height: numbe
 }
 
 export const PET_FPS = 8;
-/** Pantry level (in $FEED) that fills the feeder sprite completely. */
-export const PANTRY_VISUAL_MAX = 500;
 /** Window snaps to a screen edge when within this many CSS px. */
 export const SNAP_PX = 16;
 /** Rust cursor poll interval for click-through hit testing. */

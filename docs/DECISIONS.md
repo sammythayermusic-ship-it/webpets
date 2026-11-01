@@ -1601,3 +1601,34 @@ moment, a pet card, milestones). What I decided from it:
 - **The built-in library has to carry the personality alone**, because regular users will not
   have an API key (NEEDS-SAMMY). Claude lines are an optional extra through one provider
   interface, so a server can replace the Keychain key later without touching the pet.
+
+## 2026-10-31 — Free food built: the money system is gone
+
+What the notes above decided, as built, and the calls made on the way:
+
+- **Removed, not hidden**: the `Ledger` interface, `LocalLedger`, `STARTING_BALANCE`, the store's
+  `balance`, `depositPantry`/`withdrawPantry`, `dev.setBalance`, the harness `setBalance` op (and its
+  line in four scripts), and the dev panel's balance row. `feed(state, now, c)` takes no ledger and
+  fails only for a dead pet (`FeedFailure` is `'dead'`). There was no deposit op in the harness, so
+  no `fillPantry` op was added.
+- **Renamed**: `FEED_COST` -> `MEAL_SIZE` (25, the food one meal takes from the feeder);
+  `feedBurned` -> `foodEaten` (still `MEAL_SIZE` per meal, manual or automatic, so it always equals
+  `meals * MEAL_SIZE`); personality `degen` -> `hyper`, same numbers everywhere.
+- **The feeder**: `fillPantry` sets the pantry to `max(pantry, PANTRY_CAPACITY)` and reconciles at
+  `max(now, lastReconciledAt)`, so a hungry pet eats at once. Max rather than a plain set, so a fill
+  never takes away food the dev panel put in. `PANTRY_CAPACITY` is 150, three days; it replaces
+  `PANTRY_VISUAL_MAX` (500), so the feeder sprite is full exactly when the feeder is. Low is now
+  under one day, which with 25-point meals means one meal left.
+- **Saved files**: `pet.json` is version 3. `migratePetDoc` drops `balance`, renames the field and
+  the personality, and keeps the hunger anchor, the feeder, the latches and the needs (v1 still gets
+  its re-anchoring first). `graveyard.json` went to version 2 as well: its records hold pets, and
+  the old validator would have filtered every pet buried before today out of the file. The old
+  personality name lives on in one constant, `LEGACY_HYPER` in `persistence.ts`.
+- **What users see**: the FEED button lost its "25", which read as a price. The caption is
+  `FEEDER · 3 DAYS`; under a day it counts meals (`FEEDER · 1 MEAL`), because floored days would say
+  0 while a meal is left; with less than a meal, `FEEDER EMPTY`. The tray item is "Holiday feeder…"
+  (its action id stays `pantry`); the dialog (`feederDialog.ts`) shows the days of food, a free
+  FILL IT UP, and "It feeds <name> while you're away." The notification is "The feeder is almost
+  empty."; the montage says "ate from the feeder (80%, 5 meals left)".
+- **Forced death** (dev) empties the feeder instead of returning it to a wallet: a full feeder next
+  to a dead pet tells the wrong story.

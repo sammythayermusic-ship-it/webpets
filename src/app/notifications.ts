@@ -4,6 +4,9 @@ import { DEFAULT_CONSTANTS, DYING_SOON_HOURS, PANTRY_LOW_DAYS, PANTRY_LOW_HUNGER
 import { hungerAt, pantryDays } from '../sim/hunger';
 import type { NotificationLatches } from './types';
 
+/** The holiday feeder (the pantry, in code) has under PANTRY_LOW_DAYS of food left. */
+export const FEEDER_LOW_BODY = 'The feeder is almost empty.';
+
 export interface Toast {
   title: string;
   body: string;
@@ -56,7 +59,7 @@ export function decide(
     hungerAt(next, now, c) < PANTRY_LOW_HUNGER_MAX &&
     pantryLowFiredForPantry !== next.pantry
   ) {
-    toasts.push({ title: name, body: 'Pantry is almost empty.' });
+    toasts.push({ title: name, body: FEEDER_LOW_BODY });
     pantryLowFiredForPantry = next.pantry;
   }
 

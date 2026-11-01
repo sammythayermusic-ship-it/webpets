@@ -1,4 +1,4 @@
-// Hover HUD: a pill above the habitat (hunger ring + %, name + id, FEED 25, MIN) and a caption below it.
+// Hover HUD: a pill above the habitat (hunger ring + %, name + id, FEED, MIN) and a caption below it (the feeder).
 // The HUD model is derived locally from AppState (see model.ts); main.ts only drives visibility and relayout.
 
 import type { AppState } from '../app/types';
@@ -8,7 +8,7 @@ import type { HudHandle, UiDeps } from './types';
 import { button, el, rootSize, stopDrag } from './dom';
 import { nextScale } from './keys';
 import { pillStripRect, rectEquals } from './hitRegions';
-import { captionText, toHudModel, type HudModel } from './model';
+import { captionLow, captionText, toHudModel, type HudModel } from './model';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const RING_R = 4.5;
@@ -48,13 +48,13 @@ export function mountHud(root: HTMLElement, deps: UiDeps): HudHandle {
   name.append(nameText, id);
 
   const feedBtn = button(
-    'FEED 25',
+    'FEED',
     () => {
       store.getState().actions.feed();
     },
     'feed',
   );
-  feedBtn.title = 'Feed (burns 25 $FEED)';
+  feedBtn.title = 'Feed';
   // Size, on the bar rather than buried in the tray menu. The keyboard shortcuts still work, but they
   // only reach a window that has keyboard focus, and this one never takes focus.
   const smallerBtn = button(
@@ -111,10 +111,10 @@ export function mountHud(root: HTMLElement, deps: UiDeps): HudHandle {
     nameText.data = `${m.name} `;
     id.textContent = m.id;
     feedBtn.disabled = !m.canFeed;
-    feedBtn.title = m.alive ? (m.canFeed ? 'Feed (burns 25 $FEED)' : 'Not enough $FEED') : `${m.name} has died`;
+    feedBtn.title = m.alive ? 'Feed' : `${m.name} has died`;
     pill.classList.toggle('dead', !m.alive);
     caption.textContent = captionText(m);
-    caption.classList.toggle('low', m.pantry > 0 && m.pantryDays < 2);
+    caption.classList.toggle('low', captionLow(m));
     relayout();
   }
 

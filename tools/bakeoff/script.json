@@ -4,7 +4,6 @@
   "steps": [
     { "op": "force", "state": "fed" },
     { "op": "night", "value": false },
-    { "op": "setBalance", "n": 1000 },
     { "op": "pointer", "x": null },
     { "op": "sleep", "ms": 1500 },
     { "op": "record", "name": "bakeoff-20s", "seconds": 20, "fps": 60 },

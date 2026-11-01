@@ -116,9 +116,9 @@ describe('drives', () => {
     expect(travelled(lively)).toBeGreaterThan(travelled(tired) * 1.6);
   });
 
-  it('personality shows in the swimming: a degen covers more water than a zen fish', () => {
+  it('personality shows in the swimming: a hyper covers more water than a zen fish', () => {
     const by = (p: Personality): number => travelled(run(900, () => ({ personality: p }), 11));
-    expect(by('degen')).toBeGreaterThan(by('zen') * 1.25);
+    expect(by('hyper')).toBeGreaterThan(by('zen') * 1.25);
   });
 
   it('does not loop: no lag of the path repeats itself', () => {

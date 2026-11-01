@@ -1,4 +1,4 @@
-// Zustand vanilla store: the single owner of pet/balance/settings state. Every mutation goes through the pure
+// Zustand vanilla store: the single owner of pet/settings state. Every mutation goes through the pure
 // sim, then routes the returned events to notifications and to lastFeedEvent, then persists.
 import { createStore } from 'zustand/vanilla';
 import type { Layering, Platform } from '../platform/types';
@@ -6,11 +6,9 @@ import type { GraveRecord, PetState, ReconcileResult, Rng, SimEvent } from '../s
 import {
   DAY_MS,
   DEFAULT_CONSTANTS,
-  LocalLedger,
   clampScale,
-  STARTING_BALANCE,
-  depositPantry as simDeposit,
   feed as simFeed,
+  fillPantry as simFill,
   hungerAt,
   newPet as mintPet,
   reconcile,
@@ -20,7 +18,6 @@ import {
   stimulate,
   advanceNeeds,
   toGraveRecord,
-  withdrawPantry as simWithdraw,
 } from '../sim/index';
 import type { Scale } from '../sim/constants';
 import type {
@@ -84,7 +81,7 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
 
     const petDoc = (): PetDoc => {
       const s = get();
-      return { version: PET_VERSION, pet: s.pet, balance: s.balance, latches: s.latches, needs: s.needs };
+      return { version: PET_VERSION, pet: s.pet, latches: s.latches, needs: s.needs };
     };
     /** What the needs model is told about the pet's circumstances. */
     const regimeSource = (): RegimeSource => {
@@ -116,7 +113,7 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
       prev: PetState,
       r: ReconcileResult,
       at: number,
-      extra: { balance?: number; manualFeed?: boolean } = {},
+      extra: { manualFeed?: boolean } = {},
     ): void => {
       const s = get();
       const span = at - prev.lastReconciledAt;
@@ -142,7 +139,6 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
         lastFeedEvent,
         needs,
       };
-      if (extra.balance !== undefined) patch.balance = extra.balance;
       if (span > CATCH_UP_SPAN_MS) patch.recentEvents = r.events;
       set(patch);
 
@@ -150,7 +146,6 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
 
       const changed =
         r.state !== prev ||
-        extra.balance !== undefined ||
         decision.latches.pantryLowFiredForPantry !== s.latches.pantryLowFiredForPantry ||
         needs !== s.needs;
       if (changed) savePet();
@@ -189,13 +184,14 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
       const at = now();
       const s = get();
       if (!s.pet.alive) return;
-      const ledger = new LocalLedger(s.balance);
-      const w = simWithdraw(s.pet, at, ledger);
-      const pet: PetState = w.state.alive
-        ? { ...w.state, alive: false, diedAt: at, lastReconciledAt: at }
-        : w.state;
-      const events: SimEvent[] = w.state.alive ? [...w.events, { type: 'died', at }] : w.events;
-      commit(s.pet, { state: pet, events }, at, { balance: ledger.toJSON() });
+      const r = reconcile(s.pet, at);
+      // The feeder is emptied too: a pet that starved had nothing left in it, and a full feeder beside
+      // a dead pet would read as the wrong story.
+      const pet: PetState = r.state.alive
+        ? { ...r.state, pantry: 0, alive: false, diedAt: at, lastReconciledAt: at }
+        : r.state;
+      const events: SimEvent[] = r.state.alive ? [...r.events, { type: 'died', at }] : r.events;
+      commit(s.pet, { state: pet, events }, at);
     };
 
     const dev: DevActions = {
@@ -213,11 +209,6 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
       },
       setHunger,
       setPantry,
-      setBalance(n) {
-        const balance = Math.max(0, Math.floor(Number.isFinite(n) ? n : 0));
-        set({ balance });
-        savePet();
-      },
       forceState(state: ForcedState) {
         switch (state) {
           case 'fed':
@@ -307,7 +298,6 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
         const at = now();
 
         let pet: PetState;
-        let balance: number;
         let latches: NotificationLatches;
         /** A fresh pet, or one the migration rewrote: either way the file on disk is now behind. */
         let petNeedsSave = false;
@@ -318,17 +308,14 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
           // wrong instant, which is precisely the bug the dev panel exists to find.
           const migrated = migratePetDoc(loadedPet, at);
           pet = migrated.pet;
-          balance = migrated.balance;
           latches = migrated.latches;
           petNeedsSave = migrated !== loadedPet;
         } else {
           pet = mintPet(at, rng);
-          balance = STARTING_BALANCE;
           latches = freshLatches();
         }
         set({
           pet,
-          balance,
           latches,
           hydrated: true,
           hidden: false,
@@ -355,35 +342,23 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
       feed() {
         const s = get();
         const at = now();
-        const ledger = new LocalLedger(s.balance);
-        const r = simFeed(s.pet, at, ledger);
-        commit(s.pet, { state: r.state, events: r.events }, at, { balance: ledger.toJSON(), manualFeed: r.ok });
+        const r = simFeed(s.pet, at);
+        commit(s.pet, { state: r.state, events: r.events }, at, { manualFeed: r.ok });
         if (r.ok) set({ needs: stimulate(get().needs, 'feed', at, regimeNow(regimeSource(), at)) });
         return r;
       },
 
-      depositPantry(n) {
+      fillPantry() {
         const s = get();
         const at = now();
-        const ledger = new LocalLedger(s.balance);
-        const r = simDeposit(s.pet, n, at, ledger);
-        commit(s.pet, { state: r.state, events: r.events }, at, { balance: ledger.toJSON() });
-      },
-
-      withdrawPantry() {
-        const s = get();
-        const at = now();
-        const ledger = new LocalLedger(s.balance);
-        const r = simWithdraw(s.pet, at, ledger);
-        commit(s.pet, { state: r.state, events: r.events }, at, { balance: ledger.toJSON() });
+        commit(s.pet, simFill(s.pet, at), at);
       },
 
       newPet() {
         const s = get();
         const at = now();
-        const ledger = new LocalLedger(s.balance);
-        const w = simWithdraw(s.pet, at, ledger);
-        const old = w.state;
+        // Reconciled first, so a pet that died since the last tick is buried as dead.
+        const old = reconcile(s.pet, at).state;
         if (!old.alive && !graveyard.records.some((r) => sameGrave(r, old))) {
           graveyard = { ...graveyard, records: [...graveyard.records, toGraveRecord(old, at)] };
           saveGraveyard();
@@ -391,7 +366,6 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
         const pet = mintPet(at, rng);
         set({
           pet,
-          balance: ledger.toJSON(),
           latches: freshLatches(),
           hunger: derivedHunger(pet, at),
           lastFeedEvent: null,
@@ -509,7 +483,6 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
     return {
       hydrated: false,
       pet: placeholder,
-      balance: STARTING_BALANCE,
       settings: defaultSettings(),
       latches: freshLatches(),
       hidden: false,

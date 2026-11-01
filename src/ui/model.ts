@@ -5,7 +5,7 @@
 import type { AppState } from '../app/types';
 import type { HungerLabel, PetState } from '../sim/types';
 import type { SceneView, ScenePhase } from '../render/types';
-import { DEFAULT_CONSTANTS, FULL_ABOVE, PANTRY_LOW_DAYS, PANTRY_VISUAL_MAX } from '../sim/constants';
+import { DEFAULT_CONSTANTS, FULL_ABOVE, PANTRY_CAPACITY, PANTRY_LOW_DAYS } from '../sim/constants';
 import { formatAge } from './format';
 
 /**
@@ -19,11 +19,17 @@ export function labelFor(h: number): HungerLabel {
   return 'full';
 }
 
-/** (pantry / FEED_COST) * (FEED_GAIN / DECAY_PER_HOUR) / 24 */
+/** (pantry / MEAL_SIZE) * (FEED_GAIN / DECAY_PER_HOUR) / 24 */
 export function pantryDays(pantry: number): number {
   const c = DEFAULT_CONSTANTS;
   const safe = Number.isFinite(pantry) && pantry > 0 ? pantry : 0;
-  return (safe / c.FEED_COST) * (c.FEED_GAIN / c.DECAY_PER_HOUR) / 24;
+  return (safe / c.MEAL_SIZE) * (c.FEED_GAIN / c.DECAY_PER_HOUR) / 24;
+}
+
+/** Whole meals the feeder can still serve. */
+export function pantryMeals(pantry: number): number {
+  const safe = Number.isFinite(pantry) && pantry > 0 ? pantry : 0;
+  return Math.floor(safe / DEFAULT_CONSTANTS.MEAL_SIZE);
 }
 
 export interface HudModel {
@@ -33,13 +39,13 @@ export interface HudModel {
   label: HungerLabel;
   pantry: number;
   pantryDays: number;
-  balance: number;
   alive: boolean;
   age: string;
+  /** Food is free: any living pet can be fed. */
   canFeed: boolean;
 }
 
-export function toHudModel(s: Pick<AppState, 'pet' | 'hunger' | 'balance'>, now: number): HudModel {
+export function toHudModel(s: Pick<AppState, 'pet' | 'hunger'>, now: number): HudModel {
   const pet = s.pet;
   const hunger = pet.alive ? s.hunger : 0;
   const pct = Math.max(0, Math.min(100, Math.round(hunger)));
@@ -50,17 +56,27 @@ export function toHudModel(s: Pick<AppState, 'pet' | 'hunger' | 'balance'>, now:
     label: labelFor(hunger),
     pantry: pet.pantry,
     pantryDays: pantryDays(pet.pantry),
-    balance: s.balance,
     alive: pet.alive,
     age: formatAge((pet.diedAt ?? now) - pet.bornAt),
-    canFeed: pet.alive && s.balance >= DEFAULT_CONSTANTS.FEED_COST,
+    canFeed: pet.alive,
   };
 }
 
-/** `PANTRY 475 $FEED · 21 DAYS` with days = floor(pantryDays). */
+/**
+ * The holiday feeder under the habitat: `FEEDER · 3 DAYS` with days = floor(pantryDays); under a day it
+ * counts meals (`FEEDER · 1 MEAL`), and with not even one meal in it, `FEEDER EMPTY`.
+ */
 export function captionText(m: Pick<HudModel, 'pantry' | 'pantryDays'>): string {
+  const meals = pantryMeals(m.pantry);
+  if (meals === 0) return 'FEEDER EMPTY';
   const days = Math.floor(m.pantryDays);
-  return `PANTRY ${m.pantry} $FEED · ${days} ${days === 1 ? 'DAY' : 'DAYS'}`;
+  if (days === 0) return `FEEDER · ${meals} ${meals === 1 ? 'MEAL' : 'MEALS'}`;
+  return `FEEDER · ${days} ${days === 1 ? 'DAY' : 'DAYS'}`;
+}
+
+/** The caption warns (`.low`) when the feeder holds food but under PANTRY_LOW_DAYS of it. */
+export function captionLow(m: Pick<HudModel, 'pantry' | 'pantryDays'>): boolean {
+  return m.pantry > 0 && m.pantryDays < PANTRY_LOW_DAYS;
 }
 
 /** Tray tooltip: "<name> · <label> · <pct>%". */
@@ -90,7 +106,7 @@ export function toChipView(
     label: labelFor(hunger),
     alive: pet.alive,
     phase: phaseOf(pet, s.latches.deathAcknowledgedFor),
-    pantryFraction: Math.max(0, Math.min(1, pet.pantry / PANTRY_VISUAL_MAX)),
+    pantryFraction: Math.max(0, Math.min(1, pet.pantry / PANTRY_CAPACITY)),
     pantryLow: pet.pantry > 0 && days < PANTRY_LOW_DAYS,
     night: s.night,
     daylight: s.daylight,

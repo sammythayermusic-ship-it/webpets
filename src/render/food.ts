@@ -114,7 +114,7 @@ function flakeTexture(water: boolean): Texture {
  * only ever worked in water: given a cage it spawned seed 2 px BELOW the bedding line, clamped it 6 px
  * upward on the first step, settled it hovering 4 px above the animal's feet, froze its x forever
  * (the lateral-drift guard asks `bounds.inside`, which on a floor demands an exact row), and scattered
- * all six within 12 px of grid centre because the cage's degenerate ellipse made the spread collapse.
+ * all six within 12 px of grid centre because the cage's flattened ellipse made the spread collapse.
  * It looked like it worked only because the hamster measures bite range horizontally.
  */
 export function createFlakes(domain: Domain, bounds: MoveBounds): Flakes {

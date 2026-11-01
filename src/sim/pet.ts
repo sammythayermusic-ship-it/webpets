@@ -28,7 +28,7 @@ export const DEFAULT_HABITAT: Readonly<Record<Species, Habitat>> = Object.freeze
   chicken: 'brooder',
 });
 
-const PERSONALITIES: readonly Personality[] = ['sarcastic', 'anxious', 'zen', 'degen'];
+const PERSONALITIES: readonly Personality[] = ['sarcastic', 'anxious', 'zen', 'hyper'];
 
 function pick<T>(pool: readonly T[], rng: Rng, fallback: T): T {
   const i = Math.min(pool.length - 1, Math.max(0, Math.floor(rng() * pool.length)));
@@ -70,7 +70,7 @@ export function newPet(now: number, rng: Rng, opts: NewPetOptions = {}): PetStat
     hungerAtLastFed: 100,
     pantry: 0,
     meals: 0,
-    feedBurned: 0,
+    foodEaten: 0,
     alive: true,
     speciesData: {},
     lastReconciledAt: now,

@@ -1,6 +1,6 @@
 // Derived view models. Pure functions of AppState (plus a reduced-motion flag passed in by main.ts).
 import type { HungerLabel } from '../sim/types';
-import { DEFAULT_CONSTANTS, PANTRY_LOW_DAYS, PANTRY_VISUAL_MAX } from '../sim/constants';
+import { PANTRY_CAPACITY, PANTRY_LOW_DAYS } from '../sim/constants';
 import { hungerLabel, pantryDays } from '../sim/hunger';
 import { ageMs, formatAge } from '../sim/pet';
 import type { SceneView, ScenePhase } from '../render/types';
@@ -14,11 +14,10 @@ export interface HudModel {
   label: HungerLabel;
   pantry: number;
   pantryDays: number;
-  balance: number;
   alive: boolean;
   /** "3d 4h" */
   age: string;
-  /** alive && balance >= FEED_COST */
+  /** Food is free: any living pet can be fed. */
   canFeed: boolean;
 }
 
@@ -43,7 +42,7 @@ export function toSceneView(s: AppState, prefersReducedMotion: boolean): SceneVi
     label: hungerLabel(hunger),
     alive: pet.alive,
     phase: scenePhase(s),
-    pantryFraction: clamp01(pet.pantry / PANTRY_VISUAL_MAX),
+    pantryFraction: clamp01(pet.pantry / PANTRY_CAPACITY),
     pantryLow: pet.pantry > 0 && pantryDays(pet.pantry) < PANTRY_LOW_DAYS,
     night: s.night,
     daylight: s.daylight,
@@ -62,9 +61,8 @@ export function toHudModel(s: AppState): HudModel {
     label: hungerLabel(hunger),
     pantry: pet.pantry,
     pantryDays: pantryDays(pet.pantry),
-    balance: s.balance,
     alive: pet.alive,
     age: formatAge(ageMs(pet, s.actions.now())),
-    canFeed: pet.alive && s.balance >= DEFAULT_CONSTANTS.FEED_COST,
+    canFeed: pet.alive,
   };
 }

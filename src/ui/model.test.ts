@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PetState } from '../sim/types';
 import { DAY_MS, HOUR_MS } from '../sim/constants';
 import { PURE_NIGHT } from '../app/daynight';
-import { captionText, labelFor, pantryDays, phaseOf, toChipView, toHudModel, tooltipText } from './model';
+import { captionLow, captionText, labelFor, pantryDays, pantryMeals, phaseOf, toChipView, toHudModel, tooltipText } from './model';
 
 const NOW = 1_700_000_000_000;
 
@@ -19,7 +19,7 @@ function pet(over: Partial<PetState> = {}): PetState {
     hungerAtLastFed: 100,
     pantry: 475,
     meals: 3,
-    feedBurned: 75,
+    foodEaten: 75,
     alive: true,
     speciesData: {},
     lastReconciledAt: NOW,
@@ -46,22 +46,27 @@ describe('pantryDays', () => {
     expect(pantryDays(475)).toBeCloseTo(9.5, 6);
     expect(pantryDays(0)).toBe(0);
     expect(pantryDays(-10)).toBe(0);
+    expect(pantryDays(150)).toBeCloseTo(3, 9);
+  });
+  it('counts whole meals', () => {
+    expect(pantryMeals(150)).toBe(6);
+    expect(pantryMeals(24)).toBe(0);
+    expect(pantryMeals(Number.NaN)).toBe(0);
   });
 });
 
 describe('toHudModel', () => {
   it('derives pct, label, canFeed and age', () => {
-    const m = toHudModel({ pet: pet(), hunger: 87.4, balance: 1000 }, NOW);
+    const m = toHudModel({ pet: pet(), hunger: 87.4 }, NOW);
     expect(m.hungerPct).toBe(87);
     expect(m.label).toBe('full');
     expect(m.canFeed).toBe(true);
     expect(m.age).toBe('3d 4h');
     expect(m.alive).toBe(true);
   });
-  it('disables feeding below 25 and when dead', () => {
-    expect(toHudModel({ pet: pet(), hunger: 50, balance: 24 }, NOW).canFeed).toBe(false);
-    expect(toHudModel({ pet: pet(), hunger: 50, balance: 25 }, NOW).canFeed).toBe(true);
-    const dead = toHudModel({ pet: pet({ alive: false, diedAt: NOW - HOUR_MS }), hunger: 50, balance: 1000 }, NOW);
+  it('feeding is free: only a dead pet cannot be fed', () => {
+    expect(toHudModel({ pet: pet({ pantry: 0 }), hunger: 50 }, NOW).canFeed).toBe(true);
+    const dead = toHudModel({ pet: pet({ alive: false, diedAt: NOW - HOUR_MS }), hunger: 50 }, NOW);
     expect(dead.canFeed).toBe(false);
     expect(dead.hungerPct).toBe(0);
     expect(dead.label).toBe('starving');
@@ -70,12 +75,23 @@ describe('toHudModel', () => {
 });
 
 describe('captionText / tooltipText', () => {
-  it('formats the caption with floored days', () => {
-    expect(captionText({ pantry: 475, pantryDays: 9.5 })).toBe('PANTRY 475 $FEED · 9 DAYS');
-    // Two meals a day at 25 apiece: 50 in the pantry is exactly one day, and the only place the
-    // singular is reachable.
-    expect(captionText({ pantry: 50, pantryDays: 1 })).toBe('PANTRY 50 $FEED · 1 DAY');
-    expect(captionText({ pantry: 0, pantryDays: 0 })).toBe('PANTRY 0 $FEED · 0 DAYS');
+  it('formats the feeder caption: floored days, then meals, then empty', () => {
+    // A full feeder is three days; two meals a day at 25 apiece.
+    expect(captionText({ pantry: 150, pantryDays: 3 })).toBe('FEEDER · 3 DAYS');
+    expect(captionText({ pantry: 125, pantryDays: 2.5 })).toBe('FEEDER · 2 DAYS');
+    expect(captionText({ pantry: 50, pantryDays: 1 })).toBe('FEEDER · 1 DAY');
+    // Under a day the days would floor to zero while there is still a meal in it.
+    expect(captionText({ pantry: 25, pantryDays: 0.5 })).toBe('FEEDER · 1 MEAL');
+    // Less than a meal cannot feed anyone.
+    expect(captionText({ pantry: 10, pantryDays: 0.2 })).toBe('FEEDER EMPTY');
+    expect(captionText({ pantry: 0, pantryDays: 0 })).toBe('FEEDER EMPTY');
+    // Overfilled from the dev panel.
+    expect(captionText({ pantry: 475, pantryDays: 9.5 })).toBe('FEEDER · 9 DAYS');
+  });
+  it('flags a low feeder under a day of food, but not an empty one', () => {
+    expect(captionLow({ pantry: 25, pantryDays: 0.5 })).toBe(true);
+    expect(captionLow({ pantry: 50, pantryDays: 1 })).toBe(false);
+    expect(captionLow({ pantry: 0, pantryDays: 0 })).toBe(false);
   });
   it('formats the tooltip', () => {
     expect(tooltipText({ name: 'Gus', label: 'peckish', hungerPct: 42 })).toBe('Gus · peckish · 42%');
@@ -96,7 +112,7 @@ describe('phaseOf / toChipView', () => {
       false,
     );
     expect(v.label).toBe('hungry');
-    expect(v.pantryFraction).toBeCloseTo(0.05, 6);
+    expect(v.pantryFraction).toBeCloseTo(25 / 150, 6);
     expect(v.pantryLow).toBe(true);
     expect(v.asleep).toBe(true);
     expect(v.phase).toBe('alive');

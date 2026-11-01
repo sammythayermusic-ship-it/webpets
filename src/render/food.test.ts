@@ -161,7 +161,7 @@ describe('food on a floor', () => {
   });
 
   it('scatters across the bedding rather than piling on one column', () => {
-    // The bug: the spawn column comes from `halfWidthAt` on the cage's degenerate ellipse (ry: 1),
+    // The bug: the spawn column comes from `halfWidthAt` on the cage's flattened ellipse (ry: 1),
     // which collapses to 0 and falls back to the `Math.max(12, ...)` floor — so all six seeds land
     // within 12 px of grid centre, nowhere near the rest of the cage.
     const rng = seeded(5);

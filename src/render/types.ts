@@ -214,7 +214,7 @@ export interface SceneView {
   label: HungerLabel;
   alive: boolean;
   phase: ScenePhase;
-  /** pantry / PANTRY_VISUAL_MAX clamped to 0..1 */
+  /** pantry / PANTRY_CAPACITY clamped to 0..1: the feeder sprite is full when the feeder is */
   pantryFraction: number;
   /** pantry > 0 && pantryDays < PANTRY_LOW_DAYS */
   pantryLow: boolean;

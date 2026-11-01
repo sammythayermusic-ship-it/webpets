@@ -19,7 +19,6 @@ function fakeDev(): DevActions {
     skipOnNextLaunch: vi.fn(async () => undefined),
     setHunger: vi.fn(),
     setPantry: vi.fn(),
-    setBalance: vi.fn(),
     forceState: vi.fn(),
     simulateAbsence: vi.fn(() => []),
     resetClock: vi.fn(),
@@ -35,8 +34,7 @@ function fakeActions(): AppActions {
     tick: vi.fn(),
     now: vi.fn(() => Date.now()),
     feed: vi.fn((): FeedResult => ({ ok: true, state: fresh(), events: [] })),
-    depositPantry: vi.fn(),
-    withdrawPantry: vi.fn(),
+    fillPantry: vi.fn(),
     newPet: vi.fn(),
     acknowledgeDeath: vi.fn(),
     addSpeciesData: vi.fn(),
@@ -59,7 +57,6 @@ function fakeState(actions: AppActions): AppState {
   return {
     hydrated: true,
     pet: fresh(),
-    balance: 1000,
     settings: defaultSettings(),
     latches: { pantryLowFiredForPantry: null, deathAcknowledgedFor: null },
     hidden: false,
@@ -162,13 +159,13 @@ describe('harness runCommand', () => {
     expect(r.at).toBe(new Date(h.io.now()).toISOString());
     const data = r.data as Record<string, unknown>;
     expect(Object.keys(data).sort()).toEqual(
-      ['balance', 'drives', 'fps', 'geometry', 'hasFocus', 'hidden', 'hunger', 'needs', 'night', 'pet', 'present', 'scene', 'settings', 'visibility'].sort(),
+      ['drives', 'fps', 'geometry', 'hasFocus', 'hidden', 'hunger', 'needs', 'night', 'pet', 'present', 'scene', 'settings', 'visibility'].sort(),
     );
     expect(data['visibility']).toBe('no-document'); // vitest runs in node here
     expect(data['fps']).toBe(60);
     expect(data['geometry']).toEqual(geometry);
     expect(data['hunger']).toBe(100);
-    expect(data['balance']).toBe(1000);
+    expect('balance' in data).toBe(false);
     expect((data['scene'] as DebugState).petAnim).toBe('idle');
   });
 
@@ -208,7 +205,6 @@ describe('harness runCommand', () => {
     await runCommand({ op: 'skip', ms: 3600_000 }, h.ctx, h.io);
     await runCommand({ op: 'setHunger', n: 20 }, h.ctx, h.io);
     await runCommand({ op: 'setPantry', n: 500 }, h.ctx, h.io);
-    await runCommand({ op: 'setBalance', n: 42 }, h.ctx, h.io);
     await runCommand({ op: 'force', state: 'hungry' }, h.ctx, h.io);
     await runCommand({ op: 'night', value: true }, h.ctx, h.io);
     await runCommand({ op: 'night', value: null }, h.ctx, h.io);
@@ -224,7 +220,6 @@ describe('harness runCommand', () => {
     expect(h.actions.dev.skip).toHaveBeenCalledWith(3600_000);
     expect(h.actions.dev.setHunger).toHaveBeenCalledWith(20);
     expect(h.actions.dev.setPantry).toHaveBeenCalledWith(500);
-    expect(h.actions.dev.setBalance).toHaveBeenCalledWith(42);
     expect(h.actions.dev.forceState).toHaveBeenCalledWith('hungry');
     expect(h.actions.dev.setNightOverride).toHaveBeenNthCalledWith(1, true);
     expect(h.actions.dev.setNightOverride).toHaveBeenNthCalledWith(2, null);

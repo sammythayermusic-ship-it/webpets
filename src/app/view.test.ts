@@ -22,11 +22,16 @@ describe('view + daynight', () => {
     const a = store.getState().actions;
     await a.boot();
     a.setDayNight('day');
-    a.depositPantry(40);
+    a.fillPantry();
     let v = toSceneView(store.getState(), false);
     expect(v.phase).toBe('alive');
     expect(v.label).toBe('full');
-    expect(v.pantryFraction).toBeCloseTo(0.08, 9);
+    // The feeder sprite is full exactly when the feeder is.
+    expect(v.pantryFraction).toBe(1);
+    expect(v.pantryLow).toBe(false);
+    a.dev.setPantry(40);
+    v = toSceneView(store.getState(), false);
+    expect(v.pantryFraction).toBeCloseTo(40 / 150, 9);
     expect(v.pantryLow).toBe(true);
     expect(v.asleep).toBe(false);
     a.dev.setNightOverride(true);
@@ -55,10 +60,10 @@ describe('view + daynight', () => {
     expect(v.pantryLow).toBe(true);
     a.acknowledgeDeath();
     expect(toSceneView(store.getState(), false).phase).toBe('memorial');
-    a.dev.setBalance(5);
-    a.newPet(); // returns the 15 left in the pantry -> balance 20 < FEED_COST
-    expect(store.getState().balance).toBe(20);
-    expect(toHudModel(store.getState()).canFeed).toBe(false);
+    a.newPet();
+    // Food is free, so a new pet can always be fed; its feeder starts empty.
+    expect(toHudModel(store.getState()).canFeed).toBe(true);
+    expect(toHudModel(store.getState()).pantry).toBe(0);
     expect(toSceneView(store.getState(), false).phase).toBe('alive');
   });
 

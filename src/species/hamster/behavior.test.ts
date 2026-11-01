@@ -142,7 +142,7 @@ describe('hamster behavior', () => {
     expect(atSite(run(4000, () => input({ pantryFraction: 0.5 }, full)), hopper)).toBe(true);
   });
 
-  it('never consumes the pantry, because the hopper is the $FEED store', () => {
+  it('never consumes the pantry, because the hopper is the holiday feeder', () => {
     // Cheek-stuffing is cosmetic by design. The behaviour has no way to spend pantry -- the only
     // channel out of a tick is speciesDelta -- so what this pins is that it never invents one.
     const rng = seeded(22);

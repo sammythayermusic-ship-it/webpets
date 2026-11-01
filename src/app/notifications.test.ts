@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decide } from './notifications';
+import { decide, FEEDER_LOW_BODY } from './notifications';
 import { reconcile } from '../sim/reconcile';
 import { B, H, fresh } from '../sim/test-helpers';
 import type { NotificationLatches } from './types';
@@ -34,19 +34,20 @@ describe('notifications.decide', () => {
     expect(d.toasts).toEqual([]);
   });
 
-  it('pantry-low fires once per pantry value while hunger < 60 and resets when runway >= 2 days', () => {
+  it('feeder-low fires once per pantry value while hunger < 60 and resets at a day of food or more', () => {
     const base = fresh();
     const now = B + 12 * H; // hunger 50
     const low: PetState = { ...base, pantry: 40 };
     const d1 = decide(base, low, [], now, latches0());
-    expect(d1.toasts).toEqual([{ title: base.name, body: 'Pantry is almost empty.' }]);
+    expect(FEEDER_LOW_BODY).toBe('The feeder is almost empty.');
+    expect(d1.toasts).toEqual([{ title: base.name, body: FEEDER_LOW_BODY }]);
     expect(d1.latches.pantryLowFiredForPantry).toBe(40);
 
     const d2 = decide(low, low, [], now + 1000, d1.latches);
     expect(d2.toasts).toEqual([]);
     expect(d2.latches.pantryLowFiredForPantry).toBe(40);
 
-    const refilled: PetState = { ...low, pantry: 100 };
+    const refilled: PetState = { ...low, pantry: 150 };
     const d3 = decide(low, refilled, [], now + 2000, d2.latches);
     expect(d3.toasts).toEqual([]);
     expect(d3.latches.pantryLowFiredForPantry).toBeNull();
@@ -62,7 +63,14 @@ describe('notifications.decide', () => {
     expect(d5.latches.pantryLowFiredForPantry).toBe(15);
   });
 
-  it('pantry-low needs pantry > 0, hunger < 60 and a living pet', () => {
+  it('a day of food is not low: 50 (two meals) stays quiet, 25 (one) fires', () => {
+    const base = fresh();
+    const now = B + 12 * H; // hunger 50
+    expect(decide(base, { ...base, pantry: 50 }, [], now, latches0()).toasts).toEqual([]);
+    expect(decide(base, { ...base, pantry: 25 }, [], now, latches0()).toasts).toHaveLength(1);
+  });
+
+  it('feeder-low needs pantry > 0, hunger < 60 and a living pet', () => {
     const base = fresh();
     const empty: PetState = { ...base, pantry: 0 };
     expect(decide(base, empty, [], B + 12 * H, latches0()).toasts).toEqual([]);

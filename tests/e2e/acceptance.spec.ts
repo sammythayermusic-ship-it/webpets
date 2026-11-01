@@ -53,7 +53,7 @@ class DevPanel {
     for (let i = 0; i < times; i += 1) await b.click();
   }
 
-  async setNumber(label: 'HUNGER' | 'PANTRY' | 'BALANCE', value: number): Promise<void> {
+  async setNumber(label: 'HUNGER' | 'PANTRY', value: number): Promise<void> {
     const row = this.row(label);
     await row.locator('input').fill(String(value));
     await row.getByRole('button', { name: 'APPLY', exact: true }).click();
@@ -93,13 +93,13 @@ test('Phase 0 acceptance walk-through', async ({ page }) => {
     await hoverBowl();
     await expect(pct).toHaveText('100%');
     await expect(ring).toHaveClass(/ring-full/);
-    await expect(caption).toHaveText('PANTRY 0 $FEED · 0 DAYS');
+    await expect(caption).toHaveText('FEEDER EMPTY');
     firstPetId = (await petId.textContent()) ?? '';
     expect(firstPetId).toMatch(/^#\d+$/);
   });
 
-  await test.step('FEED deducts 25, flakes fall, the fish eats and speaks', async () => {
-    const feed = pill.getByRole('button', { name: 'FEED 25', exact: true });
+  await test.step('FEED is free: flakes fall, the fish eats and speaks', async () => {
+    const feed = pill.getByRole('button', { name: 'FEED', exact: true });
     await expect(feed).toBeEnabled();
     await feed.click();
     // The 'fed' speech line only fires on a scene `bite`, i.e. once the fish has reached a flake.
@@ -107,12 +107,12 @@ test('Phase 0 acceptance walk-through', async ({ page }) => {
     await expect.poll(async () => {
       const raw = await page.evaluate(() => localStorage.getItem('webpets:pet.json'));
       if (raw === null) return null;
-      const doc = JSON.parse(raw) as { balance: number; pet: { meals: number; feedBurned: number } };
-      return { balance: doc.balance, meals: doc.pet.meals, feedBurned: doc.pet.feedBurned };
-    }).toEqual({ balance: 975, meals: 1, feedBurned: 25 });
+      const doc = JSON.parse(raw) as { pet: { meals: number; foodEaten: number } };
+      return { hasBalance: 'balance' in doc, meals: doc.pet.meals, foodEaten: doc.pet.foodEaten };
+    }).toEqual({ hasBalance: false, meals: 1, foodEaten: 25 });
     await dev.open();
-    await expect(dev.status).toContainText('balance 975');
     await expect(dev.status).toContainText('meals 1');
+    await expect(dev.status).not.toContainText('balance');
     await dev.close();
     await page.waitForTimeout(2 * BEAT_MS); // flakes dissolving / fish back to idle
   });
@@ -144,7 +144,7 @@ test('Phase 0 acceptance walk-through', async ({ page }) => {
     await expect(memorial).toBeVisible();
     await expect(memorial).toContainText('In memory of');
     await expect(memorial).toContainText('MEALS 1');
-    await expect(pill.getByRole('button', { name: 'FEED 25', exact: true })).toBeDisabled();
+    await expect(pill.getByRole('button', { name: 'FEED', exact: true })).toBeDisabled();
     await page.waitForTimeout(BEAT_MS); // belly-up fish + card
   });
 
@@ -171,13 +171,35 @@ test('Phase 0 acceptance walk-through', async ({ page }) => {
     await page.waitForTimeout(BEAT_MS);
   });
 
-  await test.step('1000 in the pantry, 10 days: alive, pantry 525, 19 auto-feeds', async () => {
+  await test.step('the holiday feeder: free, fills to three days', async () => {
+    await page.evaluate(() => window.__webpetsMock?.emitTray('pantry'));
+    const feeder = page.locator('.feeder-dialog');
+    await expect(feeder).toBeVisible();
+    await expect(feeder).toContainText('Holiday feeder');
+    await expect(feeder).toContainText('EMPTY');
+    await expect(feeder).toContainText("while you're away.");
+    const fill = feeder.getByRole('button', { name: 'FILL IT UP', exact: true });
+    await expect(fill).toBeEnabled();
+    await fill.click();
+    await expect(feeder).toContainText('3 DAYS OF FOOD');
+    await expect(fill).toBeDisabled();
+    await page.waitForTimeout(BEAT_MS);
+    await feeder.getByRole('button', { name: 'CLOSE', exact: true }).click();
+    await expect(feeder).toBeHidden();
+    await hoverBowl();
+    await expect(caption).toHaveText('FEEDER · 3 DAYS');
+    await dev.open();
+    await expect(dev.status).toContainText('pantry 150');
+    await dev.close();
+  });
+
+  await test.step('1000 in the pantry (dev), 10 days: alive, pantry 525, 19 auto-feeds', async () => {
     await dev.open();
     // Dry run first: the event list for exactly this scenario.
     await dev.row('SIM').getByRole('button').click();
     const output = dev.panel.locator('pre');
     await expect(output).toContainText('over 10d with 1000 in the pantry');
-    const lines = ((await output.textContent()) ?? '').split('\n').filter((l) => l.includes('ate from the pantry'));
+    const lines = ((await output.textContent()) ?? '').split('\n').filter((l) => l.includes('ate from the feeder'));
     expect(lines).toHaveLength(19);
 
     // Then for real. Nineteen meals, not eight: the first lands on the hungry crossing at 16.8 h and
@@ -190,7 +212,7 @@ test('Phase 0 acceptance walk-through', async ({ page }) => {
     await expect(dev.status).toContainText('pantry 525');
     await dev.close();
     await hoverBowl();
-    await expect(caption).toHaveText('PANTRY 525 $FEED · 10 DAYS');
+    await expect(caption).toHaveText('FEEDER · 10 DAYS');
     await expect(pct).not.toHaveText('0%');
     await page.waitForTimeout(BEAT_MS);
   });
@@ -206,8 +228,8 @@ test('Phase 0 acceptance walk-through', async ({ page }) => {
     const montage = page.locator('.montage');
     await expect(montage).toBeVisible();
     await expect(montage).toContainText('While you were gone');
-    // Lines land one per 700 ms; three days at two meals a day is six pantry meals.
-    await expect(montage.locator('li').filter({ hasText: 'ate from the pantry' })).toHaveCount(6, { timeout: 12_000 });
+    // Lines land one per 700 ms; three days at two meals a day is six meals from the feeder.
+    await expect(montage.locator('li').filter({ hasText: 'ate from the feeder' })).toHaveCount(6, { timeout: 12_000 });
     await page.waitForTimeout(BEAT_MS);
     await montage.getByRole('button', { name: 'CONTINUE', exact: true }).click();
     await expect(montage).toBeHidden();

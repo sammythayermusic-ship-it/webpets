@@ -11,17 +11,16 @@ import type { Daylight } from './daynight';
 export type DayNightMode = 'auto' | 'day' | 'night';
 
 export interface NotificationLatches {
-  /** Pantry value when "Pantry is almost empty" last fired; null when it may fire again. */
+  /** Pantry value when "The feeder is almost empty" last fired; null when it may fire again. */
   pantryLowFiredForPantry: number | null;
   /** Pet id whose death card the user has dismissed; the scene then shows the memorial instead of the dead pet. */
   deathAcknowledgedFor: string | null;
 }
 
+/** `pet.json` as this build writes it. Versions 1 and 2 are read as `LegacyPetDoc` and upgraded by `migratePetDoc`. */
 export interface PetDoc {
-  /** 1 predates the twice-a-day hunger clock; see `migratePetDoc`. Always written as 2. */
-  version: 1 | 2;
+  version: 3;
   pet: PetState;
-  balance: number;
   latches: NotificationLatches;
   /**
    * Energy, curiosity, comfort and stress (`src/sim/needs.ts`). Optional on disk: every pet saved
@@ -64,8 +63,9 @@ export interface SettingsDoc {
   pendingSkipMs: number;
 }
 
+/** Version 2 renamed the buried pets' `feedBurned` to `foodEaten`; version 1 records are upgraded on load. */
 export interface GraveyardDoc {
-  version: 1;
+  version: 2;
   records: GraveRecord[];
 }
 
@@ -85,10 +85,9 @@ export interface DevActions {
   skipOnNextLaunch(ms: number): Promise<void>;
   /** reconcile, then hungerAtLastFed = clamp(h), lastFedAt = now, lastReconciledAt = now - 1. */
   setHunger(h: number): void;
-  /** reconcile, set pantry = max(0, floor(n)) bypassing the ledger, reconcile again (may auto-feed at now). */
+  /** reconcile, set pantry = max(0, floor(n)) (may exceed PANTRY_CAPACITY; dev only), reconcile again (may auto-feed at now). */
   setPantry(n: number): void;
-  setBalance(n: number): void;
-  /** fed = setHunger(100); hungry = setHunger(20)+setPantry(0); starving = setHunger(0)+setPantry(0); dead = withdraw pantry, alive=false, diedAt=now; asleep = night override on. */
+  /** fed = setHunger(100); hungry = setHunger(20)+setPantry(0); starving = setHunger(0)+setPantry(0); dead = empty the feeder, alive=false, diedAt=now; asleep = night override on. */
   forceState(s: ForcedState): void;
   /** Pure dry run: reconcile(withPantry(pet, pantry), now + days) events. Does not mutate the store. */
   simulateAbsence(days: number, pantry: number): SimEvent[];
@@ -109,10 +108,11 @@ export interface AppActions {
   boot(): Promise<void>;
   tick(): void;
   now(): number;
+  /** Free; fails only when the pet is dead. */
   feed(): FeedResult;
-  depositPantry(n: number): void;
-  withdrawPantry(): void;
-  /** Withdraws the pantry, buries the dead pet in the graveyard, mints a fresh one; balance is kept. */
+  /** Fills the holiday feeder to PANTRY_CAPACITY, for free; a hungry pet eats from it at once. No-op for a dead pet. */
+  fillPantry(): void;
+  /** Reconciles, buries the pet if it is dead, mints a fresh one (its feeder starts empty). */
   newPet(): void;
   /** Marks the current dead pet's card as seen so the scene switches to the memorial. */
   acknowledgeDeath(): void;
@@ -144,7 +144,6 @@ export interface AppActions {
 export interface AppState {
   hydrated: boolean;
   pet: PetState;
-  balance: number;
   settings: SettingsDoc;
   latches: NotificationLatches;
   /** Runtime: window minimized to the tray chip. */

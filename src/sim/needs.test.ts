@@ -78,17 +78,17 @@ describe('energy', () => {
 });
 
 describe('curiosity', () => {
-  it('rises to full in two quiet hours for a baseline personality and faster for a degen', () => {
+  it('rises to full in two quiet hours for a baseline personality and faster for a hyper', () => {
     const n = { ...defaultNeeds(B), curiosity: { value: 0, at: B } };
     expect(curiosityAt(n, B + CURIOSITY_TO_FULL_MS, { ...awake('zen'), personality: 'zen' })).toBeCloseTo(0.6, 9);
-    expect(curiosityAt(n, B + CURIOSITY_TO_FULL_MS, awake('degen'))).toBe(1);
-    expect(curiosityAt(n, B + CURIOSITY_TO_FULL_MS / 1.6, awake('degen'))).toBeCloseTo(1, 9);
+    expect(curiosityAt(n, B + CURIOSITY_TO_FULL_MS, awake('hyper'))).toBe(1);
+    expect(curiosityAt(n, B + CURIOSITY_TO_FULL_MS / 1.6, awake('hyper'))).toBeCloseTo(1, 9);
   });
 
   it('does not build while asleep or while starving', () => {
     const n = { ...defaultNeeds(B), curiosity: { value: 0.2, at: B } };
-    expect(curiosityAt(n, B + 10 * H, asleep('degen'))).toBe(0.2);
-    expect(curiosityAt(n, B + 1 * H, { ...awake('degen'), hungerLabel: 'starving' })).toBeCloseTo(0.2 + 0.5 * 1.6 * 0.3, 9);
+    expect(curiosityAt(n, B + 10 * H, asleep('hyper'))).toBe(0.2);
+    expect(curiosityAt(n, B + 1 * H, { ...awake('hyper'), hungerLabel: 'starving' })).toBeCloseTo(0.2 + 0.5 * 1.6 * 0.3, 9);
   });
 
   it('a pointer arrival spends half of it; a tap and a meal spend less', () => {
@@ -126,7 +126,7 @@ describe('comfort', () => {
     expect(comfortTarget(0, awake('anxious'))).toBeCloseTo(0.65, 9);
     expect(comfortTarget(0, { ...awake('anxious'), hungerLabel: 'starving' })).toBeCloseTo(0, 9);
     expect(comfortTarget(1, awake('zen'))).toBeCloseTo(0.5, 9);
-    expect(comfortTarget(0, { ...awake('degen'), present: true })).toBeCloseTo(0.6 + 0.25 + 0.13, 9);
+    expect(comfortTarget(0, { ...awake('hyper'), present: true })).toBeCloseTo(0.6 + 0.25 + 0.13, 9);
     expect(comfortTarget(0, asleep('sarcastic'))).toBeCloseTo(0.55 + 0.25 + 0.1, 9);
   });
 
@@ -184,7 +184,7 @@ describe('drives', () => {
     expect(rested).toBeGreaterThan(tired);
     expect(tired).toBeGreaterThan(0);
     expect(drivesOf(n, B, ctx({ hungerLabel: 'starving' })).activity).toBeLessThan(rested * 0.5);
-    expect(drivesOf(n, B, ctx({ personality: 'degen' })).activity).toBeGreaterThan(drivesOf(n, B, ctx({ personality: 'zen' })).activity);
+    expect(drivesOf(n, B, ctx({ personality: 'hyper' })).activity).toBeGreaterThan(drivesOf(n, B, ctx({ personality: 'zen' })).activity);
   });
 
   it('naps when exhausted and quiet, and keeps napping until half rested', () => {

@@ -55,12 +55,11 @@ its own so the next command lands inside the clip.
 
 | op | args | does |
 |---|---|---|
-| `state` | – | `{ visibility, hasFocus, fps, scene: debugState(), hunger, night, hidden, balance, pet, settings, geometry, needs, present, drives }` |
+| `state` | – | `{ visibility, hasFocus, fps, scene: debugState(), hunger, night, hidden, pet, settings, geometry, needs, present, drives }` |
 | `feed` | – | `actions.feed()`; data is the `FeedResult` |
 | `skip` | `{ ms }` | `dev.skip(ms)`: moves the pet's clock forward |
 | `setHunger` | `{ n }` | `dev.setHunger(n)` |
 | `setPantry` | `{ n }` | `dev.setPantry(n)` |
-| `setBalance` | `{ n }` | `dev.setBalance(n)` |
 | `force` | `{ state }` | `dev.forceState`: `fed` `hungry` `starving` `dead` `asleep` |
 | `night` | `{ value: true\|false\|null }` | `dev.setNightOverride`; `null` follows settings again |
 | `scale` | `{ steps }` | `actions.setScale(steps)` (eighths of the grid, 6–32) |

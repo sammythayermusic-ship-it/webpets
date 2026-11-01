@@ -84,7 +84,7 @@ fn item(app: &AppHandle, id: &str, text: &str) -> tauri::Result<MenuItem<Wry>> {
 
 fn build_menu(app: &AppHandle) -> tauri::Result<TrayMenu> {
     let feed = item(app, ACTION_FEED, "Feed")?;
-    let pantry = item(app, ACTION_PANTRY, "Pantry…")?;
+    let pantry = item(app, ACTION_PANTRY, "Holiday feeder…")?;
     let size_s = check(app, ACTION_SIZE_S, "Small", false)?;
     let size_m = check(app, ACTION_SIZE_M, "Medium", true)?;
     let size_l = check(app, ACTION_SIZE_L, "Large", false)?;

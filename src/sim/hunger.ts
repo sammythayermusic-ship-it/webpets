@@ -33,8 +33,8 @@ export function zeroAt(state: PetState, c: SimConstants = DEFAULT_CONSTANTS): nu
 }
 
 /**
- * Dead: diedAt. Alive: simulate auto-feeds from `now` until the pantry can no longer pay, then zeroAt + 24 h.
- * Always a number (the pantry is finite).
+ * Dead: diedAt. Alive: simulate auto-feeds from `now` until the feeder holds less than a meal, then zeroAt +
+ * DEATH_AFTER_ZERO_HOURS. Always a number (the feeder is finite).
  */
 export function projectedDeathAt(state: PetState, now: number, c: SimConstants = DEFAULT_CONSTANTS): number {
   if (!state.alive) return state.diedAt ?? now;
@@ -42,12 +42,12 @@ export function projectedDeathAt(state: PetState, now: number, c: SimConstants =
   if (!upToNow.alive) return upToNow.diedAt ?? now;
   const end = reconcile(upToNow, Number.MAX_SAFE_INTEGER, c).state;
   if (end.diedAt !== undefined) return end.diedAt;
-  // Unreachable with a positive FEED_COST; fall back to the pantry-less projection.
+  // Unreachable with a positive MEAL_SIZE; fall back to the pantry-less projection.
   return deathFromZero(zeroAt(upToNow, c), c);
 }
 
-/** Days of runway the pantry buys: (pantry / FEED_COST) * (FEED_GAIN / DECAY_PER_HOUR) / 24. */
+/** Days of food in the feeder: (pantry / MEAL_SIZE) * (FEED_GAIN / DECAY_PER_HOUR) / 24. */
 export function pantryDays(pantry: number, c: SimConstants = DEFAULT_CONSTANTS): number {
   if (!(pantry > 0)) return 0;
-  return ((pantry / c.FEED_COST) * (c.FEED_GAIN / c.DECAY_PER_HOUR)) / 24;
+  return ((pantry / c.MEAL_SIZE) * (c.FEED_GAIN / c.DECAY_PER_HOUR)) / 24;
 }

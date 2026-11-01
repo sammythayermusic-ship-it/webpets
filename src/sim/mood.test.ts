@@ -26,7 +26,7 @@ function input(over: Partial<MoodInput> = {}): MoodInput {
   };
 }
 
-const PERSONALITIES: Personality[] = ['zen', 'sarcastic', 'anxious', 'degen'];
+const PERSONALITIES: Personality[] = ['zen', 'sarcastic', 'anxious', 'hyper'];
 
 describe('the shape of the model', () => {
   it('keeps valence and arousal in range for every combination it can be asked about', () => {
@@ -146,7 +146,7 @@ describe('attention', () => {
 
 describe('sleep', () => {
   it('is calm whatever it was doing a moment ago, and stops investigating', () => {
-    const wiredThenAsleep = moodOf(input({ hunger: 100, sinceFedMs: 0, attention: 1, asleep: true, personality: 'degen' }));
+    const wiredThenAsleep = moodOf(input({ hunger: 100, sinceFedMs: 0, attention: 1, asleep: true, personality: 'hyper' }));
     expect(wiredThenAsleep.arousal).toBeLessThanOrEqual(0.18);
     expect(wiredThenAsleep.label).toBe('sleepy');
     expect(wiredThenAsleep.interest).toBe(0);
@@ -158,9 +158,9 @@ describe('personality', () => {
     const base = { hunger: 55, label: hungerLabel(55) } as const;
     const zen = moodOf(input({ ...base, personality: 'zen' }));
     const anxious = moodOf(input({ ...base, personality: 'anxious' }));
-    const degen = moodOf(input({ ...base, personality: 'degen' }));
+    const hyper = moodOf(input({ ...base, personality: 'hyper' }));
     expect(zen.valence).toBeGreaterThan(anxious.valence);
-    expect(zen.arousal).toBeLessThan(degen.arousal);
+    expect(zen.arousal).toBeLessThan(hyper.arousal);
   });
 
   it('changes how far the mood MOVES, which is what makes them feel different over time', () => {
@@ -171,7 +171,7 @@ describe('personality', () => {
       return good.valence - bad.valence;
     };
     expect(swing('zen')).toBeLessThan(swing('anxious'));
-    expect(swing('zen')).toBeLessThan(swing('degen'));
+    expect(swing('zen')).toBeLessThan(swing('hyper'));
   });
 });
 
@@ -194,7 +194,7 @@ describe('moodAnim', () => {
   });
 
   it('reaches every one of them under conditions the app can actually produce', () => {
-    expect(moodAnim(moodOf(input({ hunger: 100, sinceFedMs: 0, attention: 1, personality: 'degen' })))).toBe('excited');
+    expect(moodAnim(moodOf(input({ hunger: 100, sinceFedMs: 0, attention: 1, personality: 'hyper' })))).toBe('excited');
     expect(moodAnim(moodOf(input({ hunger: 80, attention: 0.7, sinceInteractionMs: 0, personality: 'zen' })))).toBe('curious');
     expect(moodAnim(moodOf(input({ hunger: 90, sinceFedMs: 30 * MINUTE_MS, attention: 0, personality: 'zen' })))).toBe('happy');
   });

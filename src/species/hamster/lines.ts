@@ -124,7 +124,7 @@ export const HAMSTER_LINES: Record<Personality, Record<LinePool, readonly string
       'Welcome back. There is room.',
     ],
   },
-  degen: {
+  hyper: {
     idle: [
       'Nine kilometres. Zero destination. LFG.',
       'The wheel only goes up.',

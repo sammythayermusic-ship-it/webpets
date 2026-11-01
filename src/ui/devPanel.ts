@@ -132,7 +132,7 @@ export function mountDevPanel(root: HTMLElement, deps: UiDeps): DevPanelHandleEx
     button('+3D', () => dev().skip(3 * DAY_MS)),
   );
 
-  // Set hunger / pantry / balance -----------------------------------------
+  // Set hunger / pantry (the feeder; any amount, even past capacity) ------
   const hungerInput = numberInput('100', '0', '100');
   const hungerRow = row(
     'HUNGER',
@@ -151,16 +151,6 @@ export function mountDevPanel(root: HTMLElement, deps: UiDeps): DevPanelHandleEx
       if (Number.isFinite(n)) dev().setPantry(n);
     }),
   );
-  const balanceInput = numberInput('1000', '0');
-  const balanceRow = row(
-    'BALANCE',
-    balanceInput,
-    button('APPLY', () => {
-      const n = Number(balanceInput.value);
-      if (Number.isFinite(n)) dev().setBalance(n);
-    }),
-  );
-
   // Force state -----------------------------------------------------------
   const forceSelect = el('select');
   const FORCED: readonly ForcedState[] = ['fed', 'hungry', 'starving', 'dead', 'asleep'];
@@ -217,8 +207,9 @@ export function mountDevPanel(root: HTMLElement, deps: UiDeps): DevPanelHandleEx
   // Simulate absence / skip on next launch / reset clock -----------------
   const output = el('pre');
   output.textContent = '(dry-run output appears here)';
-  // 1000, not 500: at two meals a day ten days costs 475, so 500 would finish the run on its last coin.
-  // The dry run is for seeing the shape of an absence, not for watching the pantry hit zero.
+  // 1000, not 500: at two meals a day ten days takes 475, so 500 would finish the run on its last meal.
+  // The dry run is for seeing the shape of an absence, not for watching the feeder run dry. A feeder the
+  // user fills holds three days (PANTRY_CAPACITY); this is a dev-sized one.
   const SIM_PANTRY = 1000;
   const simulateBtn = button(`SIMULATE 10-DAY ABSENCE WITH ${SIM_PANTRY} IN PANTRY`, () => {
     const s = store.getState();
@@ -259,7 +250,6 @@ export function mountDevPanel(root: HTMLElement, deps: UiDeps): DevPanelHandleEx
     skipRow,
     hungerRow,
     pantryRow,
-    balanceRow,
     forceRow,
     nightRow,
     speciesRow,
@@ -282,7 +272,7 @@ export function mountDevPanel(root: HTMLElement, deps: UiDeps): DevPanelHandleEx
       buildLine,
       `now ${formatClock(now)} (offset ${formatOffset(s.settings.devClockOffsetMs)})`,
       `${pet.name} ${pet.id} · ${pet.alive ? 'alive' : 'dead'} · ${pet.personality} · ${pet.rarity}`,
-      `hunger ${hunger.toFixed(1)}% ${labelFor(hunger)} · pantry ${pet.pantry} · balance ${s.balance} · meals ${pet.meals}`,
+      `hunger ${hunger.toFixed(1)}% ${labelFor(hunger)} · pantry ${pet.pantry} · meals ${pet.meals}`,
       `night ${s.night ? 'on' : 'off'} (override ${s.nightOverride === null ? 'none' : s.nightOverride ? 'night' : 'day'}) · scale ${s.settings.scale}x · ${s.hidden ? 'hidden' : 'shown'}`,
       needsLine(s, now),
     ];
@@ -294,7 +284,6 @@ export function mountDevPanel(root: HTMLElement, deps: UiDeps): DevPanelHandleEx
   function seedInputs(s: AppState): void {
     hungerInput.value = String(Math.round(s.pet.alive ? s.hunger : 0));
     pantryInput.value = String(s.pet.pantry);
-    balanceInput.value = String(s.balance);
   }
 
   function tickFps(): void {

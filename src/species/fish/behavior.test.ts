@@ -394,7 +394,7 @@ describe('a goldfish left to itself (step C)', () => {
   });
 
   it('turns to look at you when you arrive, sooner if it is that kind of fish', () => {
-    const firstLook = (personality: 'zen' | 'degen' | 'sarcastic'): number => {
+    const firstLook = (personality: 'zen' | 'hyper' | 'sarcastic'): number => {
       const b = createFishBehavior();
       const rng = seeded(3);
       for (let i = 0; i < 60; i += 1) b.step(input({ personality }, rng));
@@ -405,7 +405,7 @@ describe('a goldfish left to itself (step C)', () => {
       }
       return Infinity;
     };
-    expect(firstLook('degen')).toBeLessThan(firstLook('zen'));
+    expect(firstLook('hyper')).toBeLessThan(firstLook('zen'));
     expect(firstLook('zen')).toBeLessThan(Infinity);
     // and a look is a stop: it holds still for a second or two while it looks
     const b = createFishBehavior();

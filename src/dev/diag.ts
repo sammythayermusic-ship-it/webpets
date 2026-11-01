@@ -66,7 +66,6 @@ export function installDiag(ctx: DiagContext): void {
       night: s.night,
       hidden: s.hidden,
       pet: s.pet,
-      balance: s.balance,
       settings: s.settings,
       fps: ctx.scene.fps(),
       scene: ctx.scene.debugState(),

@@ -107,7 +107,7 @@ export const HIDE_STRESS = 0.5;
  * Per-personality dials. The same four personalities as the mood engine and the speech pools, read
  * through a different lens: not how the pet FEELS, but how its needs move and what it does about them.
  *
- *   curiosity  -- how fast boredom builds. A degen is bored in an hour; a zen pet takes most of a day.
+ *   curiosity  -- how fast boredom builds. A hyper pet is bored in an hour; a zen pet takes most of a day.
  *   jolt       -- how much one tap costs. An anxious pet is rattled by one; a zen pet barely notices.
  *   sociable   -- how much company is worth, in comfort. The anxious pet is the odd one: company
  *                 soothes it MORE than most, because being alone is what frightens it.
@@ -119,7 +119,7 @@ const DIALS: Readonly<Record<Personality, { curiosity: number; jolt: number; soc
   zen: { curiosity: 0.6, jolt: 0.15, sociable: 0.8, aloof: 0, calm: 0.75, pace: 0.8 },
   sarcastic: { curiosity: 0.8, jolt: 0.25, sociable: 0.7, aloof: 0.6, calm: 0.55, pace: 1.0 },
   anxious: { curiosity: 1.2, jolt: 0.4, sociable: 1.15, aloof: 0, calm: 0.4, pace: 1.05 },
-  degen: { curiosity: 1.6, jolt: 0.25, sociable: 1.3, aloof: 0, calm: 0.6, pace: 1.25 },
+  hyper: { curiosity: 1.6, jolt: 0.25, sociable: 1.3, aloof: 0, calm: 0.6, pace: 1.25 },
 };
 
 function clamp01(v: number): number {

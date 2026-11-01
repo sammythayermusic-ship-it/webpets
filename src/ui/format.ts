@@ -1,7 +1,7 @@
 // DOM-free text formatting for the HUD, montage, memorial and dev panel.
 
 import type { SimEvent } from '../sim/types';
-import { DAY_MS, HOUR_MS } from '../sim/constants';
+import { DAY_MS, DEFAULT_CONSTANTS, HOUR_MS } from '../sim/constants';
 
 const MIN_MS = 60_000;
 
@@ -51,8 +51,10 @@ export function formatDate(ts: number): string {
 /** One montage / dry-run line per sim event. Notification copy lives in app; this is display copy only. */
 export function eventLine(event: SimEvent, name: string): string {
   switch (event.type) {
-    case 'auto-fed':
-      return `${name} ate from the pantry (${Math.round(event.hungerAfter)}%, ${event.pantryAfter} left)`;
+    case 'auto-fed': {
+      const meals = Math.floor(Math.max(0, event.pantryAfter) / DEFAULT_CONSTANTS.MEAL_SIZE);
+      return `${name} ate from the feeder (${Math.round(event.hungerAfter)}%, ${meals} ${meals === 1 ? 'meal' : 'meals'} left)`;
+    }
     case 'hungry':
       return `${name} got hungry`;
     case 'starving':

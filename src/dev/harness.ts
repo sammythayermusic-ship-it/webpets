@@ -152,7 +152,6 @@ async function opState(ctx: HarnessContext): Promise<unknown> {
     hunger: s.hunger,
     night: s.night,
     hidden: s.hidden,
-    balance: s.balance,
     pet: s.pet,
     settings: s.settings,
     geometry,
@@ -290,9 +289,6 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
     case 'setPantry':
       actions.dev.setPantry(num(cmd, 'n'));
       return { pantry: ctx.store.getState().pet.pantry };
-    case 'setBalance':
-      actions.dev.setBalance(num(cmd, 'n'));
-      return { balance: ctx.store.getState().balance };
     case 'force': {
       const state = str(cmd, 'state');
       if (!FORCED_STATES.has(state)) throw new Error(`force: unknown state "${state}" (fed|hungry|starving|dead|asleep)`);

@@ -48,8 +48,11 @@ describe('formatOffset', () => {
 
 describe('eventLine', () => {
   it('renders every event type with the pet name', () => {
-    expect(eventLine({ type: 'auto-fed', at: 1, pantryAfter: 475, hungerAfter: 75 }, 'Gus')).toBe(
-      'Gus ate from the pantry (75%, 475 left)',
+    expect(eventLine({ type: 'auto-fed', at: 1, pantryAfter: 125, hungerAfter: 75 }, 'Gus')).toBe(
+      'Gus ate from the feeder (75%, 5 meals left)',
+    );
+    expect(eventLine({ type: 'auto-fed', at: 1, pantryAfter: 25, hungerAfter: 80 }, 'Gus')).toBe(
+      'Gus ate from the feeder (80%, 1 meal left)',
     );
     expect(eventLine({ type: 'hungry', at: 1 }, 'Gus')).toBe('Gus got hungry');
     expect(eventLine({ type: 'starving', at: 1 }, 'Gus')).toBe('Gus started starving');

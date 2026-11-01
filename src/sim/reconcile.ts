@@ -5,11 +5,11 @@ import { crossingFrom, deathFromZero, hungerFrom, zeroFrom } from './math';
 /**
  * Walk the pet forward from `state.lastReconciledAt` to `now`.
  *
- * - Auto-feeds are applied on the closed window [from, now]: t* = max(from, crossing) when pantry >= FEED_COST and
+ * - Auto-feeds are applied on the closed window [from, now]: t* = max(from, crossing) when pantry >= MEAL_SIZE and
  *   the pet is still alive at t*. A feed at `from` cannot repeat because it moves the next crossing forward.
  * - hungry / starving / dying-soon / died are emitted on the half-open window (from, now].
  * - A clock that moved backwards (now < lastReconciledAt) and a dead pet are no-ops returning the same state object.
- *   now === lastReconciledAt runs the walk (a deposit may feed at now) but can emit no crossing events.
+ *   now === lastReconciledAt runs the walk (filling the feeder may feed at now) but can emit no crossing events.
  */
 export function reconcile(state: PetState, now: number, c: SimConstants = DEFAULT_CONSTANTS): ReconcileResult {
   if (!state.alive || !Number.isFinite(now) || now < state.lastReconciledAt) {
@@ -20,12 +20,12 @@ export function reconcile(state: PetState, now: number, c: SimConstants = DEFAUL
   let hungerAtLastFed = state.hungerAtLastFed;
   let pantry = state.pantry;
   let meals = state.meals;
-  let feedBurned = state.feedBurned;
+  let foodEaten = state.foodEaten;
   const events: SimEvent[] = [];
   let diedAt: number | undefined;
 
-  // Guard against a zero/negative FEED_COST override looping forever: auto-feeds need a positive cost.
-  const canAutoFeed = c.FEED_COST > 0;
+  // Guard against a zero/negative MEAL_SIZE override looping forever: an auto-feed has to take some food.
+  const canAutoFeed = c.MEAL_SIZE > 0;
 
   for (;;) {
     const zero = zeroFrom(hungerAtLastFed, lastFedAt, c);
@@ -33,13 +33,13 @@ export function reconcile(state: PetState, now: number, c: SimConstants = DEFAUL
     const crossing = crossingFrom(hungerAtLastFed, lastFedAt, c);
     const tStar = Math.max(from, crossing);
 
-    if (canAutoFeed && pantry >= c.FEED_COST && tStar <= now && tStar < death) {
+    if (canAutoFeed && pantry >= c.MEAL_SIZE && tStar <= now && tStar < death) {
       const h = hungerFrom(hungerAtLastFed, lastFedAt, tStar, c);
       hungerAtLastFed = Math.min(c.MAX_HUNGER, h + c.FEED_GAIN);
       lastFedAt = tStar;
-      pantry -= c.FEED_COST;
+      pantry -= c.MEAL_SIZE;
       meals += 1;
-      feedBurned += c.FEED_COST;
+      foodEaten += c.MEAL_SIZE;
       events.push({ type: 'auto-fed', at: tStar, pantryAfter: pantry, hungerAfter: hungerAtLastFed });
       continue;
     }
@@ -66,7 +66,7 @@ export function reconcile(state: PetState, now: number, c: SimConstants = DEFAUL
     hungerAtLastFed,
     pantry,
     meals,
-    feedBurned,
+    foodEaten,
     lastReconciledAt: now,
   };
   if (diedAt !== undefined) {
