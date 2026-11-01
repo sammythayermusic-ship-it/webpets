@@ -43,7 +43,7 @@ export interface HarnessContext {
   scene: Pick<HabitatScene, 'snapshot' | 'debugState' | 'fps' | 'setPointer' | 'tap' | 'feedSpot' | 'aimFeed'>;
   devPanel: DevPanelHandle & Partial<{ open(): void; close(): void }>;
   hud?: Pick<HudHandle, 'setVisible'>;
-  speech?: Pick<SpeechHandleExt, 'say' | 'react' | 'speak' | 'transcript' | 'setTimeScale'>;
+  speech?: Pick<SpeechHandleExt, 'say' | 'react' | 'speak' | 'transcript' | 'setTimeScale' | 'getRects' | 'typedAgo'>;
 }
 
 /** Everything outside the app that a command touches: output files, the clock, and waiting. */
@@ -411,7 +411,7 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
       if (moment === 'fact' || moment === 'thought') {
         // Volunteer one now, in the pet's voice, skipping the brain's timing.
         needSpeech(ctx).speak(moment);
-        return { moment, last: needSpeech(ctx).transcript().slice(-1)[0] ?? null };
+        return { moment, last: needSpeech(ctx).transcript().slice(-1)[0] ?? null, linkRect: needSpeech(ctx).getRects()[0] ?? null };
       }
       if (!REACTIONS.has(moment)) throw new Error(`talk: "moment" must be one of ${[...REACTIONS].join(', ')}`);
       needSpeech(ctx).react(moment as Reaction);
@@ -424,7 +424,7 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
       return { k };
     }
     case 'transcript':
-      return { lines: needSpeech(ctx).transcript() };
+      return { lines: needSpeech(ctx).transcript(), typedAgoS: needSpeech(ctx).typedAgo() };
     case 'snapshot':
       return opSnapshot(cmd, ctx, io);
     case 'stats':

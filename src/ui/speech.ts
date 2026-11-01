@@ -21,6 +21,8 @@ export interface SpeechHandleExt extends SpeechHandle {
   getRects(): Rect[];
   /** What the pet has said lately, newest last (dev panel, harness). */
   transcript(): readonly SaidLine[];
+  /** Seconds since you last typed, as the brain sees it (harness). */
+  typedAgo(): number;
   /** Say a thought or a fact now, skipping the timing (harness stills). */
   speak(v: Volunteer): void;
   /** Keep quiet while something else has the stage (the "while you were gone" montage). */
@@ -275,6 +277,7 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
       return [{ x: bubble.offsetLeft + more.offsetLeft, y: bubble.offsetTop + more.offsetTop, w: more.offsetWidth, h: more.offsetHeight }];
     },
     transcript: () => said,
+    typedAgo: () => typedAgoS,
     speak(v: Volunteer) {
       talk?.speak(v);
     },
