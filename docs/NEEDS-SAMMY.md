@@ -76,6 +76,18 @@ pet. That costs money per user, which ties into how the app makes money. Until y
 built-in library carries the personality on its own, and Claude-written lines work on your Mac with
 your own key (adding it is the item below).
 
+### Add your Anthropic API key, if you want Claude-written lines (2026-10-31) — nothing blocked
+The fish talks without it (the built-in library). With it, some of its thoughts are written fresh
+by Claude, up to $0.25 a day. In Terminal, run this and paste the key when it asks for a password
+(it stays in your Keychain, never in the repo or in a file):
+
+    security add-generic-password -s com.sammythayer.webpets -a anthropic -w
+
+Then quit and reopen WebPets. To remove it: `security delete-generic-password -s com.sammythayer.webpets -a anthropic`.
+The daily cap is `dailyCapUsd` in the app's `settings.json` (0 turns written lines off); tell me if
+you want a different number or a control for it. I have not been able to test a real call, since
+there is no key on this Mac; everything up to the request is tested.
+
 ### Kids using it (2026-10-31) — nothing blocked
 If children use WebPets: Anthropic's usage policy has extra requirements for products minors use,
 and in the US, COPPA applies to anything collected from under-13s. Everything the pet knows about

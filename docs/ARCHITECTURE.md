@@ -234,6 +234,10 @@ Commands (invoke names; args/returns are camelCase JSON matching `src/platform/t
 | `notify` | `{ title, body }` | – | `app.notification().builder().title().body().show()`; log before calling (errors are swallowed by the plugin) |
 | `autostart_get` / `autostart_set` | – / `{ on }` | `bool` / – | `ManagerExt::autolaunch()` |
 | `quit_app` | – | – | |
+| `voice_status` | – | `{ hasKey }` | is a Keychain generic password set (service `com.sammythayer.webpets`, account `anthropic`) |
+| `voice_write` | `{ system, user }` | `{ text: string \| null, usd }` | one Claude-written line (Messages API, Claude Opus 5.5, low effort, default refusal fallbacks); `text` null on refusal, a cut-off reply or no key; `usd` is what it cost, for the daily cap. The key never crosses to TS |
+| `input_idle` | – | `{ keys, any }` | seconds since the last key press / any input (window server counters; no permission) |
+| `open_link` | `{ url }` | – | `open <url>` for plain https links to a real host only; anything else is an error |
 
 Events (Rust → TS, on the main window):
 
