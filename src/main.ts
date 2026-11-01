@@ -376,8 +376,9 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
         store,
         platform,
         scene,
-        hitRegions: () => computeHitRegions(scene, hudHandle, devPanelHandle),
+        hitRegions: () => computeHitRegions(scene, hudHandle, devPanelHandle, [speech]),
         lastPointer: () => lastPointer,
+        speech,
       }),
     );
   }

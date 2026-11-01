@@ -1,6 +1,7 @@
 // Dev-only: answers `webpets:snap` HMR events from tools/vite-diag-plugin.ts with a canvas PNG and a
 // state dump. Loaded by main.ts only when `import.meta.env.DEV`; tree-shaken out of production builds.
 
+import type { SpeechHandleExt } from '../ui/speech';
 import type { AppStore } from '../app/types';
 import type { Platform, PointerState } from '../platform/types';
 import type { HabitatScene, Rect } from '../render/types';
@@ -11,12 +12,13 @@ export interface DiagContext {
   scene: HabitatScene;
   hitRegions(): Rect[];
   lastPointer(): PointerState | null;
+  speech?: SpeechHandleExt;
 }
 
 declare global {
   interface Window {
     /** Dev-only handle for driving the scene from a browser console or an automation script. */
-    __webpets?: { scene: HabitatScene; store: AppStore };
+    __webpets?: { scene: HabitatScene; store: AppStore; speech?: SpeechHandleExt };
   }
 }
 
@@ -25,7 +27,7 @@ export function installDiag(ctx: DiagContext): void {
   let lastHandled = '';
   // The scene and the store, reachable from devtools. Never in a production build: this file is only
   // imported under `import.meta.env.DEV`.
-  window.__webpets = { scene: ctx.scene, store: ctx.store };
+  window.__webpets = { scene: ctx.scene, store: ctx.store, ...(ctx.speech ? { speech: ctx.speech } : {}) };
 
   const capture = async (rawName: string): Promise<void> => {
     // The Tauri webview and any browser tab both answer the same request; keep their files apart.
