@@ -396,7 +396,9 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   // 5. "While you were gone" montage; recentEvents is read once, right after boot.
   const { recentEvents, pet } = store.getState();
   if (recentEvents.length > 0) {
+    speech.hold(true);
     await montage.play(recentEvents, pet.name);
+    speech.hold(false);
     // The feeder kept it going while you were away: that is what it wants to tell you first.
     speech.react(recentEvents.some((e) => e.type === 'auto-fed') ? 'feeder' : 'welcome-back');
   }

@@ -17,10 +17,12 @@ export interface SpeechHandleExt extends SpeechHandle {
   react(moment: Reaction): void;
   /** Re-position the bubble for a new scale / canvas size (no-op while hidden). */
   relayout(): void;
-  /** Window-local rects that must take the mouse while the bubble shows. */
+  /** Window-local rects that must take the mouse while the bubble shows: just the source link. */
   getRects(): Rect[];
   /** What the pet has said lately, newest last (dev panel, harness). */
   transcript(): readonly SaidLine[];
+  /** Keep quiet while something else has the stage (the "while you were gone" montage). */
+  hold(b: boolean): void;
   /** Run the talk clock this many times faster (harness recordings); 1 is real time. */
   setTimeScale(k: number): void;
   destroy(): void;
@@ -147,10 +149,11 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
     platform.openLink(m.url).catch(() => undefined);
     hide();
   });
-  bubble.addEventListener('mouseenter', () => (hovering = true));
-  bubble.addEventListener('mouseleave', () => (hovering = false));
-  // A press on the bubble is not a knock on the glass or the start of a window drag.
-  bubble.addEventListener('mousedown', (e) => e.stopPropagation());
+  // The bubble itself is click-through (styles.css); only the source link takes the mouse. Hovering it
+  // holds the bubble open, and pressing it is not a knock on the glass or the start of a window drag.
+  more.addEventListener('mouseenter', () => (hovering = true));
+  more.addEventListener('mouseleave', () => (hovering = false));
+  more.addEventListener('mousedown', (e) => e.stopPropagation());
 
   // The brain --------------------------------------------------------------
   let talk: TalkController | null = null;
@@ -205,7 +208,10 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
       });
     });
 
-  const tickTimer = setInterval(() => talk?.tick(), TICK_MS);
+  let held = false;
+  const tickTimer = setInterval(() => {
+    if (!held) talk?.tick();
+  }, TICK_MS);
   const idleTimer = setInterval(() => {
     platform.inputIdle().then(
       (i) => (typedAgoS = i.keys),
@@ -263,10 +269,14 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
       if (!bubble.hidden) position();
     },
     getRects() {
-      if (bubble.hidden) return [];
-      return [{ x: bubble.offsetLeft, y: bubble.offsetTop, w: bubble.offsetWidth, h: bubble.offsetHeight }];
+      if (bubble.hidden || more.hidden) return [];
+      return [{ x: bubble.offsetLeft + more.offsetLeft, y: bubble.offsetTop + more.offsetTop, w: more.offsetWidth, h: more.offsetHeight }];
     },
     transcript: () => said,
+    hold(b: boolean) {
+      held = b;
+      if (b) hide();
+    },
     setTimeScale(k: number) {
       virtualBase = now();
       clockBase = Date.now();

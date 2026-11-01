@@ -171,7 +171,9 @@ const ANSWERS_YOU: ReadonlySet<Reaction> = new Set<Reaction>(['fed', 'meal', 'ta
 
 export function react(state: TalkState, moment: Reaction, i: Pick<TalkInput, 'now' | 'muted' | 'alive' | 'rng'>): { say: boolean; state: TalkState } {
   if (i.muted || !i.alive) return { say: false, state: state };
-  if (i.now - state.lastSpokeAt < TALK.MIN_GAP_MS) {
+  // Coming home is said once, when you get back, and outranks whatever the pet was just saying.
+  const homecoming = moment === 'welcome-back' || moment === 'feeder';
+  if (!homecoming && i.now - state.lastSpokeAt < TALK.MIN_GAP_MS) {
     // Hunger matters more than a gap: it waits for no one, but never talks over a bubble that just went up.
     if (!(moment === 'hungry' || moment === 'starving') || i.now - state.lastSpokeAt < 4 * SECOND) {
       return { say: false, state };

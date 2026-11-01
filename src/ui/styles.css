@@ -264,9 +264,8 @@ body {
   line-height: 1.35;
   white-space: normal;
   word-wrap: break-word;
-  /* Takes the mouse: hovering holds it open, and a fact's source is a tap away. */
-  pointer-events: auto;
-  cursor: default;
+  /* Click-through, so it never covers the HUD or the resize handle; only the source link takes the mouse. */
+  pointer-events: none;
   z-index: 5;
   transform-origin: 50% 100%;
   animation: speech-pop 220ms cubic-bezier(0.2, 0.9, 0.3, 1.25);
@@ -287,6 +286,7 @@ body {
   }
 }
 #ui .speech-more {
+  pointer-events: auto;
   display: block;
   margin: 3px 0 0;
   padding: 0;

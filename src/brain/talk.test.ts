@@ -116,6 +116,12 @@ describe('react', () => {
     expect(react(s, 'hungry', { ...base, now: T0 + 6000 }).say).toBe(true);
   });
 
+  it('always says welcome back, even right after another line', () => {
+    const s = react(initialTalk(T0, mulberry32(1)), 'fed', base).state;
+    expect(react(s, 'welcome-back', { ...base, now: T0 + 1000 }).say).toBe(true);
+    expect(react(s, 'feeder', { ...base, now: T0 + 1000 }).say).toBe(true);
+  });
+
   it('is silent when muted or dead', () => {
     const s = initialTalk(T0, mulberry32(1));
     expect(react(s, 'fed', { ...base, muted: true }).say).toBe(false);
