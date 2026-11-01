@@ -74,7 +74,11 @@ its own so the next command lands inside the clip.
 | `poke` | `{ kind }` | a needs stimulus: `tap` (a knock on the glass), `bite`, `feed`, `pointer`; data has the needs after |
 | `setNeeds` | `{ energy?, curiosity?, comfort?, stress? }` | `dev.setNeeds`: re-anchor any of the four needs (0..1) at now, for scripting a tired, bored, rattled or settled pet |
 | `presence` | `{ present }` | `actions.setPresence`: the pointer arrived (a stimulus; a greeting after a long absence) or left |
-| `snapshot` | `{ name }` | `scene.snapshot()` → `out/<name>.png`; data `{ file, bytes }` |
+| `say` | `{ text }` | puts a line in the speech bubble now, bypassing the brain (for stills of the bubble) |
+| `talk` | `{ moment }` | `fact` or `thought`: the pet volunteers one now in its own voice, skipping the brain's timing; `fed`, `meal`, `tap`, `hungry`, `starving`, `feeder`, `welcome-back`: tells the brain it happened (it may or may not answer). Data has the last line said |
+| `talkSpeed` | `{ k }` | runs the talk clock `k` times faster, so an hour of chatter fits in a recording; 1 is real time |
+| `transcript` | – | what the pet has said lately: `{ lines: [{ at, text, kind }] }`, newest last |
+| `snapshot` | `{ name }` | `scene.snapshot()` → `out/<name>.png`; data `{ file, bytes }`. The canvas only: speech bubbles are DOM and are not in it (capture the window for those) |
 | `stats` | `{ seconds }` | samples `debugState().advances/.steps` across the window: `{ advancesPerSec, stepsPerSec, fps, visibility, renderMs, elapsedMs }` |
 | `record` | `{ name, seconds, fps? }` | `canvas.captureStream(fps ?? 60)` + `MediaRecorder` → `out/<name>.mp4` or `.webm`; data `{ file, mime, bytes, seconds, fps }`. Detached. |
 | `sleep` | `{ ms }` | resolves after `ms`, in-app, for sequencing |

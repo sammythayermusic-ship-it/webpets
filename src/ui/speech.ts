@@ -7,7 +7,7 @@ import type { Rect } from '../render/types';
 import type { Utterance } from '../brain/types';
 import type { Reaction } from '../brain/talk';
 import { speciesModule } from '../species';
-import { createTalk, type TalkController, type TalkMemory } from './talk';
+import { createTalk, type TalkController, type TalkMemory, type Volunteer } from './talk';
 import type { SpeechHandle, UiDeps } from './types';
 import { el, rootSize } from './dom';
 import { labelFor } from './model';
@@ -21,6 +21,8 @@ export interface SpeechHandleExt extends SpeechHandle {
   getRects(): Rect[];
   /** What the pet has said lately, newest last (dev panel, harness). */
   transcript(): readonly SaidLine[];
+  /** Say a thought or a fact now, skipping the timing (harness stills). */
+  speak(v: Volunteer): void;
   /** Keep quiet while something else has the stage (the "while you were gone" montage). */
   hold(b: boolean): void;
   /** Run the talk clock this many times faster (harness recordings); 1 is real time. */
@@ -273,6 +275,9 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
       return [{ x: bubble.offsetLeft + more.offsetLeft, y: bubble.offsetTop + more.offsetTop, w: more.offsetWidth, h: more.offsetHeight }];
     },
     transcript: () => said,
+    speak(v: Volunteer) {
+      talk?.speak(v);
+    },
     hold(b: boolean) {
       held = b;
       if (b) hide();

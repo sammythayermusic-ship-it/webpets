@@ -6,6 +6,7 @@ import type { Personality, Rng, Species } from '../sim/types';
 import type { Moment, Utterance, Voice } from '../brain/types';
 import { emptyMemory, normalizeMemory, sayFact, sayLine, type SayMemory } from '../brain/say';
 import { decide, initialTalk, normalizeTalk, react, type Reaction, type TalkState, type Volunteer } from '../brain/talk';
+export type { Volunteer };
 import { WRITTEN_SHARE, addSpend, buildLinePrompt, canSpend, cleanLine, type LinePrompt, type Spend } from '../brain/writer';
 
 /** What the controller keeps between launches. */
@@ -47,6 +48,8 @@ export interface TalkController {
   tick(): void;
   /** Something happened to the pet. */
   react(moment: Reaction): void;
+  /** Say a thought or a fact now, skipping the brain's timing (dev panel, harness stills). */
+  speak(v: Volunteer): void;
   /** A new pet: forget what the old one said. */
   reset(): void;
   /** For the dev panel and the harness. */
@@ -189,6 +192,10 @@ export function createTalk(env: TalkEnv): TalkController {
       if (!r.say) return;
       const u = libraryLine(moment);
       if (u) say(u);
+      persist();
+    },
+    speak(v) {
+      speakVolunteer(v);
       persist();
     },
     reset() {

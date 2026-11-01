@@ -43,7 +43,7 @@ export interface HarnessContext {
   scene: Pick<HabitatScene, 'snapshot' | 'debugState' | 'fps' | 'setPointer' | 'tap' | 'feedSpot' | 'aimFeed'>;
   devPanel: DevPanelHandle & Partial<{ open(): void; close(): void }>;
   hud?: Pick<HudHandle, 'setVisible'>;
-  speech?: Pick<SpeechHandleExt, 'say' | 'react' | 'transcript' | 'setTimeScale'>;
+  speech?: Pick<SpeechHandleExt, 'say' | 'react' | 'speak' | 'transcript' | 'setTimeScale'>;
 }
 
 /** Everything outside the app that a command touches: output files, the clock, and waiting. */
@@ -408,6 +408,11 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
     case 'talk': {
       // Something happens to the pet, as far as the brain is concerned: it may or may not answer.
       const moment = str(cmd, 'moment');
+      if (moment === 'fact' || moment === 'thought') {
+        // Volunteer one now, in the pet's voice, skipping the brain's timing.
+        needSpeech(ctx).speak(moment);
+        return { moment, last: needSpeech(ctx).transcript().slice(-1)[0] ?? null };
+      }
       if (!REACTIONS.has(moment)) throw new Error(`talk: "moment" must be one of ${[...REACTIONS].join(', ')}`);
       needSpeech(ctx).react(moment as Reaction);
       return { moment, last: needSpeech(ctx).transcript().slice(-1)[0] ?? null };
