@@ -20,6 +20,24 @@ Decisions Sammy already made (do not re-ask):
 - **How you tell a pet about yourself:** a quick "Get to know me" picker (teams, hobbies,
   interests) plus clicking the pet to type to it anytime.
 
+**Sammy's notes after checkpoint C (2026-10-31), in his words:** "I want the fish to have more
+personality and to bond with you over time. I want it to be able to have the same interests as you.
+Give you updates, get happy or sad if you give it your favorite sports team and they win or lose.
+Just things like that. Happy news. Also we aren't doing $FEED anymore and this isn't crypto related
+anymore. Just feed them regularly. This is gonna be more geared towards regular users. Kids and
+adults. We need to make it trendy, innovative and viral. Everyone is gonna want one."
+
+What that changes:
+- **Food is free.** No $FEED, no balance, no "burns", no wallet anywhere in the app or the code. You
+  feed your pet regularly; that is the whole loop. The feeder you can fill before a trip stays, and
+  filling it is free.
+- **For everyone, kids included.** Every built-in line is kind and clean (teasing is fine, mean is
+  not). News is happy news. Nothing a parent would wince at. The pet's personalities lose the crypto
+  slang: "degen" becomes "hyper".
+- **Personality and bond come first** in Steps D to F: the pet shares your interests ("we" when your
+  team plays), gives you updates, and reacts to your team's wins and losses.
+- **Trendy and shareable.** A new Step F2 after F: moments worth sharing.
+
 Work in the order below. Each step ends at a checkpoint.
 
 ---
@@ -119,10 +137,22 @@ higher bond.
    fetched. If a fetch fails, the pet says nothing about it.
 4. **Sources.** Prefer free public sources (scoreboards, news feeds). Log each choice in
    `DECISIONS.md`. Anything that needs an account or costs money goes in `NEEDS-SAMMY.md` first.
-5. Room for other interests later, like the bitcoin price moving the pet's mood.
+5. Room for other interests later (a band's new album, a show's new season, the weather where you live).
 
 Report: a clip of a win day and a loss day (forced from the dev panel), and a morning of news
 lines.
+
+## Step F2 — Show it off (checkpoint F2)
+
+1. **Share a moment.** One click saves the last few seconds of your pet as a short video or GIF
+   (the bubble included), ready to post or send. Nothing is uploaded by the app.
+2. **Pet card.** A shareable card: the pet's name, species, personality, age, bond and a favourite
+   thing it has said.
+3. **Milestones worth sharing.** Birthdays, a hundred meals, a bond level reached, your team's big
+   win: the pet marks them, and the moment is one click from shared.
+4. Ideas for later, logged not built: friends' pets visiting, seasonal decorations, rare looks.
+
+Report: a shared clip and a pet card, as they would look in a group chat.
 
 ## Step G — Every pet gets the brain
 

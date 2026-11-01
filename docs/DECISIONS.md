@@ -1579,3 +1579,25 @@ and a small ring for each gulp.
   deleted (a delete would have to download it first).
 - What the recordings could not stage: the near plant sometimes hides the pecking and the look,
   which is the bowl being a bowl. The stills for those come from the first recording.
+
+## 2026-10-31 — Sammy's notes after checkpoint C: free food, for everyone, personality first
+
+Sammy: more personality, a bond that grows, shared interests, updates, happy or sad with your
+team's results, happy news; no more $FEED, nothing crypto; regular users, kids and adults; trendy,
+innovative, viral. Recorded in `docs/AFTER-BAKEOFF.md` (top), which also gains Step F2 (share a
+moment, a pet card, milestones). What I decided from it:
+
+- **The money system goes, the feeder stays.** The wallet (`Ledger`, balance, burns, the starting
+  1,000) is removed from the sim, the store, the UI, the harness and the saved file, not hidden:
+  a ledger shaped for a chain is the wrong abstraction for free food. Feeding never fails for want
+  of anything. The pantry becomes the **feeder**, a free holiday feeder: one button fills it to a
+  few days of food, it feeds the pet on its own while you are away, exactly as the pantry did.
+  Real fish keepers use holiday feeders; it keeps a weekend away from killing the pet, and it is
+  one constant if Sammy wants it gone.
+- **"degen" becomes "hyper"**: same behaviour (quick, impulsive, looks at you at once), a voice
+  that is excitable and goofy instead of crypto slang. Saved pets migrate.
+- **Kind and clean for kids.** Every built-in line is written so a parent would not wince;
+  sarcasm teases, never wounds. Claude-written lines get the same rule in their prompt.
+- **The built-in library has to carry the personality alone**, because regular users will not
+  have an API key (NEEDS-SAMMY). Claude lines are an optional extra through one provider
+  interface, so a server can replace the Keychain key later without touching the pet.

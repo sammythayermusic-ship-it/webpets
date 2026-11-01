@@ -69,7 +69,21 @@ project.
 - Testing on your actual iPhone.
 - Notarization of the Mac build before anyone else installs it.
 
+### Claude-written lines for everyone, not just you (2026-10-31) — nothing blocked
+Regular users will not have an Anthropic API key, so for them the fresh lines (and later chat,
+sports and news in the pet's voice) need a small server that holds the key and keeps a cap per
+pet. That costs money per user, which ties into how the app makes money. Until you decide, the
+built-in library carries the personality on its own, and Claude-written lines work on your Mac with
+your own key (adding it is the item below).
+
+### Kids using it (2026-10-31) — nothing blocked
+If children use WebPets: Anthropic's usage policy has extra requirements for products minors use,
+and in the US, COPPA applies to anything collected from under-13s. Everything the pet knows about
+you stays on the Mac, which helps. Worth deciding before launch: the age rating, and whether
+chatting with the pet through Claude is on for kids or only the built-in lines.
+
 ## Open questions from the brief (not blocking; code keeps both options open)
 - How the app makes money.
-- Whether food costs anything.
-- Whether a pet can die for good.
+- ~~Whether food costs anything.~~ Answered 2026-10-31: food is free, no $FEED.
+- Whether a pet can die for good. (Today it can, if it goes a day and a half unfed with an empty
+  feeder. With kids in mind you may want a gentler version, e.g. it gets sick and recovers.)
