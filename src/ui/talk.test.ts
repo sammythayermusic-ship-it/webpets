@@ -5,6 +5,7 @@ import { createTalk, dayKeyOf, type LineWriter, type TalkEnv, type TalkMemory } 
 import { emptyProfile, type Profile } from '../brain/profile';
 import type { ChatVoice } from '../brain/types';
 import { FISH_CHAT } from '../species/fish/voice/chat';
+import type { World, WorldSay } from './world';
 
 const voice: Voice = {
   lines: {
@@ -16,7 +17,50 @@ const voice: Voice = {
   facts: [{ id: 'f1', text: 'Fish are cool.', source: { title: 'Src', url: 'https://example.org/f' } }],
   factFrames: { sarcastic: ['Fact: {fact}'], anxious: [], zen: [], hyper: [] },
   chat: FISH_CHAT as ChatVoice,
+  world: {
+    sarcastic: {
+      'game-day': ['{team} play {opponent} at {time}.'],
+      live: ['{team} {score}.'],
+      won: ['We won, {score}!'],
+      lost: ['We lost, {score}.'],
+      tied: ['A draw, {score}.'],
+      'still-happy': ['Still happy about the {team}.'],
+      mope: ['Still sad about the {team}.'],
+      'no-game': ['No {team} game today.'],
+      news: ['News: {headline}'],
+      'news-interest': ['About {interest}: {headline}'],
+    },
+    anxious: {} as never,
+    zen: {} as never,
+    hyper: {} as never,
+  },
 };
+
+function fakeWorld(over: Partial<World> = {}): World & { doneKeys: string[] } {
+  const doneKeys: string[] = [];
+  let due: WorldSay | null = null;
+  return {
+    doneKeys,
+    tick: () => undefined,
+    due: () => due,
+    done: (s) => {
+      doneKeys.push(s.key);
+      if (due?.key === s.key) due = null;
+    },
+    news: () => null,
+    mood: () => null,
+    ask: async () => [],
+    cheer: () => 0,
+    refresh: async () => undefined,
+    forceResult: () => false,
+    snapshot: () => ({ sports: { said: {}, mood: null }, news: { told: [] }, games: [], stories: 0 }),
+    ...over,
+    // the harness sets `due` through this
+    set _due(v: WorldSay | null) {
+      due = v;
+    },
+  } as World & { doneKeys: string[] };
+}
 const KNOWN = {
   teams: [{ id: 'mlb:2', league: 'mlb' as const, espnId: '2', abbr: 'BOS', location: 'Boston', nickname: 'Red Sox', display: 'Boston Red Sox', aliases: [] }],
   interests: [{ id: 'baking', label: 'baking', words: ['bake'] }],
@@ -237,6 +281,47 @@ describe('talking with you', () => {
     h.talk.forgetChat();
     expect(h.saved()!.chat.recent).toEqual([]);
     expect(h.talk.bond().points).toBe(1);
+  });
+});
+
+describe('your teams and the news', () => {
+  it('says a result once you are not busy, once', () => {
+    const w = fakeWorld();
+    (w as unknown as { _due: WorldSay })._due = { moment: 'won', vars: { team: 'Celtics', opponent: '76ers', score: '117-112' }, key: 'final:g1' };
+    let busy = true;
+    const h = harness({ world: () => w, busy: () => busy });
+    h.advance(30_000);
+    expect(h.shown).toEqual([]);
+    busy = false;
+    h.advance(2000);
+    expect(h.shown.map((u) => u.text)).toEqual(['We won, 117-112!']);
+    expect(w.doneKeys).toEqual(['final:g1']);
+    h.advance(60_000);
+    expect(h.shown.filter((u) => u.text.startsWith('We won')).length).toBe(1);
+  });
+
+  it('shares a headline with a link to the real story', () => {
+    const story: WorldSay = { moment: 'news', vars: { headline: 'A town plants ten thousand trees' }, more: { label: 'Good News Network', url: 'https://www.goodnewsnetwork.org/trees/' }, key: 'news:x' };
+    const w = fakeWorld({ news: () => story });
+    const h = harness({ world: () => w });
+    expect(h.talk.speakNews()).toBe(true);
+    expect(h.shown[0]).toMatchObject({ text: 'News: A town plants ten thousand trees', more: { label: 'Good News Network', url: 'https://www.goodnewsnetwork.org/trees/' } });
+    expect(w.doneKeys).toEqual(['news:x']);
+  });
+
+  it('answers how your team is doing from the scoreboard', async () => {
+    const asked: string[][] = [];
+    const w = fakeWorld({
+      ask: async (ids) => {
+        asked.push([...ids]);
+        return [{ moment: 'live', vars: { team: 'Red Sox', opponent: 'Yankees', score: '4-2' }, key: 'ask:1' }];
+      },
+    });
+    const h = harness({ world: () => w }, { ...emptyProfile(0), teams: ['mlb:2'] });
+    h.talk.chat('how are the red sox doing?');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(asked).toEqual([['mlb:2']]);
+    expect(h.shown.at(-1)!.text).toBe('Red Sox 4-2.');
   });
 });
 
