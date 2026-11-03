@@ -22,11 +22,13 @@ for w in list {
     let pid = w[kCGWindowOwnerPID as String] as? Int ?? -1
     let wid = w[kCGWindowNumber as String] as? Int ?? -1
     let layer = w[kCGWindowLayer as String] as? Int ?? 0
-    let alpha = w[kCGWindowAlpha as String] as? Double ?? 1
+    let alpha = (w[kCGWindowAlpha as String] as? Double).flatMap { $0.isFinite ? $0 : nil } ?? 1
     let onscreen = (w[kCGWindowIsOnscreen as String] as? Bool) ?? false
     let b = w[kCGWindowBounds as String] as? [String: Any] ?? [:]
     let name = w[kCGWindowName as String] as? String ?? ""
-    let x = b["X"] as? Double ?? 0, y = b["Y"] as? Double ?? 0, ww = b["Width"] as? Double ?? 0, hh = b["Height"] as? Double ?? 0
+    // Off-screen windows can report infinite bounds, which JSON cannot hold: report those as 0.
+    let num = { (k: String) -> Double in let v = b[k] as? Double ?? 0; return v.isFinite ? v : 0 }
+    let x = num("X"), y = num("Y"), ww = num("Width"), hh = num("Height")
     let obj: [String: Any] = ["owner": owner, "pid": pid, "id": wid, "layer": layer, "alpha": alpha,
                               "onscreen": onscreen, "x": x, "y": y, "w": ww, "h": hh, "name": name]
     let data = try! JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys])

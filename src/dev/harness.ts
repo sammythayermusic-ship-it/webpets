@@ -49,10 +49,15 @@ export interface HarnessContext {
   hud?: Pick<HudHandle, 'setVisible'>;
   speech?: Pick<
     SpeechHandleExt,
-    'say' | 'react' | 'speak' | 'transcript' | 'setTimeScale' | 'getRects' | 'typedAgo' | 'unseen' | 'chat' | 'choose' | 'bond' | 'setBondPoints' | 'forgetChat'
+    | 'say' | 'react' | 'speak' | 'transcript' | 'setTimeScale' | 'getRects' | 'typedAgo' | 'unseen' | 'chat' | 'choose'
+    | 'bond' | 'setBondPoints' | 'forgetChat' | 'speakPersonal'
   >;
   profile?: ProfileStore;
   chatInput?: Pick<ChatInputHandle, 'open' | 'close' | 'isOpen' | 'getRects'>;
+  /** Pretend you left the window this long ago (the close-friend greeting needs three minutes away). */
+  backdateAway?: (ms: number) => void;
+  /** Act on the "Get to know me" card in its own window (src/dev/cardHarness.ts). */
+  cardDo?: (action: string, value: string) => Promise<void>;
 }
 
 /** Everything outside the app that a command touches: output files, the clock, and waiting. */
@@ -417,6 +422,11 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
     case 'talk': {
       // Something happens to the pet, as far as the brain is concerned: it may or may not answer.
       const moment = str(cmd, 'moment');
+      if (moment === 'personal') {
+        // A thought about you, if the bond allows and it knows something.
+        const said = needSpeech(ctx).speakPersonal();
+        return { moment, said, last: needSpeech(ctx).transcript().slice(-1)[0] ?? null };
+      }
       if (moment === 'fact' || moment === 'thought') {
         // Volunteer one now, in the pet's voice, skipping the brain's timing.
         needSpeech(ctx).speak(moment);
@@ -438,6 +448,7 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
         typedAgoS: needSpeech(ctx).typedAgo(),
         unseen: needSpeech(ctx).unseen(),
         linkRect: needSpeech(ctx).getRects()[0] ?? null,
+        rects: needSpeech(ctx).getRects(),
       };
     case 'chat': {
       // As if typed into the chat field and sent. A written reply arrives later; read `transcript`.
@@ -475,6 +486,19 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
       if (bool(cmd, 'open')) ci.open();
       else ci.close();
       return { open: ci.isOpen(), rect: ci.getRects()[0] ?? null };
+    }
+    case 'away': {
+      const ms = num(cmd, 'ms');
+      if (!ctx.backdateAway) throw new Error('away: not available');
+      ctx.backdateAway(ms);
+      return { ms };
+    }
+    case 'cardDo': {
+      if (!ctx.cardDo) throw new Error('cardDo: not available');
+      const action = str(cmd, 'action');
+      const value = typeof cmd['value'] === 'string' ? cmd['value'] : '';
+      await ctx.cardDo(action, value);
+      return { action, value };
     }
     case 'openCard': {
       if (!ctx.platform.card) throw new Error('openCard: not available');

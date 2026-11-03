@@ -48,6 +48,8 @@ export interface SpeechHandleExt extends SpeechHandle {
   setBondPoints(points: number): void;
   /** "Forget me": what you said in chat goes. */
   forgetChat(): void;
+  /** A thought about you, now (harness). */
+  speakPersonal(): boolean;
   destroy(): void;
 }
 
@@ -385,6 +387,7 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
     forgetChat() {
       talk?.forgetChat();
     },
+    speakPersonal: () => talk?.speakPersonal() ?? false,
     destroy() {
       offBite();
       offGone();

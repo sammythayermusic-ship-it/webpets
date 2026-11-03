@@ -41,6 +41,8 @@ async function main(): Promise<void> {
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') close();
   });
+  // Verification builds only (docs/HARNESS.md `cardDo`); tree-shaken out of a normal build.
+  if (import.meta.env.VITE_WEBPETS_HARNESS === '1') void import('./dev/cardHarness').then((m) => m.installCardHarness(root));
   // A new pet while the card is open: show its name.
   window.addEventListener('focus', () => void readPet().then(() => card.refresh()));
 }

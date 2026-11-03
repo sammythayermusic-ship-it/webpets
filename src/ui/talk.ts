@@ -90,6 +90,8 @@ export interface TalkController {
   setBondPoints(points: number): void;
   /** "Forget me": what you said in chat goes too (the bond stays: it is the pet's). */
   forgetChat(): void;
+  /** Say a thought about you now, if the bond allows and there is something to say (harness stills). */
+  speakPersonal(): boolean;
 }
 
 /** Local calendar day, "2026-10-31". */
@@ -484,6 +486,12 @@ export function createTalk(env: TalkEnv): TalkController {
     forgetChat() {
       chatState = emptyChat();
       persist();
+    },
+    speakPersonal() {
+      const u = personalThought();
+      if (u) say(u);
+      persist();
+      return u !== null;
     },
   };
 }

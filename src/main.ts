@@ -430,7 +430,23 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   if (import.meta.env.VITE_WEBPETS_HARNESS === '1') {
     const devPanelHandle = devPanel;
     void import('./dev/harness').then((mod) =>
-      mod.installHarness({ store, platform, scene, devPanel: devPanelHandle, hud: hudHandle, speech, profile, chatInput }),
+      mod.installHarness({
+        store,
+        platform,
+        scene,
+        devPanel: devPanelHandle,
+        hud: hudHandle,
+        speech,
+        profile,
+        chatInput,
+        backdateAway: (ms) => {
+          leftAt -= ms;
+        },
+        cardDo: async (action, value) => {
+          const { emit } = await import('@tauri-apps/api/event');
+          await emit('harness-card', { action, value });
+        },
+      }),
     );
   }
 
