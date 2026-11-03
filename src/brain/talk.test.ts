@@ -102,12 +102,17 @@ describe('decide', () => {
 describe('react', () => {
   const base = { now: T0, muted: false, alive: true, rng: mulberry32(3) };
 
-  it('answers a meal, but not twice inside the gap', () => {
+  it('answers a meal, but never over a bubble that is still being read', () => {
     const s = initialTalk(T0, mulberry32(1));
     const a = react(s, 'fed', base);
     expect(a.say).toBe(true);
     expect(react(a.state, 'meal', { ...base, now: T0 + 5000 }).say).toBe(false);
-    expect(react(a.state, 'meal', { ...base, now: T0 + TALK.MIN_GAP_MS }).say).toBe(true);
+    expect(react(a.state, 'meal', { ...base, now: T0 + TALK.REPLY_GAP_MS }).say).toBe(true);
+  });
+
+  it('says thank you for food even right after saying it is hungry', () => {
+    const s = react(initialTalk(T0, mulberry32(1)), 'hungry', base).state;
+    expect(react(s, 'fed', { ...base, now: T0 + 8000 }).say).toBe(true);
   });
 
   it('lets hunger through a short gap, never over a bubble that just went up', () => {

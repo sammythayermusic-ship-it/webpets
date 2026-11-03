@@ -23,6 +23,8 @@ export interface SpeechHandleExt extends SpeechHandle {
   transcript(): readonly SaidLine[];
   /** Seconds since you last typed, as the brain sees it (harness). */
   typedAgo(): number;
+  /** A full-screen window is in front, as the brain sees it (harness). */
+  fullscreenFront(): boolean;
   /** Say a thought or a fact now, skipping the timing (harness stills). */
   speak(v: Volunteer): void;
   /** Keep quiet while something else has the stage (the "while you were gone" montage). */
@@ -43,6 +45,8 @@ export const BRAIN_FILE = 'brain.json';
 const BRAIN_VERSION = 1;
 /** Bubble bottom edge overlaps the habitat's opaque top by this much so it visibly "belongs" to the bowl. */
 const BUBBLE_OVERLAP = 8;
+/** Space between the HUD bar and a bubble pushed down below it. */
+const HUD_GAP = 6;
 /** Typing within this many seconds counts as busy: nothing volunteered. */
 const BUSY_TYPING_S = 8;
 const IDLE_POLL_MS = 2000;
@@ -80,6 +84,7 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
   let hovering = false;
   let typedAgoS = Number.MAX_VALUE;
+  let fullscreenFront = false;
   let timeScale = 1;
   let clockBase = Date.now();
   let virtualBase = clockBase;
@@ -96,7 +101,10 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
     const h = bubble.offsetHeight;
     let x = Math.round(hit.x + hit.w / 2 - w / 2);
     x = Math.max(0, Math.min(Math.max(0, size.w - w), x));
-    const y = Math.max(0, Math.round(hit.y + BUBBLE_OVERLAP - h));
+    let y = Math.max(0, Math.round(hit.y + BUBBLE_OVERLAP - h));
+    // While you hover, the HUD bar sits along the top: the bubble drops below it rather than over it.
+    const pill = root.querySelector<HTMLElement>('.hud-pill.show');
+    if (pill) y = Math.max(y, pill.offsetTop + pill.offsetHeight + HUD_GAP);
     bubble.style.left = `${x}px`;
     bubble.style.top = `${y}px`;
   }
@@ -158,6 +166,11 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
   more.addEventListener('mouseenter', () => (hovering = true));
   more.addEventListener('mouseleave', () => (hovering = false));
   more.addEventListener('mousedown', (e) => e.stopPropagation());
+  // Follow the HUD bar coming and going while a bubble is up.
+  const hudWatch = new MutationObserver(() => {
+    if (!bubble.hidden) position();
+  });
+  for (const p of root.querySelectorAll('.hud-pill')) hudWatch.observe(p, { attributes: true, attributeFilter: ['class'] });
 
   // The brain --------------------------------------------------------------
   let talk: TalkController | null = null;
@@ -201,7 +214,7 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
         present: () => st().present,
         night: () => st().night,
         awake: () => !st().night,
-        busy: () => typedAgoS < BUSY_TYPING_S,
+        busy: () => typedAgoS < BUSY_TYPING_S || fullscreenFront,
         muted: () => st().settings.talkMuted,
         situation,
         writer,
@@ -218,8 +231,14 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
   }, TICK_MS);
   const idleTimer = setInterval(() => {
     platform.inputIdle().then(
-      (i) => (typedAgoS = i.keys),
-      () => (typedAgoS = Number.MAX_VALUE),
+      (i) => {
+        typedAgoS = i.keys;
+        fullscreenFront = i.fullscreen;
+      },
+      () => {
+        typedAgoS = Number.MAX_VALUE;
+        fullscreenFront = false;
+      },
     );
   }, IDLE_POLL_MS);
 
@@ -278,6 +297,7 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
     },
     transcript: () => said,
     typedAgo: () => typedAgoS,
+    fullscreenFront: () => fullscreenFront,
     speak(v: Volunteer) {
       talk?.speak(v);
     },
@@ -296,6 +316,7 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
       unsub();
       clearInterval(tickTimer);
       clearInterval(idleTimer);
+      hudWatch.disconnect();
       hide();
       bubble.remove();
     },

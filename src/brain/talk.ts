@@ -13,8 +13,10 @@ const MINUTE = 60 * SECOND;
 const HOUR = 60 * MINUTE;
 
 export const TALK = Object.freeze({
-  /** No two bubbles closer than this. */
+  /** No two bubbles closer than this, for anything the pet volunteers. */
   MIN_GAP_MS: 20 * SECOND,
+  /** A reply to what you just did (a meal, a knock), or hunger, needs only this since the last bubble. */
+  REPLY_GAP_MS: 6 * SECOND,
   /** At most this many bubbles in any hour, counting everything except replies to what you just did. */
   HOURLY_CAP: 8,
   /** While you are at the bowl: a thought every 45-120 s, at most this many per visit. */
@@ -173,12 +175,10 @@ export function react(state: TalkState, moment: Reaction, i: Pick<TalkInput, 'no
   if (i.muted || !i.alive) return { say: false, state: state };
   // Coming home is said once, when you get back, and outranks whatever the pet was just saying.
   const homecoming = moment === 'welcome-back' || moment === 'feeder';
-  if (!homecoming && i.now - state.lastSpokeAt < TALK.MIN_GAP_MS) {
-    // Hunger matters more than a gap: it waits for no one, but never talks over a bubble that just went up.
-    if (!(moment === 'hungry' || moment === 'starving') || i.now - state.lastSpokeAt < 4 * SECOND) {
-      return { say: false, state };
-    }
-  }
+  // Replies and hunger wait only for the last bubble to be read; nothing else may cut the usual gap.
+  const urgent = ANSWERS_YOU.has(moment) || moment === 'hungry' || moment === 'starving';
+  const gap = urgent ? TALK.REPLY_GAP_MS : TALK.MIN_GAP_MS;
+  if (!homecoming && i.now - state.lastSpokeAt < gap) return { say: false, state };
   if (moment === 'tap' && i.rng() >= TALK.TAP_REPLY) return { say: false, state };
   const answers = ANSWERS_YOU.has(moment);
   if (!answers && lastHour(state.spoken, i.now).length >= TALK.HOURLY_CAP && moment !== 'starving') {
