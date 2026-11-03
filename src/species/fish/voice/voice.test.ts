@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Personality } from '../../../sim/types';
-import type { BondMoment, ChatIntent, Moment, TeachMoment, WorldMoment } from '../../../brain/types';
+import type { BondMoment, ChatIntent, MilestoneMoment, Moment, TeachMoment, WorldMoment } from '../../../brain/types';
 import { FISH_CHAT } from './chat';
 import { FISH_FACT_FRAMES } from './lines';
 import { FISH_VOICE } from './index';
+import { FISH_MILESTONES } from './milestones';
 import { FISH_WORLD } from './world';
 
 const PERSONALITIES: readonly Personality[] = ['sarcastic', 'anxious', 'zen', 'hyper'];
@@ -279,6 +280,125 @@ describe('the goldfish on your teams and the news', () => {
       ...allLines,
       ...PERSONALITIES.flatMap((p) => FISH_FACT_FRAMES[p]),
       ...chatEntries.map((e) => e.line),
+    ]);
+    expect(lines.filter((l) => elsewhere.has(l))).toEqual([]);
+  });
+});
+
+// Moments worth sharing (milestones.ts). The bubble shows Share this underneath; the line is the moment.
+const MILESTONE_MOMENTS = Object.keys({
+  birthday: 1, meals: 1, bond: 1, 'big-win': 1,
+} satisfies Record<MilestoneMoment, 1>) as MilestoneMoment[];
+/** Per moment: the tokens every line needs ({name} is allowed anywhere, nothing else is). */
+const MILESTONE_TOKENS: Record<MilestoneMoment, readonly string[]> = {
+  birthday: ['age'],
+  meals: ['count'],
+  bond: ['bond'],
+  'big-win': ['team', 'score'],
+};
+/** Every value each token can take, so each line is checked as it will really read. */
+const MILESTONE_VALUES: Record<string, readonly string[]> = {
+  age: ['one week', 'one month', 'two months', 'one year'],
+  count: ['10', '100', '1,000'],
+  bond: ['getting comfy', 'good friends', 'best friends'],
+  team: ['Timberwolves', 'Heat', 'Red Sox'],
+  score: ['117-112', '112-104', '5-3'],
+  name: ['Bubbles'],
+};
+/** The longest values: every line fits in 90 characters with these. */
+const MILESTONE_LONG: Record<string, string> = {
+  age: 'two months', count: '1,000', bond: 'getting comfy', team: 'Timberwolves', score: '117-112', name: 'Bubbles',
+};
+const ABOUT_SHARING = /\b(share\w*|sharing|screenshot\w*|screen\w*|button\w*|click\w*|photo\w*|picture\w*|upload\w*|post\w*|send\w*)\b/i;
+
+interface MilestoneEntry { moment: MilestoneMoment; where: string; line: string }
+const milestoneEntries: MilestoneEntry[] = PERSONALITIES.flatMap((p) =>
+  MILESTONE_MOMENTS.flatMap((m) => FISH_MILESTONES[p][m].map((line) => ({ moment: m, where: `milestones.${p}.${m}`, line }))),
+);
+const fillMilestone = (line: string, values: Record<string, string>): string =>
+  line.replace(/\{(\w+)\}/g, (_, t: string) => values[t] ?? `{${t}}`);
+
+describe('the goldfish on a day worth sharing', () => {
+  it('is part of the fish voice', () => {
+    expect(FISH_VOICE.milestones).toBe(FISH_MILESTONES);
+  });
+
+  it('has at least 6 lines per moment in every personality', () => {
+    for (const p of PERSONALITIES) {
+      for (const m of MILESTONE_MOMENTS) expect(FISH_MILESTONES[p][m].length, `milestones.${p}.${m}`).toBeGreaterThanOrEqual(6);
+    }
+  });
+
+  it('uses only its own moment\'s tokens, and every one of them in every line', () => {
+    for (const { moment, where, line } of milestoneEntries) {
+      const needs = MILESTONE_TOKENS[moment];
+      const allowed = new Set(['name', ...needs]);
+      for (const t of line.match(/\{[^}]*\}/g) ?? []) expect(allowed.has(t.slice(1, -1)), `${where}: ${line}`).toBe(true);
+      for (const t of needs) expect(line, `${where} needs {${t}}`).toContain(`{${t}}`);
+    }
+  });
+
+  it('reads right whatever the age, count, bond, team or score is', () => {
+    for (const { where, line } of milestoneEntries) {
+      // "one week", "two months": no plural, no article, no "ago".
+      expect(line, where).not.toMatch(/\{age\}s\b|\ban? \{age\}|\{age\} ago\b/i);
+      // "1,000" is a number of meals, not an ordinal.
+      expect(line, where).not.toMatch(/\{count\}(st|nd|rd|th)\b/);
+      // "getting comfy" is a label, not something you are: "New status: {bond}.", never "We are {bond}!".
+      expect(line, where).not.toMatch(/\b(am|are|is|were|was|be|been|being|become|became|officially|so|such|a|an|the) \{bond\}/i);
+      expect(line, where).not.toMatch(/\{bond\}s\b/);
+      // Teams: "the {team}" is fine, "a {team}" is not; the score is your team's first, never "by {score}".
+      expect(line, where).not.toMatch(/\{team\}s\b|\ban? \{team\}/i);
+      expect(line, where).not.toMatch(/\bby \{score\}/i);
+      // Lower case values never start a sentence.
+      expect(line, where).not.toMatch(/(^|[.!?]\s+)\{(age|bond)\}/);
+    }
+  });
+
+  it('fits in 90 characters with the longest values, and fills cleanly with every value', () => {
+    for (const { where, line } of milestoneEntries) {
+      const long = fillMilestone(line, MILESTONE_LONG);
+      expect(long.length, `${where}: ${long}`).toBeLessThanOrEqual(90);
+      for (const [token, values] of Object.entries(MILESTONE_VALUES)) {
+        for (const v of values) {
+          const filled = fillMilestone(line, { ...MILESTONE_LONG, [token]: v });
+          expect(filled, where).not.toMatch(/[{}]/);
+          expect(filled, where).not.toMatch(/\s{2}/);
+        }
+      }
+    }
+  });
+
+  it('states no numbers of its own, and no predictions', () => {
+    for (const { where, line } of milestoneEntries) {
+      expect(line, where).not.toMatch(/\d/);
+      expect(line, where).not.toMatch(PREDICTION);
+    }
+  });
+
+  it('is kind and clean: no unkind words, no crypto or gambling, no talk of apps or sharing, no quotes, links, tags or emoji', () => {
+    for (const { where, line } of milestoneEntries) {
+      expect(line, where).not.toMatch(UNKIND);
+      expect(line, where).not.toMatch(MORE_UNKIND);
+      expect(line, where).not.toMatch(CRYPTO_SLANG);
+      expect(line, where).not.toMatch(GAMBLING);
+      expect(line, where).not.toMatch(NOT_ABOUT_ITSELF);
+      expect(line, where).not.toMatch(ABOUT_SHARING);
+      expect(line, where).not.toMatch(/["\u201C\u201D\u2018#]|https?:|www\./);
+      expect(line, where).not.toMatch(/\p{Extended_Pictographic}/u);
+      expect(line.trim(), where).toBe(line);
+    }
+  });
+
+  it('never repeats a line, here or from the rest of the voice', () => {
+    const lines = milestoneEntries.map((e) => e.line);
+    const dupes = lines.filter((l, i) => lines.indexOf(l) !== i);
+    expect(dupes).toEqual([]);
+    const elsewhere = new Set([
+      ...allLines,
+      ...PERSONALITIES.flatMap((p) => FISH_FACT_FRAMES[p]),
+      ...chatEntries.map((e) => e.line),
+      ...worldEntries.map((e) => e.line),
     ]);
     expect(lines.filter((l) => elsewhere.has(l))).toEqual([]);
   });

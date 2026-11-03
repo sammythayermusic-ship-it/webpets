@@ -87,6 +87,8 @@ its own so the next command lands inside the clip.
 | `openCard` | – | opens the "Get to know me" window |
 | `cardDo` | `{ action, value? }` | acts on the open card like a person would (`src/dev/cardHarness.ts`): `name` (types it), `league`, `team` (picks and adds), `interest` (presses the chip), `own` (types and adds), `scroll` (px), `forget`, `done` |
 | `world` | `{ do?, what?, result?, us?, them? }` | Step F. `do: "refresh"` fetches now (`what`: `sports`, `news` or `all`); `do: "force"` pretends your first team's game just ended (`result`: `won`/`lost`, `us`, `them`; a test, said and felt like a real one); data is the state: mood, cheer, what is due to be said, today's games, stories cached and told |
+| `milestone` | `{ moment }` | Step F2: marks a milestone now (`birthday`, `meals`, `bond`, `big-win`), said with its Share this button when the pet is free |
+| `share` | `{ what }` | Step F2: `clip` saves the last few seconds, `card` the pet card, into Downloads (and selects it in Finder); data has the path |
 | `away` | `{ ms }` | pretends you left the window `ms` ago, for the close-friend greeting at the glass (three minutes away) |
 | `snapshot` | `{ name }` | `scene.snapshot()` → `out/<name>.png`; data `{ file, bytes }`. The canvas only: speech bubbles are DOM and are not in it (capture the window for those) |
 | `stats` | `{ seconds }` | samples `debugState().advances/.steps` across the window: `{ advancesPerSec, stepsPerSec, fps, visibility, renderMs, elapsedMs }` |

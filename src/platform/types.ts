@@ -31,6 +31,8 @@ export type TrayAction =
   | 'feed'
   | 'pantry'
   | 'card'
+  | 'clip'
+  | 'pet-card'
   | 'size-s'
   | 'size-m'
   | 'size-l'
@@ -208,6 +210,10 @@ export interface Platform {
   /** Fetch a scoreboard or a news feed (src-tauri/src/world.rs): plain https, listed hosts only. */
   world: {
     fetch(url: string): Promise<string>;
+  };
+  /** Save a clip or a pet card into Downloads and show it in Finder (src-tauri/src/share.rs). Resolves to the path. */
+  share: {
+    save(name: string, bytes: Uint8Array): Promise<string>;
   };
   /** The "Get to know me" card: its own window in the app (focus.rs), an overlay in the browser. */
   card: {

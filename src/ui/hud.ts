@@ -21,6 +21,8 @@ const CAPTION_GAP = 4;
 export interface HudOptions {
   /** TALK opens the chat field (src/ui/chatInput.ts); hidden for a pet that cannot be typed to yet. */
   onTalk?: () => void;
+  /** CLIP saves the last few seconds (Step F2). */
+  onClip?: () => void;
   canTalk?: () => boolean;
 }
 
@@ -96,7 +98,11 @@ export function mountHud(root: HTMLElement, deps: UiDeps, opts: HudOptions = {})
   const talkBtn = button('TALK', () => opts.onTalk?.(), 'talk');
   talkBtn.title = 'Say something';
 
-  pill.append(svg, pct, name, feedBtn, talkBtn, smallerBtn, biggerBtn, minBtn);
+  const clipBtn = button('CLIP', () => opts.onClip?.(), 'clip');
+  clipBtn.title = 'Save the last few seconds';
+  clipBtn.hidden = !opts.onClip;
+
+  pill.append(svg, pct, name, feedBtn, talkBtn, clipBtn, smallerBtn, biggerBtn, minBtn);
 
   // ----- caption -----
   const caption = el('div', 'hud-caption');

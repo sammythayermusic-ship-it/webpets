@@ -50,8 +50,10 @@ export interface HarnessContext {
   speech?: Pick<
     SpeechHandleExt,
     | 'say' | 'react' | 'speak' | 'transcript' | 'setTimeScale' | 'getRects' | 'typedAgo' | 'unseen' | 'chat' | 'choose'
-    | 'bond' | 'setBondPoints' | 'forgetChat' | 'speakPersonal' | 'world' | 'speakNews' | 'speakMood'
+    | 'bond' | 'setBondPoints' | 'forgetChat' | 'speakPersonal' | 'world' | 'speakNews' | 'speakMood' | 'forceMilestone'
   >;
+  /** Show it off (Step F2): save the last few seconds, or the pet card; resolves to the path. */
+  share?: { clip(): Promise<string | null>; card(): Promise<string> };
   profile?: ProfileStore;
   chatInput?: Pick<ChatInputHandle, 'open' | 'close' | 'isOpen' | 'getRects'>;
   /** Pretend you left the window this long ago (the close-friend greeting needs three minutes away). */
@@ -517,6 +519,17 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
         stories: snap.stories,
         told: snap.news.told.length,
       };
+    }
+    case 'milestone': {
+      const moment = str(cmd, 'moment');
+      if (moment !== 'birthday' && moment !== 'meals' && moment !== 'bond' && moment !== 'big-win') throw new Error('milestone: birthday, meals, bond or big-win');
+      needSpeech(ctx).forceMilestone(moment);
+      return { moment };
+    }
+    case 'share': {
+      if (!ctx.share) throw new Error('share: not available');
+      const what = cmd['what'] === 'card' ? 'card' : 'clip';
+      return { what, path: what === 'card' ? await ctx.share.card() : await ctx.share.clip() };
     }
     case 'away': {
       const ms = num(cmd, 'ms');

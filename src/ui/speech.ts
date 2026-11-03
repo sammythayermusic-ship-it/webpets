@@ -57,6 +57,12 @@ export interface SpeechHandleExt extends SpeechHandle {
   speakNews(): boolean;
   /** How your team's result feels, now (harness). */
   speakMood(): boolean;
+  /** What "Share this" under a milestone does (main.ts: save the last few seconds). */
+  setShareHandler(fn: () => void): void;
+  /** A milestone was just marked: the pet celebrates for a while. */
+  celebrating(): boolean;
+  /** Mark a milestone now (harness): birthday, meals, bond or big-win. */
+  forceMilestone(moment: 'birthday' | 'meals' | 'bond' | 'big-win'): void;
   destroy(): void;
 }
 
@@ -81,6 +87,8 @@ const IDLE_POLL_MS = 2000;
 const TICK_MS = 1000;
 const DISK_SAVE_MS = 30_000;
 const TRANSCRIPT_MAX = 200;
+/** A milestone: this long of excited laps. */
+const CELEBRATE_MS = 60_000;
 
 /** A question with buttons stays up this long for an answer. */
 const QUESTION_MS = 20_000;
@@ -250,6 +258,8 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
     },
   });
   let world: World | null = null;
+  let onShare: () => void = () => undefined;
+  let celebrateUntil = 0;
   // A team added on the card: look at its scoreboard now rather than in ten minutes.
   let lastTeams = deps.profile.get().teams.join();
   const offProfile = deps.profile.subscribe((p) => {
@@ -313,6 +323,9 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
         setProfile: (p) => deps.profile.set(p),
         known: () => KNOWN,
         world: () => world,
+        petFacts: () => ({ bornAt: st().pet.bornAt, meals: st().pet.meals }),
+        onShare: () => onShare(),
+        celebrate: () => (celebrateUntil = Date.now() + CELEBRATE_MS),
       });
     });
 
@@ -432,6 +445,15 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
     world: () => world,
     speakNews: () => talk?.speakNews() ?? false,
     speakMood: () => talk?.speakMood() ?? false,
+    setShareHandler(fn: () => void) {
+      onShare = fn;
+    },
+    celebrating: () => Date.now() < celebrateUntil,
+    forceMilestone(moment) {
+      const team = TEAMS.find((t) => t.id === deps.profile.get().teams[0])?.nickname ?? 'home team';
+      const vars = { birthday: { age: 'one week' }, meals: { count: '100' }, bond: { bond: 'best friends' }, 'big-win': { team, score: '112-104' } }[moment];
+      talk?.forceMilestone({ key: `test:${moment}:${Date.now()}`, moment, vars });
+    },
     destroy() {
       offBite();
       offGone();

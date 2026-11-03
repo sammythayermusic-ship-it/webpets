@@ -12,6 +12,7 @@ mod hittest;
 mod identity;
 mod idle;
 mod links;
+mod share;
 mod state;
 mod tray;
 mod voice;
@@ -135,6 +136,7 @@ pub fn run() {
             focus::open_card,
             focus::close_card,
             world::world_fetch,
+            share::share_save,
             links::open_link,
             voice::voice_status,
             voice::voice_write,

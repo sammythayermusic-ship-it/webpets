@@ -25,6 +25,8 @@ import { hungerLabel } from './sim';
 import { createProfileStore } from './app/profile';
 import { mountChatInput } from './ui/chatInput';
 import type { World } from './ui/world';
+import { createMomentRecorder, type MomentRecorder } from './ui/moments';
+import { petCardPng } from './ui/petCard';
 import { mountCard, type CardHandle } from './ui/card';
 import { CARD_CLOSE_EVENT, CARD_OPEN_EVENT } from './platform/browser';
 import { BOND, BOND_WORDS, bondLevel, bondPerks } from './brain/bond';
@@ -218,10 +220,12 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   let closeGreetUntil = 0;
   // Your teams and the news (Step F) live with the bubble, which is mounted further down.
   let worldOf: () => World | null = () => null;
+  let celebratingNow = (): boolean => false;
   scene.setDrivesSource((napping) => {
     const d = store.getState().actions.drives(napping);
     // Your team's result today (Step F): a win celebrates, a loss sulks.
-    const cheer = worldOf()?.cheer() ?? 0;
+    // A milestone just marked (Step F2) celebrates whatever the score.
+    const cheer = celebratingNow() ? 1 : (worldOf()?.cheer() ?? 0);
     const greeted = Date.now() < closeGreetUntil && store.getState().present && !d.greet ? { ...d, greet: true } : d;
     return cheer !== 0 ? { ...greeted, cheer } : greeted;
   });
@@ -239,13 +243,15 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   // TALK and a click on the pet open the chat field; it is mounted after the bubble it talks through.
   let openChat = (): void => undefined;
   let canChat = (): boolean => false;
-  hud = mountHud(ui, deps, { onTalk: () => openChat(), canTalk: () => canChat() });
+  let shareClip = (): void => undefined;
+  hud = mountHud(ui, deps, { onTalk: () => openChat(), canTalk: () => canChat(), onClip: () => shareClip() });
   const grip = mountResizeGrip(ui, deps);
   devPanel = mountDevPanel(ui, deps, { world: () => worldOf(), speakNews: () => speech.speakNews() });
   const speech = mountSpeech(ui, deps);
   const chatInput = mountChatInput(ui, deps, (text) => speech.chat(text));
   canChat = () => speech.canChat();
   worldOf = () => speech.world();
+  celebratingNow = () => speech.celebrating();
   hud.relayout();
   openChat = () => {
     if (speech.canChat()) chatInput.open();
@@ -257,7 +263,59 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   const montage = mountMontage(ui, deps);
   mountMemorial(ui, deps);
   grip.relayout();
-  wireTray({ ...deps, devPanel, feederDialog });
+  // Show it off (Step F2): the last few seconds as a clip, and the pet card, saved to Downloads.
+  const appCanvas = app.querySelector<HTMLCanvasElement>('canvas');
+  const recorder: MomentRecorder | null = appCanvas ? createMomentRecorder({ canvas: appCanvas, root: ui, save: (n, b) => platform.share.save(n, b) }) : null;
+  const toast = (text: string): void => showToast(ui, text);
+  const stamp = (): string => {
+    const d = new Date();
+    const p = (n: number): string => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}.${p(d.getMinutes())}.${p(d.getSeconds())}`;
+  };
+  let saving = false;
+  const saveClipNow = async (): Promise<string | null> => {
+    if (!recorder || saving) return null;
+    saving = true;
+    toast('Saving the last few seconds…');
+    try {
+      const path = await recorder.saveClip(`${store.getState().pet.name} ${stamp()}`);
+      toast(path ? 'Saved to Downloads' : 'Nothing to save yet');
+      return path;
+    } catch {
+      toast('Could not save that one');
+      return null;
+    } finally {
+      saving = false;
+    }
+  };
+  shareClip = () => void saveClipNow();
+  const shareCard = async (): Promise<string> => {
+    const s = store.getState();
+    const b = speech.bond();
+    const level = b ? bondLevel(b.points) : 0;
+    const said = speech.transcript().filter((l) => (l.kind === 'thought' || l.kind === 'chat') && l.text.length <= 110 && !l.text.includes('?'));
+    const png = await petCardPng({
+      name: s.pet.name,
+      id: s.pet.id,
+      species: s.pet.species,
+      personality: s.pet.personality,
+      bornAt: s.pet.bornAt,
+      now: Date.now(),
+      bond: level > 0 ? BOND_WORDS[level] : null,
+      you: profile.get().name,
+      quote: said.at(-1)?.text ?? null,
+      portrait: (await recorder?.latestFrame()) ?? null,
+    });
+    return platform.share.save(`${s.pet.name} card ${stamp()}.png`, png);
+  };
+  const shareCardWithToast = (): void => {
+    shareCard().then(
+      () => toast('Pet card saved to Downloads'),
+      () => toast('Could not make the card'),
+    );
+  };
+  speech.setShareHandler(shareClip);
+  wireTray({ ...deps, devPanel, feederDialog, share: { clip: shareClip, card: shareCardWithToast } });
   installKeys({ store, devPanel });
   audio.setAmbient(initial.pet.species, true);
   audio.setMuted(initial.settings.muted);
@@ -446,6 +504,7 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
         speech,
         profile,
         chatInput,
+        share: { clip: saveClipNow, card: shareCard },
         backdateAway: (ms) => {
           leftAt -= ms;
         },
@@ -477,6 +536,21 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   }
 
   return { store, scene };
+}
+
+/** A short note at the bottom of the window ("Saved to Downloads"). */
+function showToast(ui: HTMLElement, text: string): void {
+  let el = ui.querySelector<HTMLElement>('.toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'toast';
+    ui.append(el);
+  }
+  el.textContent = text;
+  el.classList.add('show');
+  const mine = el;
+  clearTimeout(Number(mine.dataset['timer'] ?? 0));
+  mine.dataset['timer'] = String(setTimeout(() => mine.classList.remove('show'), 2600));
 }
 
 /** Browser only: the card as an overlay, opened and closed by the mock platform's events. */

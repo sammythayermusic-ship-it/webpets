@@ -118,6 +118,7 @@ export function createFakePlatform(seedFiles: Record<string, unknown> = {}): Fak
     openLink: async () => {},
     card: { open: async () => undefined, close: async () => undefined },
     world: { fetch: async () => Promise.reject(new Error('offline in tests')) },
+    share: { save: async (name: string) => name },
     events: { emit: async () => undefined, on: () => () => undefined },
     notify: async (title, body) => {
       p.notifications.push({ title, body });

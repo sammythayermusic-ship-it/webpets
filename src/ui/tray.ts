@@ -12,6 +12,8 @@ import { toChipView, toHudModel, tooltipText } from './model';
 export interface TrayDeps extends UiDeps {
   devPanel: Pick<DevPanelHandle, 'toggle'>;
   feederDialog: { open(): void };
+  /** Show it off (Step F2): save the last few seconds, or the pet card. */
+  share: { clip(): void; card(): void };
 }
 
 export function chipSizeFor(devicePixelRatio: number): TrayChipSize {
@@ -44,6 +46,12 @@ export function wireTray(deps: TrayDeps): () => void {
         return;
       case 'card':
         void deps.platform.card.open();
+        return;
+      case 'clip':
+        deps.share.clip();
+        return;
+      case 'pet-card':
+        deps.share.card();
         return;
       case 'pantry':
         ensureShown();

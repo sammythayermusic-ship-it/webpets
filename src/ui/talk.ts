@@ -23,6 +23,7 @@ import { BOND_WORDS, bondEvent, bondLevel, bondNow, bondPerks, emptyBond, normal
 import { clearMood, converse, emptyChat, moodToAsk, normalizeChat, withExchange, type ChatState, type Say } from '../brain/chat';
 import type { Profile } from '../brain/profile';
 import { understand, type Known, type Understood } from '../brain/understand';
+import { milestonesDue, normalizeMilestones, winMilestone, type Milestone, type MilestoneState } from '../brain/milestones';
 import type { World, WorldSay } from './world';
 
 /** What the controller keeps between launches (brain.json, one per pet). */
@@ -32,6 +33,7 @@ export interface TalkMemory {
   spend: Spend | null;
   bond: Bond;
   chat: ChatState;
+  milestones: MilestoneState;
 }
 
 export interface LineWriter {
@@ -68,6 +70,12 @@ export interface TalkEnv {
   known(): Known;
   /** Your teams' games and the news (Step F); null where there is none (tests, a pet without the lines). */
   world?: () => World | null;
+  /** When the pet was born and how many meals it has had, for milestones (Step F2). */
+  petFacts?: () => { bornAt: number; meals: number };
+  /** "Share this" under a milestone: save the last few seconds. */
+  onShare?: () => void;
+  /** A milestone: celebrate (excited laps for a while). */
+  celebrate?: () => void;
 }
 
 export interface TalkController {
@@ -99,6 +107,8 @@ export interface TalkController {
   speakNews(): boolean;
   /** Say how your team's result feels, while the mood lasts (harness). */
   speakMood(): boolean;
+  /** Mark a milestone now, as if it had just been reached (harness, dev). */
+  forceMilestone(m: Milestone): void;
 }
 
 /** Local calendar day, "2026-10-31". */
@@ -124,6 +134,10 @@ const MOOD_SHARE = 0.5;
 /** Words that make a question about your team a question about the game. */
 const GAME_WORDS = /\b(score|scores|game|games|match|playing|play|winning|losing|won|lost|win|doing)\b/;
 /** Chat intents the library answers itself even when Claude is available: they are its jokes and its greetings. */
+/** The button under a moment worth sharing. */
+export const SHARE_CHOICE: Choice = { label: 'Share this', value: 'share' };
+/** A win is announced with the milestone's line this often (with the button either way). */
+const WIN_AS_MILESTONE = 0.5;
 const LIBRARY_ONLY: ReadonlySet<ChatIntent> = new Set<ChatIntent>(['joke', 'hello', 'bye', 'thanks', 'name-ask']);
 /** Moments too important to lose to the gap after another bubble: said late rather than never. */
 const OWED: ReadonlySet<Reaction> = new Set<Reaction>(['hungry', 'starving']);
@@ -136,6 +150,12 @@ export function createTalk(env: TalkEnv): TalkController {
   let spend = normalizeSpend(o['spend']);
   let bond = normalizeBond(o['bond'], env.now());
   let chatState = normalizeChat(o['chat']);
+  const facts = (): { bornAt: number; now: number; meals: number; bond: ReturnType<typeof bondLevel> } => {
+    const f = env.petFacts?.() ?? { bornAt: env.now(), meals: 0 };
+    return { ...f, now: env.now(), bond: bondLevel(bondNow(bond, env.now()).points) };
+  };
+  let milestones = normalizeMilestones(o['milestones'], facts());
+  const milestonesOwed: Milestone[] = [];
   let wasPresent = false;
   let awaySince = env.now();
   let writing = false;
@@ -147,7 +167,7 @@ export function createTalk(env: TalkEnv): TalkController {
   let owed: Reaction | null = null;
 
   function persist(): void {
-    env.save({ memory, talk, spend, bond, chat: chatState });
+    env.save({ memory, talk, spend, bond, chat: chatState, milestones });
   }
 
   function perks(): ReturnType<typeof bondPerks> {
@@ -231,6 +251,15 @@ export function createTalk(env: TalkEnv): TalkController {
     if (!asking || !GAME_WORDS.test(lower)) return null;
     if (u.teams.length > 0 && named.length === 0) return null;
     return named;
+  }
+
+  function milestoneLine(m: Milestone): Utterance | null {
+    const { species, personality, name } = env.pet();
+    const lines = env.voice(species)?.milestones?.[personality][m.moment] ?? [];
+    const r = sayFromPool(lines, `milestone:${m.moment}:${personality}`, 'thought', memory, env.rng, { name, ...m.vars });
+    if (!r) return null;
+    memory = r.memory;
+    return { ...r.utterance, choices: [SHARE_CHOICE] };
   }
 
   /** A thought about you, if the bond allows and it knows something to say. */
@@ -503,18 +532,42 @@ export function createTalk(env: TalkEnv): TalkController {
       if (r.say) speakVolunteer(r.say);
       if (r.say || changed) persist();
       if (owed !== null && !r.say && (!env.stillTrue(owed) || reactNow(owed))) owed = null;
+      // Milestones (Step F2): noticed here, said like a result, with a button to share the moment.
+      const m = milestonesDue(milestones, facts());
+      if (m.due.length > 0) {
+        milestones = m.state;
+        milestonesOwed.push(...m.due);
+        persist();
+      }
       // Game day, or a result: said as soon as the pet is up and you are not busy, once.
       const world = env.world?.();
       world?.tick();
+      const free = !r.say && !env.muted() && env.pet().alive && env.awake() && !env.busy() && now - talk.lastSpokeAt >= TALK.REPLY_GAP_MS;
       const news = world?.due() ?? null;
-      if (news && !r.say && !env.muted() && env.pet().alive && env.awake() && !env.busy() && now - talk.lastSpokeAt >= TALK.REPLY_GAP_MS) {
-        const u = worldLine(news);
+      if (free && news) {
         world!.done(news);
+        let u = worldLine(news);
+        if (news.moment === 'won') {
+          // Your team's win is a moment worth sharing: the button, and sometimes the milestone's words.
+          const w = winMilestone(milestones, news.key, news.vars['team'] ?? '', news.vars['score'] ?? '');
+          milestones = w.state;
+          const big = w.due && env.rng() < WIN_AS_MILESTONE ? milestoneLine(w.due) : null;
+          u = big ?? (u ? { ...u, choices: [SHARE_CHOICE] } : null);
+          if (w.due) env.celebrate?.();
+        }
         if (u) {
           say(u);
           talk = { ...talk, lastSpokeAt: now };
           persist();
         }
+      } else if (free && milestonesOwed.length > 0) {
+        const u = milestoneLine(milestonesOwed.shift()!);
+        if (u) {
+          say(u);
+          env.celebrate?.();
+          talk = { ...talk, lastSpokeAt: now };
+        }
+        persist();
       }
     },
     react(moment) {
@@ -533,10 +586,12 @@ export function createTalk(env: TalkEnv): TalkController {
       owed = null;
       bond = emptyBond(env.now());
       chatState = emptyChat();
+      milestones = normalizeMilestones(undefined, facts());
+      milestonesOwed.length = 0;
       persist();
     },
     snapshot() {
-      return { memory, talk, spend, bond, chat: chatState };
+      return { memory, talk, spend, bond, chat: chatState, milestones };
     },
     chat(text) {
       const trimmed = text.trim();
@@ -559,6 +614,10 @@ export function createTalk(env: TalkEnv): TalkController {
       converseAndReply(u, null, trimmed);
     },
     choose(choice) {
+      if (choice.value === SHARE_CHOICE.value) {
+        env.onShare?.();
+        return;
+      }
       converseAndReply(understand(choice.label, env.known()), choice.value, choice.label);
     },
     bondEvent(ev) {
@@ -574,6 +633,9 @@ export function createTalk(env: TalkEnv): TalkController {
     forgetChat() {
       chatState = emptyChat();
       persist();
+    },
+    forceMilestone(m) {
+      milestonesOwed.push(m);
     },
     speakMood() {
       const m = env.world?.()?.mood() ?? null;

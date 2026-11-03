@@ -29,6 +29,8 @@ const TRAY_ACTION_SET: Readonly<Record<TrayAction, true>> = {
   feed: true,
   pantry: true,
   card: true,
+  clip: true,
+  'pet-card': true,
   'size-s': true,
   'size-m': true,
   'size-l': true,
@@ -158,6 +160,9 @@ export function createTauriPlatform(): Platform {
     openLink: (url: string) => invoke<void>('open_link', { url }),
     world: {
       fetch: (url: string) => invoke<string>('world_fetch', { url }),
+    },
+    share: {
+      save: (name: string, bytes: Uint8Array) => invoke<string>('share_save', bytes, { headers: { 'x-name': name } }),
     },
     card: {
       open: () => invoke<void>('open_card'),

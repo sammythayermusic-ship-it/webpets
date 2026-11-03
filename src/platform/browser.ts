@@ -27,6 +27,8 @@ const MENU_ITEMS: ReadonlyArray<{ action: TrayAction; label: string }> = [
   { action: 'feed', label: 'Feed' },
   { action: 'pantry', label: 'Holiday feeder…' },
   { action: 'card', label: 'Get to know me…' },
+  { action: 'clip', label: 'Save the last few seconds' },
+  { action: 'pet-card', label: 'Pet card…' },
   { action: 'size-s', label: 'Size: Small' },
   { action: 'size-m', label: 'Size: Medium' },
   { action: 'size-l', label: 'Size: Large' },
@@ -442,6 +444,18 @@ export function createBrowserPlatform(): Platform {
         const r = await fetch(url);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.text();
+      },
+    },
+    // A download, the browser's version of "saved to Downloads".
+    share: {
+      save: async (name: string, bytes: Uint8Array) => {
+        const url = URL.createObjectURL(new Blob([bytes as BlobPart]));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        return name;
       },
     },
     // One page, so the card is an overlay on it: main.ts mounts it when this event fires.

@@ -41,7 +41,20 @@ export interface Voice {
   chat?: ChatVoice;
   /** Your teams' games and the news (Step F). Every token is filled from data the app fetched. */
   world?: Record<Personality, Record<WorldMoment, readonly string[]>>;
+  /** Moments worth sharing (Step F2): the pet marks them, and the bubble offers "Share this". */
+  milestones?: Record<Personality, Record<MilestoneMoment, readonly string[]>>;
 }
+
+/**
+ * Moments worth sharing (AFTER-BAKEOFF Step F2). Tokens: `{age}` ("one week", "one month", "one
+ * year"), `{count}` (a number of meals, "100"), `{bond}` ("good friends", "best friends"), `{team}`
+ * (your team's nickname), `{score}` ("112-104", your team first), `{name}`.
+ */
+export type MilestoneMoment =
+  | 'birthday' // the pet turns {age} old
+  | 'meals' // its {count}th meal
+  | 'bond' // you two became {bond}
+  | 'big-win'; // your {team} won, {score}: a moment to share
 
 /**
  * Sports and news (AFTER-BAKEOFF Step F). Lines are frames; the facts in them come only from a
