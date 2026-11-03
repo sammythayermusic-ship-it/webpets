@@ -1774,3 +1774,32 @@ What the notes above decided, as built, and the calls made on the way:
 - **Polling**: scoreboards every 10 minutes (3 while one of your games is on or about to start), only
   for leagues you follow and never without a team; news every 3 hours, the first a minute after
   launch. `world.json` keeps what was said and the mood, so a relaunch does not repeat a result.
+
+## 2026-11-02 — Step F2: show it off
+
+- **Clips are kept, not recorded on demand.** The last six seconds are always in memory (10 frames a
+  second, 640 px wide, small JPEGs, about 2 MB), so "Save the last few seconds" catches the moment
+  that already happened. Frames come from the habitat canvas through `captureStream` and a hidden
+  video (the WebGL canvas cannot be read between frames), on the same worker tick as the scene so the
+  packaged window's "hidden" state cannot slow them. The bubble is drawn in from the DOM, on a soft
+  dark backdrop with a small "WebPets" mark: shared clips say where they came from.
+- **MP4 when the webview can make one**, WebM otherwise; no GIF yet (a GIF of a goldfish in clear
+  water is big and banded; a later step can add one).
+- **Saved to Downloads and selected in Finder** (`share.rs`), one drag from a chat. Nothing is uploaded,
+  and the app never posts anything itself. Names are checked to a safe shape and a known extension.
+- **The pet card** is 1080 x 1350 (the shape the big apps show best): name, the latest frame as a
+  portrait, species, personality, age in words, the bond in words with your name, the last thing it
+  said that is not a question, tinted by personality.
+- **Milestones**: birthdays (a day, a week, then months, then years), meals (10, 50, 100, 250, 500,
+  1,000, 2,000), each bond level, your team's wins. Each is marked once, said when the pet is free,
+  with a Share this button and a minute of excited laps. A pet that already passed some when this
+  arrived starts with them marked. A win is announced with the win line or the milestone line, half
+  and half, the button either way.
+
+### Ideas for later, logged not built (AFTER-BAKEOFF F2.4)
+- Friends' pets visiting: a friend's pet swims or scurries into your habitat for a minute (needs a
+  way to pair two Macs; no server today).
+- Seasonal decorations: a pumpkin in the bowl in October, snow on the cage in December.
+- Rare looks: a calico or black moor goldfish, a white hamster, drawn at adoption by `rarity`.
+- A share sheet (AirDrop, Messages) instead of Finder, a GIF option, a vertical 9:16 clip for stories.
+- A milestone gallery on the pet card's back.

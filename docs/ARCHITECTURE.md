@@ -242,6 +242,7 @@ Commands (invoke names; args/returns are camelCase JSON matching `src/platform/t
 | `end_typing` | – | – | hands focus back to the remembered app, unless the card window is open |
 | `open_card` | – | – | opens (or focuses) the "Get to know me" window, label `card`, `card.html`, 440×640, taking focus the same way |
 | `close_card` | – | – | closes it; its `Destroyed` event gives focus back |
+| `share_save` | raw bytes, header `x-name` | path | Step F2: writes a clip or a pet card into Downloads and selects it in Finder (`share.rs`); safe names and known extensions only |
 | `world_fetch` | `{ url }` | body as text | Step F: an https GET to ESPN's public site API or one of the listed news feeds (`world.rs`); anything else is an error |
 
 Events (Rust → TS, on the main window):
