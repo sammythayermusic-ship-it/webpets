@@ -123,7 +123,7 @@ function makeHarness(): Harness {
   let clock = 1_700_000_000_000;
   const ctx: HarnessContext = {
     store,
-    platform: { window: { getGeometry: async () => geometry } },
+    platform: { window: { getGeometry: async () => geometry, getLayering: async () => ({ level: 0, behavior: 0 }) } },
     scene: {
       snapshot: async () => PNG_DATA_URL,
       debugState: () => debugState(),

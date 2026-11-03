@@ -176,6 +176,23 @@ brain included for every new species.
 - Still open from before: how the app makes money, whether food costs anything, whether a pet can
   die for good.
 
+## Step H — On the desktop (proposed 2026-11-03, after Sammy's note; not started)
+
+The pet as a desktop widget or as the desktop itself. Spiked first (`docs/reports/spike-desktop.md`):
+the window at desktop level works; a true macOS widget cannot animate, so this is the live version.
+
+1. **A square tank habitat** from Blender (`assets/habitats/fish/tank/`), day, night, dawn and dusk
+   plates like the bowl, rendered big enough for a Retina display in wallpaper mode.
+2. **Two sizes of one mode.** "On the desktop": widget-sized at a pinned spot behind your windows, or
+   filling the display as the wallpaper. One window per display, main display first. Today's
+   floating mode stays as the third choice, in the tray.
+3. **Clicks.** Feeding, knocking and talking must still work when the desktop shows; "click the
+   wallpaper to show the desktop" must not fire on the tank.
+4. **Cost.** Measure the live layer at full screen in the built app; lower its resolution if the Mac
+   warms up.
+
+Report: the tank as a widget among the macOS widgets, and as the wallpaper, with a clip of each.
+
 ## Still waiting on Sammy
 
 The iCloud and full-disk problem in `NEEDS-SAMMY.md` is still open and slows every build. Deleting

@@ -55,8 +55,9 @@ pub fn set_layering(
     always_on_top: bool,
     all_desktops: bool,
     over_fullscreen: bool,
+    on_desktop: bool,
 ) -> Result<(), String> {
-    window::set_layering(&app, window::Layering { always_on_top, all_desktops, over_fullscreen })
+    window::set_layering(&app, window::Layering { always_on_top, all_desktops, over_fullscreen, on_desktop })
 }
 
 /// The window's level and collection-behavior bits, read off the live window. For the boot report.
@@ -126,6 +127,7 @@ pub fn tray_set_menu_state(
     always_on_top: bool,
     all_desktops: bool,
     over_fullscreen: bool,
+    on_desktop: bool,
     alive: bool,
     hidden: bool,
 ) -> Result<(), String> {
@@ -141,6 +143,7 @@ pub fn tray_set_menu_state(
         always_on_top,
         all_desktops,
         over_fullscreen,
+            on_desktop,
             alive,
             hidden,
         },

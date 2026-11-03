@@ -463,6 +463,7 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
       alwaysOnTop: initial.settings.alwaysOnTop,
       allDesktops: initial.settings.allDesktops,
       overFullscreen: initial.settings.overFullscreen,
+      onDesktop: initial.settings.onDesktop,
     })
     .catch(logRejected('setLayering'));
   refreshHitRegions();

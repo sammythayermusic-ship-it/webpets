@@ -43,7 +43,7 @@ const HABITATS: ReadonlySet<string> = new Set<Habitat>([
 /** What the harness needs from the app. Narrow on purpose so the tests can hand in small fakes. */
 export interface HarnessContext {
   store: Pick<AppStore, 'getState'>;
-  platform: { window: Pick<WindowApi, 'getGeometry'>; card?: Platform['card'] };
+  platform: { window: Pick<WindowApi, 'getGeometry' | 'getLayering'>; card?: Platform['card'] };
   scene: Pick<HabitatScene, 'snapshot' | 'debugState' | 'fps' | 'setPointer' | 'tap' | 'feedSpot' | 'aimFeed'>;
   devPanel: DevPanelHandle & Partial<{ open(): void; close(): void }>;
   hud?: Pick<HudHandle, 'setVisible'>;
@@ -330,6 +330,13 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
     case 'scale':
       await actions.setScale(num(cmd, 'steps'));
       return { scale: ctx.store.getState().settings.scale };
+    case 'layering': {
+      // Any of the four flags; the rest keep their values. Data is the level read back off the window.
+      const patch: Record<string, boolean> = {};
+      for (const k of ['alwaysOnTop', 'allDesktops', 'overFullscreen', 'onDesktop']) if (typeof cmd[k] === 'boolean') patch[k] = cmd[k] as boolean;
+      await actions.setLayering(patch);
+      return { ...(await ctx.platform.window.getLayering()), settings: ctx.store.getState().settings };
+    }
     case 'species': {
       const species = str(cmd, 'species');
       const habitat = str(cmd, 'habitat');

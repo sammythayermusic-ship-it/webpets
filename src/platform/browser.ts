@@ -41,6 +41,7 @@ const MENU_ITEMS: ReadonlyArray<{ action: TrayAction; label: string }> = [
   { action: 'always-on-top', label: 'Visible on: Float above windows' },
   { action: 'all-desktops', label: 'Visible on: Every desktop' },
   { action: 'over-fullscreen', label: 'Visible on: Over fullscreen apps' },
+  { action: 'on-desktop', label: 'Visible on: On the desktop (behind windows)' },
   { action: 'launch-at-login', label: 'Launch at login' },
   { action: 'dev-panel', label: 'Dev panel' },
   { action: 'new-pet', label: 'New pet' },
@@ -258,6 +259,8 @@ export function createBrowserPlatform(): Platform {
         return s.allDesktops;
       case 'over-fullscreen':
         return s.overFullscreen;
+      case 'on-desktop':
+        return s.onDesktop;
       default:
         return false;
     }

@@ -1813,3 +1813,25 @@ What the notes above decided, as built, and the calls made on the way:
 - Rare looks: a calico or black moor goldfish, a white hamster, drawn at adoption by `rarity`.
 - A share sheet (AirDrop, Messages) instead of Finder, a GIF option, a vertical 9:16 clip for stories.
 - A milestone gallery on the pet card's back.
+
+## 2026-11-03 — Spike: the tank on the desktop
+
+Sammy's note after checkpoint F2: a square tank as a desktop widget, or as the whole desktop
+background. A true macOS widget (WidgetKit) is a snapshot redrawn a few times an hour, with no
+animation and no WebGL, and it needs a signed native extension (the Apple developer account is on
+NEEDS-SAMMY), so it cannot hold the live fish. The live version of both ideas is the habitat window at
+**desktop level**: above the wallpaper, below every window and the desktop icons, the way the
+live-wallpaper apps do it; a widget-sized tank and a wallpaper tank are the same mode at two sizes.
+- Built as a fourth layering flag, `onDesktop` (default off), applied as `kCGDesktopIconWindowLevel − 1`
+  and winning over `alwaysOnTop` for the level. Tray item "On the desktop (behind windows)" under
+  Visible on; harness op `layering`.
+- Checked in the installed harness app (`docs/reports/spike-desktop.md`): the level applies and holds,
+  the window renders normally there, sits under the desktop icons among the macOS widgets, and is on
+  every desktop Space. Clicks are unproven: Stage Manager on Sammy's Mac put his windows over the
+  tank during the scripted test, and the clicks went into them, so the script stopped. Sammy can
+  answer it with the tray item.
+- Full-desktop captures from the spike stay out of the repo (they show the desktop); only the
+  window capture is in `docs/reports/spike-desktop/`.
+- Proposed as Step H in `AFTER-BAKEOFF.md`, after Step G: a square tank habitat, two sizes, one
+  window per display, the live layer's cost at full screen.
+

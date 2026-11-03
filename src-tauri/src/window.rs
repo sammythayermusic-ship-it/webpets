@@ -506,18 +506,26 @@ fn settle_position(app: &AppHandle) -> Result<(), String> {
     app.emit("window-moved", geometry).map_err(err)
 }
 
+/// `kCGDesktopIconWindowLevel` (`CGWindowLevelForKey(kCGDesktopIconWindowLevelKey)`): the desktop
+/// icons' level, `kCGMinimumWindowLevel + 20`. Not in objc2's NSWindow level constants.
+#[cfg(target_os = "macos")]
+const DESKTOP_ICON_WINDOW_LEVEL: isize = -2_147_483_603;
+
 /// How the habitat window sits relative to other windows, desktops and fullscreen apps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Layering {
     pub always_on_top: bool,
     pub all_desktops: bool,
     pub over_fullscreen: bool,
+    /// Sit on the desktop: above the wallpaper, below every window and the desktop icons (spike,
+    /// 2026-11-03). Wins over `always_on_top` for the level.
+    pub on_desktop: bool,
 }
 
 impl Default for Layering {
     /// What the app did unconditionally before any of this was a setting.
     fn default() -> Self {
-        Self { always_on_top: true, all_desktops: true, over_fullscreen: true }
+        Self { always_on_top: true, all_desktops: true, over_fullscreen: true, on_desktop: false }
     }
 }
 
@@ -536,6 +544,7 @@ pub fn layering_from_settings(app: &AppHandle) -> Layering {
         always_on_top: flag("alwaysOnTop", d.always_on_top),
         all_desktops: flag("allDesktops", d.all_desktops),
         over_fullscreen: flag("overFullscreen", d.over_fullscreen),
+        on_desktop: flag("onDesktop", d.on_desktop),
     }
 }
 
@@ -584,7 +593,15 @@ fn apply_layering(window: &WebviewWindow<Wry>, layering: Layering) -> Result<(),
                 // level only clears ordinary windows. Being above the menu bar's level is harmless
                 // here because the window is always clamped into the monitor's WORK area, which
                 // excludes the menu bar, so it can never actually sit over it.
-                ns.setLevel(if layering.always_on_top { NSStatusWindowLevel } else { NSNormalWindowLevel });
+                // On the desktop: one below the desktop icons, above the wallpaper, where the
+                // live-wallpaper apps put theirs. Clicks still reach it when nothing covers it.
+                ns.setLevel(if layering.on_desktop {
+                    DESKTOP_ICON_WINDOW_LEVEL - 1
+                } else if layering.always_on_top {
+                    NSStatusWindowLevel
+                } else {
+                    NSNormalWindowLevel
+                });
 
                 let mut behavior = ns.collectionBehavior();
                 behavior.set(NSWindowCollectionBehavior::CanJoinAllSpaces, layering.all_desktops);

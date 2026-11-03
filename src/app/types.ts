@@ -65,6 +65,7 @@ export interface SettingsDoc {
   alwaysOnTop: boolean;
   allDesktops: boolean;
   overFullscreen: boolean;
+  onDesktop: boolean;
   /** Added to Date.now() by app.now(). Persisted so a faked clock survives relaunch. */
   devClockOffsetMs: number;
   /** Armed by dev.skipOnNextLaunch: consumed at boot (added to devClockOffsetMs before the first reconcile). */

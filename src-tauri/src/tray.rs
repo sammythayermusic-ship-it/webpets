@@ -33,6 +33,7 @@ pub const ACTION_LAUNCH_AT_LOGIN: &str = "launch-at-login";
 pub const ACTION_ALWAYS_ON_TOP: &str = "always-on-top";
 pub const ACTION_ALL_DESKTOPS: &str = "all-desktops";
 pub const ACTION_OVER_FULLSCREEN: &str = "over-fullscreen";
+pub const ACTION_ON_DESKTOP: &str = "on-desktop";
 pub const ACTION_DEV_PANEL: &str = "dev-panel";
 pub const ACTION_NEW_PET: &str = "new-pet";
 pub const ACTION_TOGGLE_VISIBILITY: &str = "toggle-visibility";
@@ -50,6 +51,7 @@ pub struct TrayMenuState {
     pub always_on_top: bool,
     pub all_desktops: bool,
     pub over_fullscreen: bool,
+    pub on_desktop: bool,
     pub alive: bool,
     pub hidden: bool,
 }
@@ -72,6 +74,7 @@ pub struct TrayMenu {
     pub always_on_top: CheckMenuItem<Wry>,
     pub all_desktops: CheckMenuItem<Wry>,
     pub over_fullscreen: CheckMenuItem<Wry>,
+    pub on_desktop: CheckMenuItem<Wry>,
     pub visibility: MenuItem<Wry>,
 }
 
@@ -115,12 +118,13 @@ fn build_menu(app: &AppHandle) -> tauri::Result<TrayMenu> {
     let always_on_top = check(app, ACTION_ALWAYS_ON_TOP, "Float above windows", true)?;
     let all_desktops = check(app, ACTION_ALL_DESKTOPS, "Show on every desktop", true)?;
     let over_fullscreen = check(app, ACTION_OVER_FULLSCREEN, "Show over fullscreen apps", true)?;
+    let on_desktop = check(app, ACTION_ON_DESKTOP, "On the desktop (behind windows)", false)?;
     let visible_on = Submenu::with_id_and_items(
         app,
         "visible-on",
         "Visible on",
         true,
-        &[&always_on_top, &all_desktops, &over_fullscreen],
+        &[&always_on_top, &all_desktops, &over_fullscreen, &on_desktop],
     )?;
     let dev_panel = item(app, ACTION_DEV_PANEL, "Dev panel")?;
     let new_pet = item(app, ACTION_NEW_PET, "New pet")?;
@@ -171,6 +175,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<TrayMenu> {
         always_on_top,
         all_desktops,
         over_fullscreen,
+        on_desktop,
         visibility,
     })
 }
@@ -272,6 +277,7 @@ pub fn set_menu_state(app: &AppHandle, s: &TrayMenuState) -> Result<(), String> 
     e(m.always_on_top.set_checked(s.always_on_top))?;
     e(m.all_desktops.set_checked(s.all_desktops))?;
     e(m.over_fullscreen.set_checked(s.over_fullscreen))?;
+    e(m.on_desktop.set_checked(s.on_desktop))?;
     e(m.feed.set_enabled(s.alive))?;
     e(m.pantry.set_enabled(s.alive))?;
     e(m.visibility.set_text(if s.hidden { "Show" } else { "Minimize" }))?;

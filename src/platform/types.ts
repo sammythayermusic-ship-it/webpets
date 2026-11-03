@@ -46,6 +46,7 @@ export type TrayAction =
   | 'always-on-top'
   | 'all-desktops'
   | 'over-fullscreen'
+  | 'on-desktop'
   | 'dev-panel'
   | 'new-pet'
   | 'toggle-visibility'
@@ -62,6 +63,7 @@ export interface TrayMenuState {
   alwaysOnTop: boolean;
   allDesktops: boolean;
   overFullscreen: boolean;
+  onDesktop: boolean;
   alive: boolean; // feed/pantry items disabled when false
   hidden: boolean; // menu item reads "Show" when true, "Minimize" when false
 }
@@ -157,6 +159,12 @@ export interface Layering {
    * app reaches into AppKit directly.
    */
   overFullscreen: boolean;
+  /**
+   * Sit on the desktop: above the wallpaper, below every window and the desktop icons, the way a
+   * live wallpaper does. Takes the level over `alwaysOnTop`. A spike (2026-11-03) toward a desktop
+   * tank and a wallpaper tank.
+   */
+  onDesktop: boolean;
 }
 
 export interface TrayApi {

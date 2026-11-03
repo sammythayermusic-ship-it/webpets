@@ -221,7 +221,7 @@ Commands (invoke names; args/returns are camelCase JSON matching `src/platform/t
 | `set_scale` | `{ scale }` | `WindowGeometry` | resize keeping bottom-right anchored; first call restores position |
 | `set_scale_live` | `{ scale, live }` | `WindowGeometry` | as above; `live` skips edge snapping and the position write, for a drag in flight |
 | `set_interaction_lock` | `{ ms }` | — | hands the pointer to the webview for `ms` (renewable, 0 releases); the cursor poller stands down |
-| `set_layering` | `{ alwaysOnTop, allDesktops, overFullscreen }` | — | window level and collection behaviour, applied as a set |
+| `set_layering` | `{ alwaysOnTop, allDesktops, overFullscreen, onDesktop }` | — | window level and collection behaviour, applied as a set |
 | `get_layering` | – | `{ level, behavior }` | level and collection-behaviour bits read off the LIVE window, for the boot report |
 | `build_identity` | – | `BuildIdentity` | `{ bundle, exe, version, builtAtMs, staleLaunch }` — which binary is running |
 | `set_hit_regions` | `{ regions: Rect[] }` | – | regions in window-local CSS px |

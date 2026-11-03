@@ -78,6 +78,7 @@ export function defaultSettings(): SettingsDoc {
     alwaysOnTop: true,
     allDesktops: true,
     overFullscreen: true,
+    onDesktop: false,
     devClockOffsetMs: 0,
     pendingSkipMs: 0,
   };
@@ -227,6 +228,7 @@ export function normalizeSettings(v: unknown): SettingsDoc {
     alwaysOnTop: isBool(v['alwaysOnTop']) ? v['alwaysOnTop'] : d.alwaysOnTop,
     allDesktops: isBool(v['allDesktops']) ? v['allDesktops'] : d.allDesktops,
     overFullscreen: isBool(v['overFullscreen']) ? v['overFullscreen'] : d.overFullscreen,
+    onDesktop: isBool(v['onDesktop']) ? v['onDesktop'] : d.onDesktop,
     devClockOffsetMs: isNum(v['devClockOffsetMs']) ? v['devClockOffsetMs'] : 0,
     pendingSkipMs: isNum(v['pendingSkipMs']) ? v['pendingSkipMs'] : 0,
   };

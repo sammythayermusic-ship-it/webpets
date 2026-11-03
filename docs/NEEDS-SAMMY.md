@@ -5,6 +5,12 @@ by it. Everything else keeps moving without it.
 
 ## Open now
 
+- **Try the tank on the desktop (2026-11-03).** In the installed app's tray: Visible on → On the
+  desktop (behind windows). Then click the fish, click the glass, and click the wallpaper beside the
+  tank. What I need to know: does a click on the tank feed or knock, and does the "click the
+  wallpaper to show the desktop" gesture fire on it? The same item turns it off. (My scripted clicks
+  landed in your windows because Stage Manager put them over the tank, so I stopped.)
+
 ### The repo lives in iCloud Drive and the disk is nearly full (2026-10-28) — blocks builds
 `~/Desktop` is synced to iCloud Drive with "Optimize Mac Storage" on, and the disk was at 96% (20 GB
 free). macOS responded by evicting about two thirds of the files in every WebPets worktree — sources,

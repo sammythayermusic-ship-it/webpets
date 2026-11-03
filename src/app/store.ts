@@ -95,6 +95,7 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
       alwaysOnTop: st.alwaysOnTop,
       allDesktops: st.allDesktops,
       overFullscreen: st.overFullscreen,
+      onDesktop: st.onDesktop,
     });
     const saveGraveyard = (): void => persist.saveGraveyard(graveyard);
 

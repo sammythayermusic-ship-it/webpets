@@ -63,6 +63,7 @@ its own so the next command lands inside the clip.
 | `force` | `{ state }` | `dev.forceState`: `fed` `hungry` `starving` `dead` `asleep` |
 | `night` | `{ value: true\|false\|null }` | `dev.setNightOverride`; `null` follows settings again |
 | `scale` | `{ steps }` | `actions.setScale(steps)` (eighths of the grid, 6–32) |
+| `layering` | `{ alwaysOnTop?, allDesktops?, overFullscreen?, onDesktop? }` | `actions.setLayering(patch)`; data is the level and behaviour read back off the window, and the settings |
 | `species` | `{ species, habitat }` | `dev.setSpecies`, scheduled 100 ms after the result is written because the app reloads; poll `state` afterwards |
 | `hide` / `show` | – | `actions.setHidden(true / false)` |
 | `devPanel` | `{ open }` | opens or closes the dev panel; data has its rect |

@@ -93,6 +93,9 @@ export function wireTray(deps: TrayDeps): () => void {
       case 'over-fullscreen':
         a.setLayering({ overFullscreen: !s.settings.overFullscreen }).catch(logRejected('setLayering'));
         return;
+      case 'on-desktop':
+        a.setLayering({ onDesktop: !s.settings.onDesktop }).catch(logRejected('setLayering'));
+        return;
       case 'launch-at-login':
         a.setLaunchAtLogin(!s.settings.launchAtLogin).catch(logRejected('setLaunchAtLogin'));
         return;
@@ -151,6 +154,7 @@ export function wireTray(deps: TrayDeps): () => void {
     alwaysOnTop: s.settings.alwaysOnTop,
     allDesktops: s.settings.allDesktops,
     overFullscreen: s.settings.overFullscreen,
+    onDesktop: s.settings.onDesktop,
       alive: s.pet.alive,
       hidden: s.hidden,
     };
