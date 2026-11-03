@@ -75,7 +75,7 @@ canonical `/Applications/WebPets.app`, and launches it. Never keep extra copies 
 Generators and tools:
 - `python3 tools/gen_placeholders.py <species> <habitat>` — stamped PLACEHOLDER layers plus the manifest fragment (needs Pillow). `tools/gen_app_icon.py` — placeholder app and tray icons.
 - `tools/mac/clickat.swift`, `tools/mac/winlist.swift` — `swiftc -O <file> -o /tmp/<name>`; post a real click / list windows (level, bounds, on-screen) without screen-recording permission.
-- `tools/mac/mousepos.swift` (cursor position), `window_stills.py` + `stills_to_clip.py` (window stills to a captioned clip: the only way to record the speech bubble and HUD, which are DOM), `record_talk.sh` (the checkpoint D recording; moves the real cursor, so only while the Mac is idle).
+- `tools/mac/mousepos.swift` (cursor position), `window_stills.py` + `stills_to_clip.py` (window stills to a captioned clip: the only way to record the speech bubble and HUD, which are DOM), `record_talk.sh` and `record_getting_to_know.sh` (the checkpoint D and E recordings; they move the real cursor and type, so only while the Mac is idle).
 - `tools/vite-diag-plugin.ts` with `src/dev/diag.ts` — dev-only snapshot bridge (`curl 'http://localhost:1420/__webpets/snap?name=x'` writes `.diag/`).
 - Blender (`/Applications/Blender.app/Contents/MacOS/Blender`, background mode, scripts in `assets/3d/scripts/`):
   `Blender -b assets/3d/wp_scene.blend -P assets/3d/scripts/wp_render2.py -- <out_root> <jobs> <samples>`
