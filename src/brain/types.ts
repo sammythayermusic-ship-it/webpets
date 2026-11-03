@@ -39,7 +39,27 @@ export interface Voice {
   factFrames: Record<Personality, readonly string[]>;
   /** Talking with you and getting to know you (Step E). A species without it cannot be typed to yet. */
   chat?: ChatVoice;
+  /** Your teams' games and the news (Step F). Every token is filled from data the app fetched. */
+  world?: Record<Personality, Record<WorldMoment, readonly string[]>>;
 }
+
+/**
+ * Sports and news (AFTER-BAKEOFF Step F). Lines are frames; the facts in them come only from a
+ * scoreboard or a feed the app fetched (src/brain/sports.ts, src/brain/news.ts), never from the line.
+ * Tokens: `{team}` (your team's nickname, "Red Sox"), `{opponent}` (theirs), `{score}` ("5-3", your
+ * team first), `{time}` ("7:10 pm"), `{headline}` (a real headline, as published), `{interest}`.
+ */
+export type WorldMoment =
+  | 'game-day' // your team plays today: {team}, {opponent}, {time}
+  | 'live' // you asked, a game is on: {team}, {opponent}, {score}
+  | 'won' // final, your team won: {team}, {opponent}, {score}
+  | 'lost' // final, your team lost: {team}, {opponent}, {score}
+  | 'tied' // final, a draw: {team}, {opponent}, {score}
+  | 'still-happy' // later the same day after a win: {team}
+  | 'mope' // the evening or the next morning after a loss: {team}
+  | 'no-game' // you asked, no game today: {team}
+  | 'news' // a feel-good headline: {headline}
+  | 'news-interest'; // a headline about something you like: {interest}, {headline}
 
 /**
  * What you typed, as far as the pet understands it without Claude (src/brain/understand.ts). A

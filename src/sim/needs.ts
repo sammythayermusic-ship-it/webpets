@@ -75,6 +75,11 @@ export interface Drives {
   greet: boolean;
   /** Interest in the surface (a fish gulps there; a hamster checks the hopper). */
   surface: number;
+  /**
+   * How your team did today (Step F), -1..1: above zero it celebrates, below zero it sulks. Not
+   * from the needs model: the caller adds it from the scoreboard. Absent is 0.
+   */
+  cheer?: number;
 }
 
 // ---- rates -----------------------------------------------------------------------------------------

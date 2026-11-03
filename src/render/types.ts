@@ -192,7 +192,7 @@ export interface Manifest {
  * the gravel; holding a pebble in its mouth; spitting it out; gulping at the surface; looking out at
  * the viewer; resting low at night.
  */
-export type PetAct = 'hover' | 'peck' | 'mouthful' | 'spit' | 'gulp' | 'look' | 'rest';
+export type PetAct = 'hover' | 'peck' | 'mouthful' | 'spit' | 'gulp' | 'look' | 'rest' | 'sulk';
 
 export type PetAnim = 'idle' | 'walk' | 'eat' | 'hungry' | 'sleep' | 'dead' | 'excited';
 

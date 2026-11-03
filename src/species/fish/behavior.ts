@@ -26,6 +26,8 @@ const EAT_TICKS = 4;
 const TURN_COOLDOWN = 6;
 /** Horizontal component of the travel direction needed before the fish commits to a new facing. */
 const TURN_DEAD_ZONE = 0.3;
+/** Your team won (drives.cheer): an excited lap of the bowl about this often, in ticks (25 s). */
+const CHEER_LAP_TICKS = 200;
 /** Ticks a finished meal is celebrated for: an excited lap of the bowl. */
 const CELEBRATE_TICKS = 22;
 /** Away this long (3 s) and the pointer coming back is an ARRIVAL, which earns a look. */
@@ -140,6 +142,7 @@ export function createFishBehavior(): FishBehavior {
   let feedBites = 0;
   /** Ticks of celebration left after a finished meal, and whether its lap is still to start. */
   let celebrate = 0;
+  let cheerTicks = 0;
   let lapPending = false;
   /** Someone at the glass: ticks since the pointer was last there, the look it is owed, the look. */
   let awayTicks = ARRIVAL_AWAY_TICKS;
@@ -239,6 +242,18 @@ export function createFishBehavior(): FishBehavior {
     if (turnCooldown > 0) turnCooldown -= 1;
     if (eatTicks > 0) eatTicks -= 1;
     if (celebrate > 0) celebrate -= 1;
+    const cheer = clamp(drives.cheer ?? 0, -1, 1);
+    // A win: every so often, an excited lap, as after a good meal.
+    if (cheer > 0.5) {
+      cheerTicks += 1;
+      if (cheerTicks >= CHEER_LAP_TICKS && input.alive && input.label !== 'hungry' && input.label !== 'starving') {
+        cheerTicks = 0;
+        celebrate = CELEBRATE_TICKS;
+        lapPending = true;
+      }
+    } else {
+      cheerTicks = 0;
+    }
     // The meal is over when the food is gone. One that was eaten (not just watched dissolve) earns a lap.
     if (input.flakes.length === 0 && feedTicks >= 0) {
       if (feedBites > 0 && input.alive) {
@@ -355,11 +370,15 @@ export function createFishBehavior(): FishBehavior {
     } else {
       // ---- awake and fed enough to have a mind of its own: plan and swim legs
       const hungry = input.label === 'hungry';
-      const { yMin, yMax } = band(bounds, halfH, hungry ? 'hungry' : 'full');
+      const full = band(bounds, halfH, hungry ? 'hungry' : 'full');
+      // A loss: it keeps to the lower half of the bowl, slowly.
+      const sulking = cheer < -0.5 && !hungry;
+      const yMin = sulking ? (full.yMin + full.yMax) / 2 : full.yMin;
+      const yMax = full.yMax;
       const cx = bounds.rect.x + bounds.rect.w / 2;
       const ampX = Math.max(8, (bounds.rect.w / 2 - halfW) * 0.8);
       const activity = clamp(drives.activity, 0, 1);
-      const cruise = CRUISE * (0.45 + 0.75 * activity) * pers.pace * (hungry ? 0.6 : 1);
+      const cruise = CRUISE * (0.45 + 0.75 * activity) * pers.pace * (hungry ? 0.6 : 1) * (sulking ? 0.6 : 1);
 
       // A tap on the glass: a startle dart away from it, whatever else was planned.
       if (input.tap && !hungry) {
@@ -585,6 +604,7 @@ export function createFishBehavior(): FishBehavior {
       }
       anim = hungry ? 'hungry' : celebrate > 0 ? 'excited' : 'idle';
       if (anim === 'idle' && act === 'gulp') anim = 'eat';
+      if (sulking && act === undefined) act = 'sulk';
     }
 
     // ---- facing: flips only when the travel direction really has, once per change, holding position

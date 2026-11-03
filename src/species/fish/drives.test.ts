@@ -148,3 +148,25 @@ describe('drives', () => {
     expect(travelled(outs)).toBeGreaterThan(100);
   });
 });
+
+describe('your team (drives.cheer)', () => {
+  const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
+
+  it('celebrates a win with excited laps every so often', () => {
+    const won = run(1600, () => ({ drives: { ...calm, cheer: 1 } }));
+    const plain = run(1600, () => ({ drives: calm }));
+    const excited = (outs: FishOutput[]): number => outs.filter((o) => o.anim === 'excited').length;
+    expect(excited(won)).toBeGreaterThan(100);
+    expect(excited(plain)).toBe(0);
+  });
+
+  it('sulks low and slow after a loss, fins folded', () => {
+    const lost = run(1600, () => ({ drives: { ...calm, cheer: -1 } })).slice(200);
+    const plain = run(1600, () => ({ drives: calm })).slice(200);
+    const midY = (bounds.surfaceY + HH + (bounds.floorY - HH)) / 2;
+    expect(lost.every((o) => o.y >= midY - 6)).toBe(true);
+    expect(mean(lost.map((o) => o.y))).toBeGreaterThan(mean(plain.map((o) => o.y)));
+    expect(travelled(lost)).toBeLessThan(travelled(plain));
+    expect(lost.filter((o) => o.act === 'sulk').length).toBeGreaterThan(lost.length / 3);
+  });
+});

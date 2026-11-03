@@ -16,6 +16,7 @@ mod state;
 mod tray;
 mod voice;
 mod window;
+mod world;
 
 use std::path::Path;
 use std::sync::atomic::Ordering;
@@ -133,6 +134,7 @@ pub fn run() {
             focus::end_typing,
             focus::open_card,
             focus::close_card,
+            world::world_fetch,
             links::open_link,
             voice::voice_status,
             voice::voice_write,

@@ -126,6 +126,8 @@ interface Mounted {
 const TIER_DOWN_MS = 9;
 const TIER_UP_MS = 4;
 
+/** Fins on a sulking pet (its team lost): folded, like a low mood. */
+const SULK_SPIRITS = 0.66;
 /** Half the box, in grid px around the pet's drawn centre, that counts as clicking the pet. */
 const PET_HIT_HALF = Object.freeze({ w: 26, h: 18 });
 
@@ -352,6 +354,8 @@ export function createScene(
     pendingTap = null;
     lastAct = out.act;
     spirits = spiritsFor(mood.label, out.anim, view.label, alive);
+    // Your team lost: fins folded, whatever else is going on.
+    if (out.act === 'sulk') spirits = Math.min(spirits, SULK_SPIRITS);
     napping = out.anim === 'sleep' && !view.asleep;
     let ate = false;
     if (out.biteFlakeIndex !== null) {
