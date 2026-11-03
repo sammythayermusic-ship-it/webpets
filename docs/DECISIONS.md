@@ -1686,6 +1686,11 @@ What the notes above decided, as built, and the calls made on the way:
   bubble, or comes while you type or can't see the pet, is kept and said once it can be, if the
   fish is still hungry. It is the line that tells you to feed it. Replies to what you just did are
   not held back by typing.
+- **Times in the future are not believed.** The second recording loaded a talk state saved by a
+  sped-up recording clock an hour ahead, and the fish said nothing (no hello, no thanks, no answer
+  to a knock) until the real clock caught up. A time zone change or a clock correction would do the
+  same to a real pet. A future "last spoke" now counts as just long enough ago to talk, and future
+  bubbles leave the hourly count.
 - **Recordings of the bubble are window captures.** The bubble is DOM, so the harness's canvas
   recorder cannot see it; `screencapture -l<window>` stills of the harness app, joined into a
   video, show exactly what is on screen and nothing behind the window.

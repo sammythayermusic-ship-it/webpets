@@ -90,6 +90,26 @@ export function initialTalk(now: number, rng: Rng): TalkState {
   };
 }
 
+/**
+ * The clock went backwards (a time zone or clock change, or a sped-up recording clock that was saved):
+ * times stamped in the future are not believed. Otherwise the pet would sit silent until the clock
+ * caught up, every gap and the hourly cap counting from a time that has not come yet. A future "last
+ * spoke" becomes just long enough ago to talk; future bubbles leave the hourly count.
+ */
+function settle(s: TalkState, now: number): TalkState {
+  const ahead = (t: number): boolean => t > now;
+  const present = s.presentSince !== null && ahead(s.presentSince);
+  if (!ahead(s.lastSpokeAt) && !ahead(s.awaySince) && !ahead(s.lastLonelyAt) && !present && !s.spoken.some(ahead)) return s;
+  return {
+    ...s,
+    lastSpokeAt: ahead(s.lastSpokeAt) ? now - TALK.MIN_GAP_MS : s.lastSpokeAt,
+    spoken: s.spoken.filter((t) => !ahead(t)),
+    presentSince: present ? now : s.presentSince,
+    awaySince: Math.min(s.awaySince, now),
+    lastLonelyAt: Math.min(s.lastLonelyAt, now),
+  };
+}
+
 function between(range: readonly [number, number], rng: Rng): number {
   return range[0] + rng() * (range[1] - range[0]);
 }
@@ -127,7 +147,7 @@ function trackPresence(s: TalkState, i: TalkInput): { s: TalkState; arrivedAfter
 
 /** Called every second or so. At most one thing volunteered per call. */
 export function decide(state: TalkState, i: TalkInput): { say: Volunteer | null; state: TalkState } {
-  const { s: tracked, arrivedAfter } = trackPresence(state, i);
+  const { s: tracked, arrivedAfter } = trackPresence(settle(state, i.now), i);
   let s = tracked;
   if (i.muted || !i.alive) return { say: null, state: s };
   const room = roomToTalk(s, i.now);
@@ -171,7 +191,8 @@ export type Reaction = Extract<Moment, 'fed' | 'meal' | 'tap' | 'hungry' | 'star
 
 const ANSWERS_YOU: ReadonlySet<Reaction> = new Set<Reaction>(['fed', 'meal', 'tap', 'welcome-back']);
 
-export function react(state: TalkState, moment: Reaction, i: Pick<TalkInput, 'now' | 'muted' | 'alive' | 'rng'>): { say: boolean; state: TalkState } {
+export function react(state0: TalkState, moment: Reaction, i: Pick<TalkInput, 'now' | 'muted' | 'alive' | 'rng'>): { say: boolean; state: TalkState } {
+  const state = settle(state0, i.now);
   if (i.muted || !i.alive) return { say: false, state: state };
   // Coming home is said once, when you get back, and outranks whatever the pet was just saying.
   const homecoming = moment === 'welcome-back' || moment === 'feeder';
@@ -194,12 +215,12 @@ export function normalizeTalk(v: unknown, now: number, rng: Rng): TalkState {
   const o = v as Record<string, unknown>;
   const num = (k: string, d: number): number => (typeof o[k] === 'number' && Number.isFinite(o[k]) ? (o[k] as number) : d);
   const day = (k: string): string | null => (typeof o[k] === 'string' ? (o[k] as string) : null);
-  return {
+  return settle({
     ...fresh,
     lastSpokeAt: num('lastSpokeAt', fresh.lastSpokeAt),
     spoken: Array.isArray(o['spoken']) ? lastHour(o['spoken'].filter((t): t is number => typeof t === 'number'), now) : [],
     lastLonelyAt: num('lastLonelyAt', fresh.lastLonelyAt),
     nightSaidOn: day('nightSaidOn'),
     morningSaidOn: day('morningSaidOn'),
-  };
+  }, now);
 }

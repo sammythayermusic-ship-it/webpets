@@ -134,6 +134,27 @@ describe('react', () => {
   });
 });
 
+describe('a clock that went backwards', () => {
+  it('does not leave the pet silent until the clock catches up', () => {
+    // Saved an hour "ahead": spoke at T0 + 1 h, the hour's cap full of future times.
+    const ahead: TalkState = {
+      ...initialTalk(T0, mulberry32(2)),
+      lastSpokeAt: T0 + HOUR,
+      spoken: Array.from({ length: TALK.HOURLY_CAP }, (_, k) => T0 + HOUR - k * MIN),
+      nextThoughtAt: T0 + 3 * HOUR,
+      awaySince: T0 - 10 * MIN,
+      lastLonelyAt: T0 + HOUR,
+    };
+    const hello = decide(ahead, input({ now: T0 + 30_000, present: true }));
+    expect(hello.say).toBe('visit');
+    expect(react(ahead, 'fed', { now: T0 + 30_000, muted: false, alive: true, rng: mulberry32(1) }).say).toBe(true);
+    const restored = normalizeTalk(ahead, T0, mulberry32(3));
+    expect(restored.lastSpokeAt).toBeLessThanOrEqual(T0);
+    const { said } = run(restored, T0, T0 + HOUR);
+    expect(said.length).toBeGreaterThan(0);
+  });
+});
+
 describe('normalizeTalk', () => {
   it('restores what it can and starts fresh otherwise', () => {
     const r = normalizeTalk({ lastSpokeAt: T0 - 1000, spoken: [T0 - 2 * HOUR, T0 - MIN, 'x'], nightSaidOn: '2026-10-30' }, T0, mulberry32(1));
