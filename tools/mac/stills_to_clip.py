@@ -52,9 +52,9 @@ def speed_at(t):
     return speeds[i][1] if i >= 0 else 1.0
 
 
-# Largest still sets the canvas; stills are centred on it.
-W = max(Image.open(p).width for _, p in frames[:: max(1, len(frames) // 20)])
-H = max(Image.open(p).height for _, p in frames[:: max(1, len(frames) // 20)])
+# The first still sets the canvas. The window scales evenly, so a still from a resized window is
+# scaled to fit rather than centred: the habitat keeps its size on screen through a resize.
+W, H = Image.open(frames[0][1]).size
 W += W % 2
 BAR = max(56, H // 7)
 font = ImageFont.truetype("/System/Library/Fonts/SFNS.ttf", max(18, BAR // 3))
@@ -69,9 +69,13 @@ clip_t = 0.0  # seconds of output emitted so far
 start = frames[0][0]
 for i, (t, path) in enumerate(frames):
     nxt = frames[i + 1][0] if i + 1 < len(frames) else t + 400
-    real = (nxt - t) / 1000.0
+    # A long gap between stills is time that was not recorded (a fast-forward between parts): skip it.
+    real = min((nxt - t) / 1000.0, 1.5)
     dur = real / speed_at(t)
     img = Image.open(path).convert("RGBA")
+    if img.width > W or img.height > H or (img.width < W - 2 and img.height < H - 2):
+        k = min(W / img.width, H / img.height)
+        img = img.resize((round(img.width * k), round(img.height * k)), Image.LANCZOS)
     canvas = Image.new("RGBA", (W, H + BAR), BG + (255,))
     canvas.alpha_composite(img, ((W - img.width) // 2, (H - img.height) // 2))
     d = ImageDraw.Draw(canvas)
