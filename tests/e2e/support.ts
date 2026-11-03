@@ -22,10 +22,23 @@ export const BOWL_CENTER = {
 };
 
 /**
- * Collects uncaught page errors and console.error output for the lifetime of the page.
- * Assert `toEqual([])` at the end of a test.
+ * Keeps the page off the internet: the browser mock fetches real scoreboards and news (Step F), and a
+ * test must not depend on ESPN or a feed being up, or on their CORS headers. Anything not served
+ * locally gets an empty answer, which the app reads as no games and no stories.
+ */
+export function keepOffline(page: Page): void {
+  void page.route(
+    (url) => !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname),
+    (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}', headers: { 'access-control-allow-origin': '*' } }),
+  );
+}
+
+/**
+ * Collects uncaught page errors and console.error output for the lifetime of the page, and keeps the
+ * page offline (`keepOffline`). Assert `toEqual([])` at the end of a test.
  */
 export function collectErrors(page: Page): string[] {
+  keepOffline(page);
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(`pageerror: ${err.message}`));
   page.on('console', (msg) => {

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { keepOffline } from './support';
 
 /**
  * The resize handle, end to end. None of this is reachable from a unit test: it needs a real pointer
@@ -22,6 +23,7 @@ const ASPECT = 320 / 240;
 const PAD = 48;
 
 test('the corner handle resizes the habitat, keeping its shape and whole pixels', async ({ page }) => {
+  keepOffline(page);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.goto('/');

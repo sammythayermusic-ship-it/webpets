@@ -1796,6 +1796,16 @@ What the notes above decided, as built, and the calls made on the way:
   arrived starts with them marked. A win is announced with the win line or the milestone line, half
   and half, the button either way.
 
+- **Recording drivers hover before they read a button's position.** When the pointer comes in, the
+  HUD bar shows and the bubble drops below it, so a position read with the pointer away is stale by
+  the time of the click (the first share run, and the missed link click at checkpoint F, knocked on
+  the glass instead). `record_share.sh` moves onto the fish, waits, then reads and clicks.
+
+- **Browser tests stay off the internet.** `keepOffline` (`tests/e2e/support.ts`, called by
+  `collectErrors` and the two specs that collect their own errors) answers every non-local request
+  with an empty body and a CORS header. A run failed when ESPN's MLB scoreboard came back without its
+  CORS header, and the browser logged that as an error.
+
 ### Ideas for later, logged not built (AFTER-BAKEOFF F2.4)
 - Friends' pets visiting: a friend's pet swims or scurries into your habitat for a minute (needs a
   way to pair two Macs; no server today).

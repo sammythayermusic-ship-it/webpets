@@ -118,6 +118,11 @@ startcap "$WID" share
 cap "A moment worth sharing: your team won"
 H milestone '{"moment":"big-win"}' >/dev/null
 sleep 6
+# Hover first: the HUD bar comes in along the top and the bubble drops below it, so read the button
+# where it is once the pointer is over the window.
+read FX FY < <(fish_at)
+move "$FX" "$FY"
+sleep 1.2
 H transcript > "$RUN/before-click.json"
 read BX BY < <(choice_at 0)
 before=$(ls "$HOME/Downloads" | grep -c "\.mp4$")

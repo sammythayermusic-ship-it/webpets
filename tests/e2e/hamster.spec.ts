@@ -4,9 +4,10 @@
 // while `createScene` still mounts the only habitat it was ever told about.
 
 import { expect, test } from '@playwright/test';
-import { gotoFresh, waitForBoot } from './support';
+import { gotoFresh, keepOffline, waitForBoot } from './support';
 
 test('switches to the hamster and comes back up in the cage', async ({ page }) => {
+  keepOffline(page);
   const errors: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());

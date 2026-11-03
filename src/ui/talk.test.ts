@@ -330,4 +330,23 @@ describe('dayKeyOf', () => {
     expect(dayKeyOf(new Date(2026, 9, 31, 23, 59).getTime())).toBe('2026-10-31');
     expect(dayKeyOf(new Date(2026, 10, 1, 0, 1).getTime())).toBe('2026-11-01');
   });
+  it('marks a milestone with a Share this button that saves the moment, and says nothing more', () => {
+    let shared = 0;
+    let celebrated = 0;
+    const lines = { birthday: [], meals: [], bond: [], 'big-win': ['{team} won {score}!'] };
+    const withMilestones: Voice = { ...voice, milestones: { sarcastic: lines, anxious: lines, zen: lines, hyper: lines } };
+    const h = harness({ voice: () => withMilestones, onShare: () => shared++, celebrate: () => celebrated++ });
+    h.advance(60_000);
+    const before = h.shown.length;
+    h.talk.forceMilestone({ key: 'win:g1', moment: 'big-win', vars: { team: 'Red Sox', score: '5-3' } });
+    h.advance(2000);
+    const u = h.shown.at(-1)!;
+    expect(h.shown.length).toBe(before + 1);
+    expect(u.text).toBe('Red Sox won 5-3!');
+    expect(u.choices).toEqual([{ label: 'Share this', value: 'share' }]);
+    expect(celebrated).toBe(1);
+    h.talk.choose(u.choices![0]!);
+    expect(shared).toBe(1);
+    expect(h.shown.length).toBe(before + 1);
+  });
 });
