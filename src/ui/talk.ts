@@ -299,7 +299,7 @@ export function createTalk(env: TalkEnv): TalkController {
       if (u) say(u);
       return;
     }
-    if (v === 'visit' || v === 'welcome-back') {
+    if (v === 'visit' || v === 'welcome-back' || v === 'morning') {
       const u = closeHello();
       if (u) {
         say(u);

@@ -219,6 +219,18 @@ describe('talking with you', () => {
     expect(h.saved()!.chat.mood).toBeNull();
   });
 
+  it('checks in at a good-morning hello too', () => {
+    const h = harness();
+    h.talk.setBondPoints(60);
+    h.talk.chat("I'm so tired");
+    // Overnight: the next visit is the first of a new morning.
+    h.advance(22 * 3600_000);
+    h.setPresent(true);
+    h.advance(2000);
+    const lines = FISH_CHAT.bond.sarcastic['mood-check'];
+    expect(h.shown.some((u) => lines.includes(u.text))).toBe(true);
+  });
+
   it('forgets what you said when asked, and keeps the bond', () => {
     const h = harness();
     h.talk.chat('hi');
