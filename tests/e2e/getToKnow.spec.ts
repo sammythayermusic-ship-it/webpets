@@ -40,7 +40,12 @@ test('the card saves who you are, and the pet asks before it remembers what you 
     await expect(page.locator('.speech-text')).toContainText('dinosaurs');
     await yes.click();
     await expect.poll(async () => (await profile())?.interests).toEqual(['baking', 'dinosaurs']);
-    await field.press('Escape');
+    // Pressing a button keeps the conversation going: keep typing without clicking the field again.
+    await expect(field).toBeFocused();
+    await page.keyboard.type('tell me a joke');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.speech-text')).not.toContainText('dinosaurs');
+    await page.keyboard.press('Escape');
     await expect(field).toBeHidden();
   });
 

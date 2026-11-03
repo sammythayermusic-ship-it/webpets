@@ -169,7 +169,11 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
     for (const c of choices) {
       const b = el('button', 'speech-choice', c.label);
       b.type = 'button';
-      b.addEventListener('mousedown', (e) => e.stopPropagation());
+      // No focus change on press: you may be mid-conversation, and the chat field must keep the keyboard.
+      b.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+      });
       b.addEventListener('mouseenter', () => (hovering = true));
       b.addEventListener('mouseleave', () => (hovering = false));
       b.addEventListener('click', (e) => {

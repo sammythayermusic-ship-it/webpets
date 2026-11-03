@@ -99,12 +99,18 @@ export function mountChatInput(root: HTMLElement, deps: UiDeps, onSay: (text: st
     if (text.length > 0) onSay(text.slice(0, CHAT_MAX_CHARS));
   });
   field.addEventListener('input', armIdle);
-  field.addEventListener('keydown', (e) => {
+  // Esc closes it wherever the focus is (after pressing one of the pet's answer buttons, say), and
+  // a printable key with the focus elsewhere in the window goes back to the field.
+  const onKey = (e: KeyboardEvent): void => {
+    if (!open) return;
     if (e.key === 'Escape') {
       e.preventDefault();
       close();
+      return;
     }
-  });
+    if (document.activeElement !== field && e.key.length === 1 && !e.metaKey && !e.ctrlKey) field.focus();
+  };
+  window.addEventListener('keydown', onKey, true);
   // Clicking into another app takes the keyboard away: the conversation is over.
   const onBlur = (): void => {
     if (open) close();
@@ -128,6 +134,7 @@ export function mountChatInput(root: HTMLElement, deps: UiDeps, onSay: (text: st
     destroy() {
       close();
       window.removeEventListener('blur', onBlur);
+      window.removeEventListener('keydown', onKey, true);
       unsub();
       form.remove();
     },
