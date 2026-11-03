@@ -131,7 +131,10 @@ export function createWorld(env: WorldEnv): World {
       gamesAt = env.now();
       const r = sportsStep(sports, games, env.now(), dayKey(env.now()));
       sports = r.state;
-      for (const e of r.events) due.push(sayGame(e.kind, e.game));
+      for (const e of r.events) {
+        due.push(sayGame(e.kind, e.game));
+        if (e.kind === 'final') lastMoodLine = Number.NEGATIVE_INFINITY;
+      }
       persist();
     } finally {
       fetchingSports = false;
@@ -253,6 +256,8 @@ export function createWorld(env: WorldEnv): World {
       const r = sportsStep(sports, [g], env.now(), dayKey(env.now()));
       sports = r.state;
       for (const e of r.events) due.push(sayGame(e.kind, e.game));
+      // A new result is a new mood: its first line need not wait for the last mood's gap.
+      lastMoodLine = Number.NEGATIVE_INFINITY;
       persist();
       return true;
     },
