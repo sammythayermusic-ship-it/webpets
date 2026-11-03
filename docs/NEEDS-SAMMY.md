@@ -94,6 +94,13 @@ and in the US, COPPA applies to anything collected from under-13s. Everything th
 you stays on the Mac, which helps. Worth deciding before launch: the age rating, and whether
 chatting with the pet through Claude is on for kids or only the built-in lines.
 
+Update 2026-11-02 (Step E): you can now type to the pet. Without a key it answers only from its
+own lines, and understanding what you typed never leaves the Mac. With a key, Claude writes the
+open replies under stricter rules (a gentle change of subject for anything unkind, "tell a grown-up
+you trust" if someone says they are hurt, never asks for personal details), sent only your name and
+the one thing the reply is about. A per-person "kid mode" (built-in lines only) would be easy to
+add once you decide.
+
 ## Open questions from the brief (not blocking; code keeps both options open)
 - How the app makes money.
 - ~~Whether food costs anything.~~ Answered 2026-10-31: food is free, no $FEED.
