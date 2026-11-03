@@ -34,6 +34,8 @@ export interface TalkEnv {
   /** You are typing or otherwise busy. */
   busy(): boolean;
   muted(): boolean;
+  /** Hunger that lost out to the gap after another bubble is said once the gap clears, if this is still true. */
+  stillTrue(moment: Reaction): boolean;
   /** Plain words about right now, for a written line ("it is evening", "it ate an hour ago"). */
   situation(): string[];
   writer: LineWriter | null;
@@ -46,8 +48,8 @@ export interface TalkEnv {
 export interface TalkController {
   /** Ask the brain; call about once a second. */
   tick(): void;
-  /** Something happened to the pet. */
-  react(moment: Reaction): void;
+  /** Something happened to the pet. True when it said something about it. */
+  react(moment: Reaction): boolean;
   /** Say a thought or a fact now, skipping the brain's timing (dev panel, harness stills). */
   speak(v: Volunteer): void;
   /** A new pet: forget what the old one said. */
@@ -65,6 +67,8 @@ export function dayKeyOf(t: number): string {
 }
 
 const WRITER_CHECK_MS = 60_000;
+/** Moments too important to lose to the gap after another bubble: said late rather than never. */
+const OWED: ReadonlySet<Reaction> = new Set<Reaction>(['hungry', 'starving']);
 
 export function createTalk(env: TalkEnv): TalkController {
   const saved = env.load();
@@ -77,6 +81,8 @@ export function createTalk(env: TalkEnv): TalkController {
   let writerCheckedAt = Number.NEGATIVE_INFINITY;
   /** The last few things said, as text, for a written line to avoid. */
   let lastSaid: string[] = [];
+  /** A hunger line still to say once the gap clears. */
+  let owed: Reaction | null = null;
 
   function persist(): void {
     env.save({ memory, talk, spend });
@@ -150,6 +156,16 @@ export function createTalk(env: TalkEnv): TalkController {
     env.show(u);
   }
 
+  function reactNow(moment: Reaction): boolean {
+    const r = react(talk, moment, { now: env.now(), muted: env.muted(), alive: env.pet().alive, rng: env.rng });
+    talk = r.state;
+    if (!r.say) return false;
+    const u = libraryLine(moment);
+    if (u) say(u);
+    persist();
+    return true;
+  }
+
   function speakVolunteer(v: Volunteer): void {
     if (v === 'fact') {
       const u = fact();
@@ -185,14 +201,12 @@ export function createTalk(env: TalkEnv): TalkController {
       talk = r.state;
       if (r.say) speakVolunteer(r.say);
       if (r.say || changed) persist();
+      if (owed !== null && !r.say && (!env.stillTrue(owed) || reactNow(owed))) owed = null;
     },
     react(moment) {
-      const r = react(talk, moment, { now: env.now(), muted: env.muted(), alive: env.pet().alive, rng: env.rng });
-      talk = r.state;
-      if (!r.say) return;
-      const u = libraryLine(moment);
-      if (u) say(u);
-      persist();
+      const said = reactNow(moment);
+      owed = !said && OWED.has(moment) ? moment : null;
+      return said;
     },
     speak(v) {
       speakVolunteer(v);
@@ -202,6 +216,7 @@ export function createTalk(env: TalkEnv): TalkController {
       memory = emptyMemory();
       talk = initialTalk(env.now(), env.rng);
       lastSaid = [];
+      owed = null;
       persist();
     },
     snapshot() {

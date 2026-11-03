@@ -5,7 +5,7 @@ import { createTalk, dayKeyOf, type LineWriter, type TalkEnv, type TalkMemory } 
 
 const voice: Voice = {
   lines: {
-    sarcastic: { thought: ['T1', 'T2', 'T3'], fed: ['Yum, {name}.'], visit: ['Oh. You.'], tap: ['Knock.'] },
+    sarcastic: { thought: ['T1', 'T2', 'T3'], fed: ['Yum, {name}.'], visit: ['Oh. You.'], tap: ['Knock.'], hungry: ['Feed me.'] },
     anxious: {},
     zen: {},
     hyper: {},
@@ -29,6 +29,7 @@ function harness(over: Partial<TalkEnv> = {}) {
     awake: () => true,
     busy: () => false,
     muted: () => false,
+    stillTrue: () => true,
     situation: () => ['it is afternoon'],
     writer: null,
     dailyCapUsd: () => 0.25,
@@ -65,6 +66,26 @@ describe('the talk controller', () => {
     const h = harness();
     h.talk.react('fed');
     expect(h.shown.map((u) => u.text)).toEqual(['Yum, Goldie.']);
+  });
+
+  it('says hunger late rather than never when another bubble was just up, but only while it is still true', () => {
+    let hungry = true;
+    const h = harness({ stillTrue: () => hungry });
+    h.talk.react('fed');
+    expect(h.talk.react('hungry')).toBe(false);
+    h.advance(3000);
+    expect(h.shown.map((u) => u.text)).toEqual(['Yum, Goldie.']);
+    h.advance(5000);
+    expect(h.shown.map((u) => u.text)).toEqual(['Yum, Goldie.', 'Feed me.']);
+    h.advance(60_000);
+    expect(h.shown).toHaveLength(2);
+
+    const g = harness({ stillTrue: () => hungry });
+    g.talk.react('fed');
+    g.talk.react('hungry');
+    hungry = false;
+    g.advance(60_000);
+    expect(g.shown.map((u) => u.text)).toEqual(['Yum, Goldie.']);
   });
 
   it('says nothing at all while muted', () => {

@@ -216,6 +216,7 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
         awake: () => !st().night,
         busy: () => typedAgoS < BUSY_TYPING_S || fullscreenFront,
         muted: () => st().settings.talkMuted,
+        stillTrue: (m) => labelFor(st().hunger) === m,
         situation,
         writer,
         dailyCapUsd: () => st().settings.dailyCapUsd,
