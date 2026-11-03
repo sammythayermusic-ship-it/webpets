@@ -50,6 +50,7 @@ describe('what counts as happy news', () => {
       'Senate passes bill after election fight',
       'The women’s boxing nights helping abuse survivors',
       'Judge accuses DOJ of weaponization',
+      'Sinclair dinosaurs stolen for Halloween wedding',
       'A'.repeat(NEWS.MAX_HEADLINE + 1),
     ])
       expect(safeHeadline(t), t).toBe(false);

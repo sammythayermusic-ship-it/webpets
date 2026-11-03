@@ -50,7 +50,7 @@ export interface HarnessContext {
   speech?: Pick<
     SpeechHandleExt,
     | 'say' | 'react' | 'speak' | 'transcript' | 'setTimeScale' | 'getRects' | 'typedAgo' | 'unseen' | 'chat' | 'choose'
-    | 'bond' | 'setBondPoints' | 'forgetChat' | 'speakPersonal' | 'world' | 'speakNews'
+    | 'bond' | 'setBondPoints' | 'forgetChat' | 'speakPersonal' | 'world' | 'speakNews' | 'speakMood'
   >;
   profile?: ProfileStore;
   chatInput?: Pick<ChatInputHandle, 'open' | 'close' | 'isOpen' | 'getRects'>;
@@ -422,6 +422,10 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
     case 'talk': {
       // Something happens to the pet, as far as the brain is concerned: it may or may not answer.
       const moment = str(cmd, 'moment');
+      if (moment === 'mood') {
+        const said = needSpeech(ctx).speakMood();
+        return { moment, said, last: needSpeech(ctx).transcript().slice(-1)[0] ?? null };
+      }
       if (moment === 'news') {
         const said = needSpeech(ctx).speakNews();
         return { moment, said, last: needSpeech(ctx).transcript().slice(-1)[0] ?? null };

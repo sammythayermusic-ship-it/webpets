@@ -97,6 +97,8 @@ export interface TalkController {
   speakPersonal(): boolean;
   /** Share a headline now, if there is a fresh one (harness, dev panel). */
   speakNews(): boolean;
+  /** Say how your team's result feels, while the mood lasts (harness). */
+  speakMood(): boolean;
 }
 
 /** Local calendar day, "2026-10-31". */
@@ -572,6 +574,13 @@ export function createTalk(env: TalkEnv): TalkController {
     forgetChat() {
       chatState = emptyChat();
       persist();
+    },
+    speakMood() {
+      const m = env.world?.()?.mood() ?? null;
+      const u = m ? worldLine(m) : null;
+      if (u) say(u);
+      persist();
+      return u !== null;
     },
     speakNews() {
       const world = env.world?.();

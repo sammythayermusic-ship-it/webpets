@@ -55,6 +55,8 @@ export interface SpeechHandleExt extends SpeechHandle {
   world(): World | null;
   /** Share a headline now, if there is one (harness, dev panel). */
   speakNews(): boolean;
+  /** How your team's result feels, now (harness). */
+  speakMood(): boolean;
   destroy(): void;
 }
 
@@ -429,6 +431,7 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
     speakPersonal: () => talk?.speakPersonal() ?? false,
     world: () => world,
     speakNews: () => talk?.speakNews() ?? false,
+    speakMood: () => talk?.speakMood() ?? false,
     destroy() {
       offBite();
       offGone();
