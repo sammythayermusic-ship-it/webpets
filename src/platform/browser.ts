@@ -423,7 +423,7 @@ export function createBrowserPlatform(): Platform {
       write: () => Promise.resolve({ text: null, usd: 0 }),
     },
     // Nobody is typing in a test page.
-    inputIdle: () => Promise.resolve({ keys: Number.MAX_VALUE, any: 0 }),
+    inputIdle: () => Promise.resolve({ keys: Number.MAX_VALUE, any: 0, fullscreen: false }),
     openLink: (url: string): Promise<void> => {
       if (url.startsWith('https://')) window.open(url, '_blank', 'noopener');
       return Promise.resolve();

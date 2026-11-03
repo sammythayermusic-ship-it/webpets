@@ -43,7 +43,7 @@ export interface HarnessContext {
   scene: Pick<HabitatScene, 'snapshot' | 'debugState' | 'fps' | 'setPointer' | 'tap' | 'feedSpot' | 'aimFeed'>;
   devPanel: DevPanelHandle & Partial<{ open(): void; close(): void }>;
   hud?: Pick<HudHandle, 'setVisible'>;
-  speech?: Pick<SpeechHandleExt, 'say' | 'react' | 'speak' | 'transcript' | 'setTimeScale' | 'getRects' | 'typedAgo'>;
+  speech?: Pick<SpeechHandleExt, 'say' | 'react' | 'speak' | 'transcript' | 'setTimeScale' | 'getRects' | 'typedAgo' | 'fullscreenFront'>;
 }
 
 /** Everything outside the app that a command touches: output files, the clock, and waiting. */
@@ -424,7 +424,7 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
       return { k };
     }
     case 'transcript':
-      return { lines: needSpeech(ctx).transcript(), typedAgoS: needSpeech(ctx).typedAgo() };
+      return { lines: needSpeech(ctx).transcript(), typedAgoS: needSpeech(ctx).typedAgo(), fullscreenFront: needSpeech(ctx).fullscreenFront() };
     case 'snapshot':
       return opSnapshot(cmd, ctx, io);
     case 'stats':

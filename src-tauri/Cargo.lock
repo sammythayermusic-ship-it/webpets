@@ -4709,6 +4709,8 @@ dependencies = [
 name = "webpets"
 version = "0.0.1"
 dependencies = [
+ "core-foundation",
+ "core-graphics",
  "objc2-app-kit",
  "reqwest",
  "security-framework",

@@ -188,8 +188,8 @@ export interface Platform {
     status(): Promise<{ hasKey: boolean }>;
     write(system: string, user: string): Promise<{ text: string | null; usd: number }>;
   };
-  /** Seconds since the last key press and since any input at all (src-tauri/src/idle.rs). */
-  inputIdle(): Promise<{ keys: number; any: number }>;
+  /** Seconds since the last key press and since any input, and whether a full-screen window is in front (src-tauri/src/idle.rs). */
+  inputIdle(): Promise<{ keys: number; any: number; fullscreen: boolean }>;
   /** Open a plain https link in the default browser (a fact's source). */
   openLink(url: string): Promise<void>;
   autostart: {

@@ -112,7 +112,7 @@ export function createFakePlatform(seedFiles: Record<string, unknown> = {}): Fak
       status: async () => ({ hasKey: false }),
       write: async () => ({ text: null, usd: 0 }),
     },
-    inputIdle: async () => ({ keys: Number.MAX_VALUE, any: 0 }),
+    inputIdle: async () => ({ keys: Number.MAX_VALUE, any: 0, fullscreen: false }),
     openLink: async () => {},
     notify: async (title, body) => {
       p.notifications.push({ title, body });

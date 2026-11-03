@@ -1664,3 +1664,21 @@ What the notes above decided, as built, and the calls made on the way:
   empty."; the montage says "ate from the feeder (80%, 5 meals left)".
 - **Forced death** (dev) empties the feeder instead of returning it to a wallet: a full feeder next
   to a dead pet tells the wrong story.
+
+## 2026-10-31 — Step D built: what changed on the way
+
+- **The bubble is click-through; only its source link takes the mouse.** A bubble that took the
+  mouse covered the resize handle and the HUD (the e2e resize test caught it). The link is the one
+  hit region the bubble adds, and hovering it holds the bubble open.
+- **Welcome back always gets said, and the pet keeps quiet during the montage.** The acceptance
+  walk-through caught a goodnight said a second before the montage swallowing the welcome back
+  (the 20 s gap). Coming home outranks the gap; the brain is held while the montage plays.
+- **"Busy" includes a full-screen window in front**, not just typing: `idle.rs` asks the window
+  server's on-screen list whether an ordinary window covers a whole display (menu bar strip
+  included, so a zoomed window does not count). Bounds and layers only, no titles, no permission;
+  `core-graphics` and `core-foundation` at the versions the windowing layer already pulls in.
+- **Recordings of the bubble are window captures.** The bubble is DOM, so the harness's canvas
+  recorder cannot see it; `screencapture -l<window>` stills of the harness app, joined into a
+  video, show exactly what is on screen and nothing behind the window.
+- **No real Claude call yet.** There is no key on this Mac and entering one is Sammy's to do
+  (NEEDS-SAMMY); the request, the filter, the fallback and the cap are tested up to the network.
