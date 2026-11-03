@@ -424,7 +424,12 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
       return { k };
     }
     case 'transcript':
-      return { lines: needSpeech(ctx).transcript(), typedAgoS: needSpeech(ctx).typedAgo(), fullscreenFront: needSpeech(ctx).fullscreenFront() };
+      return {
+        lines: needSpeech(ctx).transcript(),
+        typedAgoS: needSpeech(ctx).typedAgo(),
+        fullscreenFront: needSpeech(ctx).fullscreenFront(),
+        linkRect: needSpeech(ctx).getRects()[0] ?? null,
+      };
     case 'snapshot':
       return opSnapshot(cmd, ctx, io);
     case 'stats':
