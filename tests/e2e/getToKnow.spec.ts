@@ -24,6 +24,13 @@ test('the card saves who you are, and the pet asks before it remembers what you 
     await expect.poll(async () => (await profile())?.name).toBe('Sam');
     await expect.poll(async () => (await profile())?.teams).toEqual(['mlb:2']);
     await expect.poll(async () => (await profile())?.interests).toEqual(['baking']);
+    // Forget me asks first, and Keep it backs out.
+    await expect(card.getByRole('button', { name: 'Keep it' })).toBeHidden();
+    await card.getByRole('button', { name: 'Forget me' }).click();
+    await expect(card.getByRole('button', { name: 'Forget me' })).toBeHidden();
+    await card.getByRole('button', { name: 'Keep it' }).click();
+    await expect(card.getByRole('button', { name: 'Forget me' })).toBeVisible();
+    expect((await profile())?.name).toBe('Sam');
     await card.getByRole('button', { name: 'Done' }).click();
     await expect(card).toHaveCount(0);
   });

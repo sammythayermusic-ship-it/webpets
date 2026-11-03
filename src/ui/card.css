@@ -53,6 +53,11 @@
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
 }
 
+/* `display: flex` on rows would otherwise beat the hidden attribute (the Forget me confirmation). */
+.gtk-card [hidden] {
+  display: none !important;
+}
+
 .gtk-card {
   box-sizing: border-box;
   width: 100%;
