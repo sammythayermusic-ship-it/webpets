@@ -242,6 +242,7 @@ Commands (invoke names; args/returns are camelCase JSON matching `src/platform/t
 | `end_typing` | – | – | hands focus back to the remembered app, unless the card window is open |
 | `open_card` | – | – | opens (or focuses) the "Get to know me" window, label `card`, `card.html`, 440×640, taking focus the same way |
 | `close_card` | – | – | closes it; its `Destroyed` event gives focus back |
+| `world_fetch` | `{ url }` | body as text | Step F: an https GET to ESPN's public site API or one of the listed news feeds (`world.rs`); anything else is an error |
 
 Events (Rust → TS, on the main window):
 
@@ -296,7 +297,9 @@ dropped.
 told (`memory`), its talk timing (`talk`), today's spend on written lines (`spend`), the bond (`bond`:
 `src/brain/bond.ts`) and chat (`chat`: the last four exchanges, how you said you felt, how often you brought
 each interest up). `profile.json` is about you, not a pet, and survives new pets: `{ version: 1, name, teams,
-interests, own, updatedAt }` (`src/brain/profile.ts`); "Forget me" writes an empty one.
+interests, own, updatedAt }` (`src/brain/profile.ts`); "Forget me" writes an empty one. `world.json` (Step F,
+`src/ui/world.ts`) keeps what the pet has said about your games and the stories it has told, and the mood
+your team's last result left.
 
 Store files (Tauri store plugin, app-data dir): `pet.json`, `settings.json`, `graveyard.json`, `brain.json`, `profile.json`. TS reads/writes them
 through `platform.store` (`PersistApi`: `load(file)`, `set(file, data)`, `save(file)`) which only ever touches the

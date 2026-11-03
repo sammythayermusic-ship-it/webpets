@@ -1742,3 +1742,35 @@ What the notes above decided, as built, and the calls made on the way:
   tray actions in `tauri.ts` missed it); it is a record keyed by every action now, so a missing one
   fails to compile. And the HUD asked whether the pet can talk before the bubble existed, which the
   browser preview caught as a failed start.
+
+## 2026-11-02 — Step F: the world comes into the bowl
+
+- **Sources, all free, no account, no key** (checked by hand tonight):
+  - Scores: ESPN's public site API, `site.api.espn.com/apis/site/v2/sports/<sport>/<league>/scoreboard`,
+    one request per league you follow. Unofficial but open (it even sends CORS headers); the team ids
+    are the ones the card already stores. If ESPN changes or blocks it, the pet goes quiet about sports.
+  - Happy news: Good News Network, The Optimist Daily, Positive News (feel-good) and ScienceDaily (wow
+    science), one feed per fetch in turn.
+  - Your interests: Google News search RSS, `"<interest>" when:7d`, one interest per fetch in turn.
+  - All fetched by Rust (`world.rs`): plain https GETs to that fixed list of hosts only, nothing sent
+    but the URL. Adding a source means adding its host there and a line here.
+- **Never make things up.** A score, an opponent, a time or a headline reaches a bubble only as a token
+  filled from a fetched scoreboard or feed; the lines themselves state no facts (a test checks for
+  digits and predictions). A failed fetch means nothing is said about that league or feed. Headlines
+  are shown as published; one too long for the bubble is skipped, never shortened.
+- **Light news only, by default.** Every headline goes through a filter: never harm, crime, violence,
+  death, disaster, illness or adult topics, whatever the setting; politics and conflict only if
+  `settings.seriousNews` is on (dev panel SERIOUS for now; a real setting when there is a settings
+  screen). Tonight's feeds: about four in five headlines pass; the war, abuse and cancer ones do not.
+- **When it talks about the world.** Game-day hype once, from 9 am (or six hours before the start);
+  the result once, as soon as the pet is awake and you are not busy (like hunger, it waits rather
+  than being lost). A win: happy for the rest of the day, an excited lap every 25 seconds or so. A
+  loss: sad until noon the next day, keeping to the lower half of the bowl, slower, fins folded
+  (`drives.cheer`, the fish's new `sulk` act). A mope or still-happy line now and then while the mood
+  lasts; a headline in place of a passing thought 30% of the time, 60% in the morning. "How are the
+  Celtics doing?" answers from a scoreboard no older than two minutes.
+- **Forcing a result for testing** (dev panel TEST WIN / TEST LOSS, harness `world force`) makes a
+  pretend final for your first team, labelled a test in its detail; it moves the mood like a real one.
+- **Polling**: scoreboards every 10 minutes (3 while one of your games is on or about to start), only
+  for leagues you follow and never without a team; news every 3 hours, the first a minute after
+  launch. `world.json` keeps what was said and the mood, so a relaunch does not repeat a result.
