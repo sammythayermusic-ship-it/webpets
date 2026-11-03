@@ -77,8 +77,11 @@ for i, (t, path) in enumerate(frames):
     d = ImageDraw.Draw(canvas)
     d.rectangle([0, H, W, H + BAR], fill=(12, 13, 16, 255))
     text = caption_at(t)
-    tw = d.textlength(text, font=font)
-    d.text(((W - tw) / 2, H + (BAR - font.size) / 2 - 2), text, font=font, fill=(235, 236, 240, 255))
+    f = font
+    while d.textlength(text, font=f) > W - 24 and f.size > 10:
+        f = f.font_variant(size=f.size - 1)
+    tw = d.textlength(text, font=f)
+    d.text(((W - tw) / 2, H + (BAR - f.size) / 2 - 2), text, font=f, fill=(235, 236, 240, 255))
     rgb = canvas.convert("RGB")
     clip_t += dur
     while n < round(clip_t * fps):

@@ -1,0 +1,40 @@
+What Pebble (an anxious goldfish) said in the checkpoint D clips, in order.
+Recorded 2026-11-02 in the installed WebPets Harness.app. The kind of moment is in brackets.
+
+clip-moments.mp4 (time into the clip)
+  0:07  [hello]    Hi! I missed you a normal amount. A lot.
+  0:16  [fed]      Food! I was not worried. I was a little worried.
+  0:37  [fact]     Okay, cool fact, do not worry: Some white sand beaches in Hawaii are made of parrotfish poop!
+  1:01  [fact]     Is it okay if I share a fact? A pair of shrimp can spend their whole lives inside a glass
+                   sponge called the Venus flower basket.
+                   (source: "What is a glass sponge? — NOAA Ocean Service")
+  1:15  [hungry]   Um. Not to bother you, but I am a bit hungry.
+  1:27  [fed]      Oh thank goodness. Thank you!
+
+clip-knock.mp4 (from the first recording, same fish)
+        [knock]    That made me jump. Hello though!
+        [knock]    My heart! Okay. I am okay. Hi.
+
+clip-hour.mp4 (minute of the hour)
+   0    [hello]    Yay. My favourite person.
+   0    [fact]     Okay, cool fact, do not worry: Goldfish eat live plants, so only a few tough ones, like
+                   Anubias, survive in their tanks.
+   2    [thought]  What if the water is just a little too wet?
+   3    [thought]  I tidied a pebble. Is it in the right place now? I think so.
+   5    [fact]     I learned something! At night, some parrotfish wrap themselves in a cocoon of mucus, like
+                   a sleeping bag.
+        (you leave; four lines is the most it says in one visit)
+  41    [fact]     I learned something! Scientists trained goldfish to tell music by Bach apart from music
+                   by Stravinsky.
+        (you come back)
+  49    [hello]    Hello! Is everything okay? I hope everything is okay.
+  50    [fact]     Um, did you know? Medaka rice fish were the first animals with backbones to have babies in
+                   space, in 1994.
+  52    [fact]     Um, did you know? Giant water lily pads in the Amazon can grow up to 3 meters (10 feet)
+                   across.
+  53    [fact]     I learned something! Goldfish have no teeth you can see, but they have teeth hidden in
+                   their throats.
+        (eight thoughts and facts in the hour: the cap. It says nothing more until the hour rolls on.)
+
+The whole library: src/species/fish/voice/lines.ts (296 lines) and src/species/fish/voice/facts.ts
+(181 facts, each with its source).
