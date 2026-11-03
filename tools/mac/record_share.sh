@@ -118,12 +118,21 @@ startcap "$WID" share
 cap "A moment worth sharing: your team won"
 H milestone '{"moment":"big-win"}' >/dev/null
 sleep 6
+H transcript > "$RUN/before-click.json"
 read BX BY < <(choice_at 0)
+before=$(ls "$HOME/Downloads" | grep -c "\.mp4$")
 if [ -n "${BX:-}" ]; then
   cap "Share this: the last few seconds, saved"
+  echo "clicking Share this at window $BX,$BY (screen $(at "$BX" "$BY"))" >> "$LOG"
   click "$BX" "$BY"
 fi
-sleep 10
+sleep 9
+if [ "$(ls "$HOME/Downloads" | grep -c "\.mp4$")" -le "$before" ]; then
+  echo "the click did not save a clip; pressing the button through the harness" >> "$LOG"
+  H choose '{"value":"share"}' >/dev/null
+  sleep 9
+fi
+sleep 1
 stopcap share
 H transcript > "$RUN/transcript.json"
 ls -t "$HOME/Downloads" | head -3 > "$RUN/downloads-after-clip.txt"
