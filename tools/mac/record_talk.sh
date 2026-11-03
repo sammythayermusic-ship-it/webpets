@@ -3,9 +3,9 @@
 # takes window stills (window_stills.py), writes a caption timeline for stills_to_clip.py.
 #   Part 1 (moments/): hello, a meal, a knock, a fact and its source, hungry then fed.
 #   Part 2 (hour/):    an hour sped up: at the bowl, away, back.
-# It moves the real cursor, clicks the bubble's source link (a browser tab opens) and may step
-# through Spaces to find the harness window, so run it only while nobody is using the Mac. It puts
-# the cursor and the front app back when it ends.
+# It moves the real cursor, clicks the bubble (not the source itself: opening it can switch to the
+# browser's full-screen Space mid-recording) and may step through Spaces to find the harness window,
+# so run it only while nobody is using the Mac. It puts the cursor and the front app back at the end.
 #
 #   bash tools/mac/record_talk.sh <out-dir>
 #   python3 tools/mac/stills_to_clip.py <out-dir>/hour <out-dir>/timeline.tsv hour.mp4
@@ -79,6 +79,8 @@ click() { "$BIN/clickat" $(at "$1" "$2") click 200 >/dev/null; }
 away() { "$BIN/clickat" $((WX - 300)) $((WY + WH / 2)) move 50 >/dev/null; }
 
 CX=$((WW / 2)); CY=$((WH * 55 / 100))
+# Open water near the top of the bowl, above the surface: a click there drops food, lower down it knocks.
+FY=$((WH * 24 / 100))
 startcap() { python3 "$REPO/tools/mac/window_stills.py" "$WID" "$RUN/$1" "$RUN/stop-$1" 0.4 & CAPPID=$!; sleep 1; }
 stopcap() { touch "$RUN/stop-$1"; wait "$CAPPID"; }
 
@@ -89,7 +91,7 @@ if H state | grep -q '"alive":false'; then H newPet >/dev/null; sleep 2; fi
 H night '{"value":false}' >/dev/null
 H talkSpeed '{"k":1}' >/dev/null
 H setPantry '{"n":150}' >/dev/null
-H setHunger '{"n":90}' >/dev/null
+H setHunger '{"n":50}' >/dev/null
 sleep 3
 
 # Part 1: the moments ----------------------------------------------------------
@@ -104,8 +106,8 @@ move "$CX" "$CY"; sleep 0.3; move $((CX + 20)) $((CY - 10))
 sleep 8
 
 cap "Click over the water: a pinch of food"
-click "$CX" $((WH * 45 / 100))
-sleep 16
+click "$CX" "$FY"
+sleep 22
 
 cap "A knock on the glass (it answers about 6 times in 10)"
 for i in 1 2 3; do
@@ -128,17 +130,17 @@ if [ -n "$LINK" ]; then
   sleep 4
   LINK2=$(H transcript | rectmid)
   [ -n "$LINK2" ] && read LX LY <<< "$LINK2"
-  cap "Tap the source: it opens in your browser"
-  click "$LX" "$LY"
-  sleep 3
+  # Not clicked here: opening it can switch to the browser's full-screen Space mid-recording.
+  cap "Tap the source to open it in your browser"
+  sleep 4
 fi
 
 cap "It gets hungry, then you feed it"
 H setPantry '{"n":0}' >/dev/null
 H setHunger '{"n":20}' >/dev/null
-sleep 7
-click "$CX" $((WH * 45 / 100))
-sleep 14
+sleep 9
+click "$CX" "$FY"
+sleep 24
 stopcap moments
 H setPantry '{"n":150}' >/dev/null
 H setHunger '{"n":90}' >/dev/null
