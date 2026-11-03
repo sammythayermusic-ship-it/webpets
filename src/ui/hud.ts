@@ -1,4 +1,4 @@
-// Hover HUD: a pill above the habitat (hunger ring + %, name + id, FEED, MIN) and a caption below it (the feeder).
+// Hover HUD: a pill above the habitat (hunger ring + %, name + id, FEED, TALK, size, MIN) and a caption below it (the feeder).
 // The HUD model is derived locally from AppState (see model.ts); main.ts only drives visibility and relayout.
 
 import type { AppState } from '../app/types';
@@ -18,7 +18,13 @@ const PILL_GAP = 4;
 const PILL_H = 16;
 const CAPTION_GAP = 4;
 
-export function mountHud(root: HTMLElement, deps: UiDeps): HudHandle {
+export interface HudOptions {
+  /** TALK opens the chat field (src/ui/chatInput.ts); hidden for a pet that cannot be typed to yet. */
+  onTalk?: () => void;
+  canTalk?: () => boolean;
+}
+
+export function mountHud(root: HTMLElement, deps: UiDeps, opts: HudOptions = {}): HudHandle {
   const { store, scene } = deps;
 
   // ----- pill -----
@@ -87,7 +93,10 @@ export function mountHud(root: HTMLElement, deps: UiDeps): HudHandle {
   );
   minBtn.title = 'Minimize to the tray chip';
 
-  pill.append(svg, pct, name, feedBtn, smallerBtn, biggerBtn, minBtn);
+  const talkBtn = button('TALK', () => opts.onTalk?.(), 'talk');
+  talkBtn.title = 'Say something';
+
+  pill.append(svg, pct, name, feedBtn, talkBtn, smallerBtn, biggerBtn, minBtn);
 
   // ----- caption -----
   const caption = el('div', 'hud-caption');
@@ -111,6 +120,7 @@ export function mountHud(root: HTMLElement, deps: UiDeps): HudHandle {
     nameText.data = `${m.name} `;
     id.textContent = m.id;
     feedBtn.disabled = !m.canFeed;
+    talkBtn.hidden = !(opts.onTalk && (opts.canTalk?.() ?? true) && m.alive);
     feedBtn.title = m.alive ? 'Feed' : `${m.name} has died`;
     pill.classList.toggle('dead', !m.alive);
     caption.textContent = captionText(m);

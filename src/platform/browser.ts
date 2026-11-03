@@ -26,6 +26,7 @@ const TRAY_CSS_PX = 22;
 const MENU_ITEMS: ReadonlyArray<{ action: TrayAction; label: string }> = [
   { action: 'feed', label: 'Feed' },
   { action: 'pantry', label: 'Holiday feeder…' },
+  { action: 'card', label: 'Get to know me…' },
   { action: 'size-s', label: 'Size: Small' },
   { action: 'size-m', label: 'Size: Medium' },
   { action: 'size-l', label: 'Size: Large' },
@@ -44,6 +45,10 @@ const MENU_ITEMS: ReadonlyArray<{ action: TrayAction; label: string }> = [
   { action: 'toggle-visibility', label: 'Minimize' },
   { action: 'quit', label: 'Quit' },
 ];
+
+/** Window events the browser mock uses for the card overlay (main.ts listens). */
+export const CARD_OPEN_EVENT = 'webpets:card-open';
+export const CARD_CLOSE_EVENT = 'webpets:card-close';
 
 type Listener<T> = (value: T) => void;
 
@@ -384,6 +389,9 @@ export function createBrowserPlatform(): Platform {
       setInteractionLock: async () => undefined,
       getLayering: async () => ({ level: 0, behavior: 0 }),
       setLayering: async () => undefined,
+      // A page has the keyboard already.
+      beginTyping: async () => undefined,
+      endTyping: async () => undefined,
     },
     tray: {
       setChip: (rgba: Uint8Array, size: TrayChipSize): Promise<void> => {
@@ -427,6 +435,25 @@ export function createBrowserPlatform(): Platform {
     openLink: (url: string): Promise<void> => {
       if (url.startsWith('https://')) window.open(url, '_blank', 'noopener');
       return Promise.resolve();
+    },
+    // One page, so the card is an overlay on it: main.ts mounts it when this event fires.
+    card: {
+      open: async () => {
+        window.dispatchEvent(new CustomEvent(CARD_OPEN_EVENT));
+      },
+      close: async () => {
+        window.dispatchEvent(new CustomEvent(CARD_CLOSE_EVENT));
+      },
+    },
+    events: {
+      emit: async (name) => {
+        window.dispatchEvent(new CustomEvent(`webpets:${name}`));
+      },
+      on: (name, cb) => {
+        const h = (): void => cb();
+        window.addEventListener(`webpets:${name}`, h);
+        return () => window.removeEventListener(`webpets:${name}`, h);
+      },
     },
     autostart: {
       isEnabled: () => Promise.resolve(autostartOn),

@@ -11,7 +11,11 @@ import type { Reaction } from '../brain/talk';
 import type { SpeechHandleExt } from '../ui/speech';
 import type { AppStore, ForcedState } from '../app/types';
 import type { Stimulus } from '../sim/needs';
-import type { WindowApi } from '../platform/types';
+import type { Platform, WindowApi } from '../platform/types';
+import type { ProfileStore } from '../app/profile';
+import type { ChatInputHandle } from '../ui/chatInput';
+import { BOND_WORDS, bondLevel } from '../brain/bond';
+import { normalizeProfile } from '../brain/profile';
 import type { HabitatScene } from '../render/types';
 import type { Habitat, Species } from '../sim/types';
 import type { DevPanelHandle, HudHandle } from '../ui/types';
@@ -39,11 +43,16 @@ const HABITATS: ReadonlySet<string> = new Set<Habitat>([
 /** What the harness needs from the app. Narrow on purpose so the tests can hand in small fakes. */
 export interface HarnessContext {
   store: Pick<AppStore, 'getState'>;
-  platform: { window: Pick<WindowApi, 'getGeometry'> };
+  platform: { window: Pick<WindowApi, 'getGeometry'>; card?: Platform['card'] };
   scene: Pick<HabitatScene, 'snapshot' | 'debugState' | 'fps' | 'setPointer' | 'tap' | 'feedSpot' | 'aimFeed'>;
   devPanel: DevPanelHandle & Partial<{ open(): void; close(): void }>;
   hud?: Pick<HudHandle, 'setVisible'>;
-  speech?: Pick<SpeechHandleExt, 'say' | 'react' | 'speak' | 'transcript' | 'setTimeScale' | 'getRects' | 'typedAgo' | 'unseen'>;
+  speech?: Pick<
+    SpeechHandleExt,
+    'say' | 'react' | 'speak' | 'transcript' | 'setTimeScale' | 'getRects' | 'typedAgo' | 'unseen' | 'chat' | 'choose' | 'bond' | 'setBondPoints' | 'forgetChat'
+  >;
+  profile?: ProfileStore;
+  chatInput?: Pick<ChatInputHandle, 'open' | 'close' | 'isOpen' | 'getRects'>;
 }
 
 /** Everything outside the app that a command touches: output files, the clock, and waiting. */
@@ -430,6 +439,48 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
         unseen: needSpeech(ctx).unseen(),
         linkRect: needSpeech(ctx).getRects()[0] ?? null,
       };
+    case 'chat': {
+      // As if typed into the chat field and sent. A written reply arrives later; read `transcript`.
+      const text = str(cmd, 'text');
+      needSpeech(ctx).chat(text);
+      return { text, last: needSpeech(ctx).transcript().slice(-1)[0] ?? null, rects: needSpeech(ctx).getRects() };
+    }
+    case 'choose': {
+      const value = str(cmd, 'value');
+      if (!needSpeech(ctx).choose(value)) throw new Error(`choose: no button with value "${value}" under the bubble`);
+      return { value, last: needSpeech(ctx).transcript().slice(-1)[0] ?? null };
+    }
+    case 'bond': {
+      // Read the bond; with `points`, set it first (0-100).
+      const points = optNum(cmd, 'points');
+      if (points !== undefined) needSpeech(ctx).setBondPoints(points);
+      const b = needSpeech(ctx).bond();
+      return b ? { points: b.points, level: bondLevel(b.points), word: BOND_WORDS[bondLevel(b.points)], knocks: b.knocks } : null;
+    }
+    case 'profile': {
+      // Read the profile; with `set`, replace it first (it goes through the same checks as a saved file).
+      const prof = ctx.profile;
+      if (!prof) throw new Error('profile: not available');
+      if (cmd['set'] !== undefined) prof.set(normalizeProfile({ ...(cmd['set'] as object), updatedAt: Date.now() }, Date.now()));
+      return prof.get();
+    }
+    case 'forget': {
+      ctx.profile?.forget();
+      needSpeech(ctx).forgetChat();
+      return { profile: ctx.profile?.get() ?? null };
+    }
+    case 'chatField': {
+      const ci = ctx.chatInput;
+      if (!ci) throw new Error('chatField: not available');
+      if (bool(cmd, 'open')) ci.open();
+      else ci.close();
+      return { open: ci.isOpen(), rect: ci.getRects()[0] ?? null };
+    }
+    case 'openCard': {
+      if (!ctx.platform.card) throw new Error('openCard: not available');
+      await ctx.platform.card.open();
+      return { opened: true };
+    }
     case 'snapshot':
       return opSnapshot(cmd, ctx, io);
     case 'stats':

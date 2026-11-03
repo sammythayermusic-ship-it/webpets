@@ -42,6 +42,9 @@ export function wireTray(deps: TrayDeps): () => void {
       case 'feed':
         a.feed();
         return;
+      case 'card':
+        void deps.platform.card.open();
+        return;
       case 'pantry':
         ensureShown();
         deps.feederDialog.open();

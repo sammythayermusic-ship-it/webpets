@@ -30,6 +30,11 @@ export interface Understood {
   name: string | null;
   /** Interest ids, in the order mentioned. */
   interests: string[];
+  /**
+   * You sound like you like or do them ("I love", "I played", "my dog", "is fun"), not just used the
+   * word ("I'm running late"). The pet only asks to remember a new interest when this is true.
+   */
+  liking: boolean;
   teams: TeamMention[];
   mood: Mood | null;
 }
@@ -108,9 +113,20 @@ const NOT_A_NAME = new Set([
   'is', 'it', 'too', 'sad', 'happy', 'tired', 'bored', 'secret', 'nothing', 'whatever', 'that', 'this',
 ]);
 
-/** Lower case, curly quotes straightened, anything but letters, digits and apostrophes made a space. */
+const LIKING = [
+  'like', 'likes', 'liked', 'love', 'loves', 'loved', 'enjoy', 'enjoys', 'into', 'favorite', 'favourite', 'fan',
+  'hobby', 'obsessed', 'play', 'plays', 'played', 'playing', 'practice', 'practicing', 'practise', 'learning',
+  'my', 'fun', 'best', 'awesome', 'went', 'go', 'going', 'adore',
+];
+
+/** Words after an everyday nickname that make it a team ("giants fan", "heat game"). */
+const TEAM_CUES_AFTER = new Set(['fan', 'fans', 'game', 'games', 'won', 'win', 'wins', 'lost', 'lose', 'play', 'playing', 'played', 'season', 'tonight']);
+
+/** Lower case, accents folded, curly quotes straightened, anything but letters, digits and apostrophes made a space. */
 export function normalizeText(text: string): string {
   return text
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
     .toLowerCase()
     .replace(/[’‘]/g, "'")
     .replace(/[^\p{L}\p{N}']+/gu, ' ')
@@ -160,7 +176,24 @@ function interestsIn(padded: string, known: readonly Interest[]): string[] {
   return found.sort((a, b) => a.at - b.at).map((f) => f.id);
 }
 
-function teamsIn(padded: string, known: readonly Team[]): TeamMention[] {
+/**
+ * An everyday-word nickname ("Giants", "Heat", "Bills") counts as a team when it is written with a
+ * capital in the middle of a sentence, or comes with "go" before it or "fan", "game"... after it.
+ * "The heat today" is the weather; "I love the Giants" and "go heat" are teams.
+ */
+function everydayMentioned(raw: string, padded: string, nickname: string): boolean {
+  const nick = normalizeText(nickname);
+  if (padded.includes(` go ${nick} `)) return true;
+  for (const after of TEAM_CUES_AFTER) if (padded.includes(` ${nick} ${after} `)) return true;
+  const cased = new RegExp(`(^|[^\\p{L}])${nickname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'gu');
+  for (const m of raw.matchAll(cased)) {
+    const before = raw.slice(0, (m.index ?? 0) + m[1]!.length).trimEnd();
+    if (before.length > 0 && !/[.!?]$/.test(before)) return true;
+  }
+  return false;
+}
+
+function teamsIn(padded: string, known: readonly Team[], raw = ''): TeamMention[] {
   // Every phrase that can name a team, where it occurs, and the words to report as said.
   const hits: { start: number; end: number; said: string; id: string }[] = [];
   const add = (phrase: string, id: string, said = phrase): void => {
@@ -169,10 +202,11 @@ function teamsIn(padded: string, known: readonly Team[]): TeamMention[] {
     for (const o of occurrences(padded, p)) hits.push({ start: o, end: o + p.length + 1, said: normalizeText(said), id });
   };
   for (const t of known) {
-    add(t.display, t.id);
+    // A club named just its nickname ("Chelsea") is an everyday word too: no back door via the display name.
+    const bare = normalizeText(t.display) === normalizeText(t.nickname);
+    if (!(bare && t.everydayWord)) add(t.display, t.id);
     add(`${t.location} ${t.nickname}`, t.id);
-    if (t.everydayWord) add(`go ${t.nickname}`, t.id, t.nickname);
-    else add(t.nickname, t.id);
+    if (!t.everydayWord || everydayMentioned(raw, padded, t.nickname)) add(t.nickname, t.id);
     for (const a of t.aliases) add(a, t.id);
   }
   // Longest first; a shorter phrase inside a longer one is the same mention ("giants" in "new york giants").
@@ -204,7 +238,8 @@ export function understand(text: string, known: Known): Understood {
     answer: words.length <= 4 && YES.test(norm) ? 'yes' : words.length <= 4 && NO.test(norm) ? 'no' : null,
     name: nameIn(norm),
     interests: negated ? [] : interestsIn(padded, known.interests),
-    teams: negated ? [] : teamsIn(padded, known.teams),
+    liking: !negated && has(padded, LIKING),
+    teams: negated ? [] : teamsIn(padded, known.teams, text),
     mood,
   };
 }

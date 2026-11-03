@@ -177,7 +177,7 @@ export function converse(
   if (interest !== undefined) {
     if (p.interests.includes(interest)) {
       if (u.intent === 'unknown') return { say: teach('already-know', { thing: label(interest) }), state: s, profile: p, told: false };
-    } else if (p.interests.length < MAX_INTERESTS) {
+    } else if (u.liking && p.interests.length < MAX_INTERESTS) {
       s = { ...s, pending: { kind: 'save-interest', id: interest } };
       return { say: teach('ask-interest', { interest: label(interest) }, YES_NO), state: s, profile: p, told: false };
     }

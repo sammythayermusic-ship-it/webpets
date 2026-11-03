@@ -47,6 +47,8 @@ export interface SettingsDoc {
   talkMuted: boolean;
   /** Daily cap on Claude-written lines, US dollars; 0 turns them off. */
   dailyCapUsd: number;
+  /** The "Get to know me" card has been offered once (it opens by itself on the first launch only). */
+  cardOffered: boolean;
   dayNight: DayNightMode;
   launchAtLogin: boolean;
   /**
@@ -129,6 +131,7 @@ export interface AppActions {
   setMuted(b: boolean): void;
   setNotificationsMuted(b: boolean): void;
   setTalkMuted(b: boolean): void;
+  setCardOffered(b: boolean): void;
   setDayNight(m: DayNightMode): void;
   setLaunchAtLogin(b: boolean): Promise<void>;
   /** Change any of the window layering flags; the rest keep their current values. */

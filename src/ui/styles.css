@@ -329,6 +329,77 @@ body {
   transform: rotate(45deg);
 }
 
+/* Answers to a question the pet asked ("Yes" / "No thanks", or which team): small pills under the line. */
+.speech-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 5px 0 1px;
+}
+.speech-choices[hidden] {
+  display: none;
+}
+#ui .speech-choice {
+  pointer-events: auto;
+  height: 18px;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+  background: rgba(15, 17, 21, 0.08);
+  color: var(--wp-ink);
+}
+#ui .speech-choice:hover:not(:disabled) {
+  background: rgba(15, 17, 21, 0.16);
+}
+#ui .speech-choice:first-child {
+  background: #ff8a1f;
+  color: #fff;
+}
+#ui .speech-choice:first-child:hover:not(:disabled) {
+  background: #f07a10;
+}
+
+/* ---------- Chat field (typing to the pet) ---------- */
+
+.chat-input {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 3px 3px 3px 4px;
+  background: var(--wp-scrim);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-radius: 999px;
+  box-shadow: var(--wp-shadow), var(--wp-hairline);
+  z-index: 6;
+  animation: speech-pop 180ms cubic-bezier(0.2, 0.9, 0.3, 1.25);
+}
+.chat-input[hidden] {
+  display: none;
+}
+#ui .chat-field {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  font-size: 11px;
+}
+#ui .chat-send {
+  height: 22px;
+  background: #ff8a1f;
+}
+#ui .chat-send:hover:not(:disabled) {
+  background: #f07a10;
+}
+
 /* ---------- Dev panel ---------- */
 
 .dev-panel {

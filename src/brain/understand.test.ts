@@ -87,6 +87,21 @@ describe('understanding what you type', () => {
     expect(understand('soccerball', K).interests).toEqual([]);
   });
 
+  it('can tell liking a thing from just saying the word', () => {
+    expect(understand('I love minecraft', K).liking).toBe(true);
+    expect(understand('walking my dog', K).liking).toBe(true);
+    expect(understand('baking is fun', K).liking).toBe(true);
+    expect(understand('the dog barked', K).liking).toBe(false);
+    expect(understand("I don't like soccer", K).liking).toBe(false);
+  });
+
+  it('folds accents and dots, so Montréal and St. Louis match however they are typed', () => {
+    const k: Known = { teams: [team('mls:9720', 'Montréal', 'CF Montréal', { aliases: ['cf montreal'] }), team('mlb:24', 'St. Louis', 'Cardinals', { everydayWord: true })], interests: [] };
+    expect(understand('cf montreal', k).teams).toEqual([{ said: 'cf montreal', ids: ['mls:9720'] }]);
+    expect(understand('CF Montréal!', k).teams).toEqual([{ said: 'cf montreal', ids: ['mls:9720'] }]);
+    expect(understand('st louis cardinals', k).teams).toEqual([{ said: 'st louis cardinals', ids: ['mlb:24'] }]);
+  });
+
   it('notices teams, asks which when a name is shared, and needs a cue for everyday words', () => {
     expect(understand('go red sox!', K).teams).toEqual([{ said: 'red sox', ids: ['mlb:2'] }]);
     expect(understand('the sox won', K).teams).toEqual([{ said: 'sox', ids: ['mlb:2', 'mlb:4'] }]);
@@ -96,6 +111,12 @@ describe('understanding what you type', () => {
     expect(understand('the heat today is a lot', K).teams).toEqual([]);
     expect(understand('miami heat', K).teams).toEqual([{ said: 'miami heat', ids: ['nba:14'] }]);
     expect(understand('go heat', K).teams).toEqual([{ said: 'heat', ids: ['nba:14'] }]);
+    expect(understand('heat game tonight', K).teams).toEqual([{ said: 'heat', ids: ['nba:14'] }]);
+    expect(understand('I watched the Heat', K).teams).toEqual([{ said: 'heat', ids: ['nba:14'] }]);
+    expect(understand('Heat is too much today', K).teams).toEqual([]);
+    const club: Known = { teams: [{ ...team('epl:363', 'London', 'Chelsea', { everydayWord: true }), display: 'Chelsea' }], interests: [] };
+    expect(understand('chelsea is my friend', club).teams).toEqual([]);
+    expect(understand('Chelsea won!', club).teams).toEqual([{ said: 'chelsea', ids: ['epl:363'] }]);
     expect(understand("I can't stand the Red Sox", K).teams).toEqual([]);
   });
 

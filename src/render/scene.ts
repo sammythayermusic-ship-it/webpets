@@ -126,6 +126,9 @@ interface Mounted {
 const TIER_DOWN_MS = 9;
 const TIER_UP_MS = 4;
 
+/** Half the box, in grid px around the pet's drawn centre, that counts as clicking the pet. */
+const PET_HIT_HALF = Object.freeze({ w: 26, h: 18 });
+
 export function createScene(
   manifest: Manifest,
   subject: SceneSubject = DEFAULT_SUBJECT,
@@ -409,6 +412,15 @@ export function createScene(
     },
     aimFeed(gx) {
       feedAim = gx;
+    },
+    petAt(cssX, cssY) {
+      if (!m) return false;
+      const f = scaleFactor(scale);
+      const gx = (cssX - WINDOW_PAD) / f;
+      const gy = (cssY - WINDOW_PAD) / f;
+      const sprite = m.player.sprite;
+      // Generous: the fish is small and moving, and a near miss should still count as reaching for it.
+      return Math.abs(gx - sprite.x) <= PET_HIT_HALF.w && Math.abs(gy - sprite.y) <= PET_HIT_HALF.h;
     },
     tap(cssX, cssY) {
       const f = scaleFactor(scale);

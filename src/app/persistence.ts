@@ -10,6 +10,8 @@ import type { GraveRecord, Personality, PetState } from '../sim/types';
 import { DEFAULT_DAILY_CAP_USD } from '../brain/writer';
 
 export const PET_FILE = 'pet.json';
+/** What the pet has said, its talk timing, the bond and what you said in chat (src/ui/talk.ts). One per pet. */
+export const BRAIN_FILE = 'brain.json';
 export const SETTINGS_FILE = 'settings.json';
 export const GRAVEYARD_FILE = 'graveyard.json';
 export const SAVE_THROTTLE_MS = 500;
@@ -67,6 +69,7 @@ export function defaultSettings(): SettingsDoc {
     notificationsMuted: false,
     talkMuted: false,
     dailyCapUsd: DEFAULT_DAILY_CAP_USD,
+    cardOffered: false,
     dayNight: 'auto',
     launchAtLogin: false,
     alwaysOnTop: true,
@@ -211,6 +214,7 @@ export function normalizeSettings(v: unknown): SettingsDoc {
     notificationsMuted: isBool(v['notificationsMuted']) ? v['notificationsMuted'] : d.notificationsMuted,
     talkMuted: isBool(v['talkMuted']) ? v['talkMuted'] : d.talkMuted,
     dailyCapUsd: isNum(v['dailyCapUsd']) && v['dailyCapUsd'] >= 0 ? v['dailyCapUsd'] : d.dailyCapUsd,
+    cardOffered: isBool(v['cardOffered']) ? v['cardOffered'] : d.cardOffered,
     dayNight: dn === 'auto' || dn === 'day' || dn === 'night' ? dn : d.dayNight,
     launchAtLogin: isBool(v['launchAtLogin']) ? v['launchAtLogin'] : d.launchAtLogin,
     // No version bump for these. A missing field already falls back to its default, whereas an

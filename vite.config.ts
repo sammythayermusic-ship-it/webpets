@@ -20,6 +20,10 @@ export default defineConfig({
     minify: !process.env.TAURI_ENV_DEBUG ? 'esbuild' : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
     assetsInlineLimit: 0,
+    // Two pages: the habitat, and the "Get to know me" card's own window (src-tauri/src/focus.rs).
+    rollupOptions: {
+      input: { main: resolve(__dirname, 'index.html'), card: resolve(__dirname, 'card.html') },
+    },
   },
   plugins: [
     webpetsDiag(),

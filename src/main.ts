@@ -22,6 +22,14 @@ import {
 } from './ui';
 import type { DevPanelHandle, HudHandle } from './ui';
 import { hungerLabel } from './sim';
+import { createProfileStore } from './app/profile';
+import { mountChatInput } from './ui/chatInput';
+import { mountCard, type CardHandle } from './ui/card';
+import { CARD_CLOSE_EVENT, CARD_OPEN_EVENT } from './platform/browser';
+import { BOND, BOND_WORDS, bondLevel, bondPerks } from './brain/bond';
+import { GREET_MS } from './sim/needs';
+import { INTERESTS } from './brain/data/interests';
+import { LEAGUES, TEAMS } from './brain/data/teams';
 
 /** HUD stays visible this long after the pointer leaves the hit regions (contract rule 3). */
 const HUD_GRACE_MS = 400;
@@ -185,6 +193,9 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   // 1. Store.
   const store = createAppStore(platform);
   await store.getState().actions.boot();
+  // What the pets know about you; shared with the "Get to know me" card's window.
+  const profile = createProfileStore(platform);
+  await profile.ready;
 
   // 2. Scene + canvas, then the #ui overlay above it.
   const app = requireApp();
@@ -201,25 +212,37 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   const audio = initAudio();
   const reducedMotion = prefersReducedMotion();
   scene.setView(toSceneView(initial, reducedMotion));
-  // The needs model feeds the behaviour: asked once per tick with whether the pet is napping.
-  scene.setDrivesSource((napping) => store.getState().actions.drives(napping));
+  // The needs model feeds the behaviour: asked once per tick with whether the pet is napping. A close
+  // friend (Step E's bond) also greets you at the glass after a short absence, not only a long one.
+  let closeGreetUntil = 0;
+  scene.setDrivesSource((napping) => {
+    const d = store.getState().actions.drives(napping);
+    return Date.now() < closeGreetUntil && store.getState().present && !d.greet ? { ...d, greet: true } : d;
+  });
   scene.on('bite', () => store.getState().actions.poke('bite'));
 
   // 3. UI components and wiring.
   let hud: HudHandle | null = null;
   let devPanel: DevPanelHandle | null = null;
-  let speechRects: { getRects(): Rect[] } | null = null;
+  const extraRects: { getRects(): Rect[] }[] = [];
   const refreshHitRegions = (): void => {
     if (!hud || !devPanel) return; // components call requestHitRegions while mounting
-    const others = speechRects ? [speechRects] : [];
-    platform.window.setHitRegions(computeHitRegions(scene, hud, devPanel, others)).catch(logRejected('setHitRegions'));
+    platform.window.setHitRegions(computeHitRegions(scene, hud, devPanel, extraRects)).catch(logRejected('setHitRegions'));
   };
-  const deps = { store, platform, scene, audio, requestHitRegions: refreshHitRegions };
-  hud = mountHud(ui, deps);
+  const deps = { store, platform, scene, audio, profile, requestHitRegions: refreshHitRegions };
+  // TALK and a click on the pet open the chat field; it is mounted after the bubble it talks through.
+  let openChat = (): void => undefined;
+  hud = mountHud(ui, deps, { onTalk: () => openChat(), canTalk: () => speech.canChat() });
   const grip = mountResizeGrip(ui, deps);
   devPanel = mountDevPanel(ui, deps);
   const speech = mountSpeech(ui, deps);
-  speechRects = speech;
+  const chatInput = mountChatInput(ui, deps, (text) => speech.chat(text));
+  openChat = () => {
+    if (speech.canChat()) chatInput.open();
+  };
+  extraRects.push(speech, chatInput);
+  // "Forget me" on the card: what you said in chat goes too.
+  platform.events.on('forget-me', () => speech.forgetChat());
   const feederDialog = mountFeederDialog(ui, deps);
   const montage = mountMontage(ui, deps);
   mountMemorial(ui, deps);
@@ -244,6 +267,7 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
       hudHandle.relayout();
       grip.relayout();
       speech.relayout();
+      chatInput.relayout();
       refreshHitRegions();
     }
 
@@ -270,12 +294,21 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   let grace: ReturnType<typeof setTimeout> | null = null;
   let lastPointer: PointerState | null = null;
   let wasInside = false;
+  let leftAt = Date.now();
   platform.window.onPointer((p: PointerState) => {
     lastPointer = p;
     // Presence is an attention event: arriving spends curiosity and may earn a greeting; leaving
     // re-anchors the needs as "alone". Edge-triggered, because the poller repeats while inside.
     if (p.inside !== wasInside) {
       wasInside = p.inside;
+      const at = Date.now();
+      if (p.inside) {
+        const b = speech.bond();
+        const close = b !== null && bondPerks(bondLevel(b.points)).swimToGlass;
+        if (close && at - leftAt >= BOND.CLOSE_GREET_AWAY_MS) closeGreetUntil = at + GREET_MS;
+      } else {
+        leftAt = at;
+      }
       store.getState().actions.setPresence(p.inside);
     }
     if (p.inside) {
@@ -333,6 +366,11 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
       if (!store.getState().actions.feed().ok) scene.aimFeed(null);
       return;
     }
+    // Reaching for the pet itself is wanting to talk to it, not a knock on the glass.
+    if (speech.canChat() && scene.petAt(e.clientX, e.clientY)) {
+      chatInput.open();
+      return;
+    }
     store.getState().actions.poke('tap');
     scene.tap(e.clientX, e.clientY);
     speech.react('tap');
@@ -376,7 +414,7 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
         store,
         platform,
         scene,
-        hitRegions: () => computeHitRegions(scene, hudHandle, devPanelHandle, [speech]),
+        hitRegions: () => computeHitRegions(scene, hudHandle, devPanelHandle, extraRects),
         lastPointer: () => lastPointer,
         speech,
       }),
@@ -389,7 +427,7 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   if (import.meta.env.VITE_WEBPETS_HARNESS === '1') {
     const devPanelHandle = devPanel;
     void import('./dev/harness').then((mod) =>
-      mod.installHarness({ store, platform, scene, devPanel: devPanelHandle, hud: hudHandle, speech }),
+      mod.installHarness({ store, platform, scene, devPanel: devPanelHandle, hud: hudHandle, speech, profile, chatInput }),
     );
   }
 
@@ -403,7 +441,53 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
     speech.react(recentEvents.some((e) => e.type === 'auto-fed') ? 'feeder' : 'welcome-back');
   }
 
+  // 6. The "Get to know me" card. In the browser it is an overlay on this page (the app gives it its
+  // own window). It opens by itself once, on the first launch, in the app only, so tests and the
+  // browser preview start on the habitat.
+  if (platform.kind === 'browser') mountBrowserCard(platform, profile, store, () => speech.bond());
+  if (platform.kind === 'tauri' && !store.getState().settings.cardOffered) {
+    store.getState().actions.setCardOffered(true);
+    platform.card.open().catch(logRejected('openCard'));
+  }
+
   return { store, scene };
+}
+
+/** Browser only: the card as an overlay, opened and closed by the mock platform's events. */
+function mountBrowserCard(
+  platform: Platform,
+  profile: ReturnType<typeof createProfileStore>,
+  store: AppStore,
+  bond: () => { points: number } | null,
+): void {
+  let overlay: HTMLElement | null = null;
+  let card: CardHandle | null = null;
+  const close = (): void => {
+    card?.destroy();
+    overlay?.remove();
+    card = null;
+    overlay = null;
+  };
+  window.addEventListener(CARD_CLOSE_EVENT, close);
+  window.addEventListener(CARD_OPEN_EVENT, () => {
+    if (overlay) return;
+    overlay = document.createElement('div');
+    overlay.className = 'gtk-overlay';
+    document.body.append(overlay);
+    card = mountCard(overlay, {
+      profile,
+      leagues: LEAGUES,
+      teams: TEAMS,
+      interests: INTERESTS,
+      petName: () => store.getState().pet.name,
+      bondWord: () => {
+        const b = bond();
+        return b ? BOND_WORDS[bondLevel(b.points)] : null;
+      },
+      onForget: () => void platform.events.emit('forget-me'),
+      onDone: () => void platform.card.close(),
+    });
+  });
 }
 
 async function main(): Promise<void> {

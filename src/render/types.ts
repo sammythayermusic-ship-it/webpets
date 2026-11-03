@@ -247,6 +247,8 @@ export interface HabitatScene {
   feedSpot(cssX: number, cssY: number): number | null;
   /** Aim the NEXT feed at grid x (null: no aim). Consumed by the next `feed()`. */
   aimFeed(gx: number | null): void;
+  /** Whether window-local CSS px are on the pet itself (clicking the pet starts a chat, Step E). */
+  petAt(cssX: number, cssY: number): boolean;
   /** Window-local CSS px, null when the pointer left. Drives glass sheen and parallax. */
   setPointer(x: number | null, y: number | null): void;
   on(event: SceneEvent, cb: () => void): () => void;

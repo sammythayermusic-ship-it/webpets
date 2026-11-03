@@ -3,11 +3,12 @@
 // only window dragging and the store plugin are called through the JS APIs directly.
 
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { emit, listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { load, type Store } from '@tauri-apps/plugin-store';
 import type { Scale, TrayChipSize } from '../sim/constants';
 import type {
+  AppEvent,
   BuildIdentity,
   ClockReading,
   PersistApi,
@@ -22,26 +23,31 @@ import type {
 /** Every key the whole document is stored under; Rust only touches the separate `positions` key. */
 const DOC_KEY = 'doc';
 
-const TRAY_ACTIONS: ReadonlySet<string> = new Set<TrayAction>([
-  'feed',
-  'pantry',
-  'size-s',
-  'size-m',
-  'size-l',
-  'mute',
-  'notifications',
-  'daynight-auto',
-  'daynight-day',
-  'daynight-night',
-  'launch-at-login',
-  'always-on-top',
-  'all-desktops',
-  'over-fullscreen',
-  'dev-panel',
-  'new-pet',
-  'toggle-visibility',
-  'quit',
-]);
+// A record, not a list, so a TrayAction added to the type and missed here fails to compile. A list
+// missed 'talk', and the tray's "Pet talks" switch did nothing in the app.
+const TRAY_ACTION_SET: Readonly<Record<TrayAction, true>> = {
+  feed: true,
+  pantry: true,
+  card: true,
+  'size-s': true,
+  'size-m': true,
+  'size-l': true,
+  mute: true,
+  notifications: true,
+  talk: true,
+  'daynight-auto': true,
+  'daynight-day': true,
+  'daynight-night': true,
+  'launch-at-login': true,
+  'always-on-top': true,
+  'all-desktops': true,
+  'over-fullscreen': true,
+  'dev-panel': true,
+  'new-pet': true,
+  'toggle-visibility': true,
+  quit: true,
+};
+const TRAY_ACTIONS: ReadonlySet<string> = new Set(Object.keys(TRAY_ACTION_SET));
 
 function isTrayAction(id: unknown): id is TrayAction {
   return typeof id === 'string' && TRAY_ACTIONS.has(id);
@@ -121,6 +127,8 @@ export function createTauriPlatform(): Platform {
       setScaleLive: (scale: Scale, live: boolean) => invoke<WindowGeometry>('set_scale_live', { scale, live }),
       setInteractionLock: (ms: number) => invoke<void>('set_interaction_lock', { ms }),
       getLayering: () => invoke<{ level: number; behavior: number }>('get_layering'),
+      beginTyping: () => invoke<void>('begin_typing'),
+      endTyping: () => invoke<void>('end_typing'),
       setLayering: (opts) =>
         invoke<void>('set_layering', {
           alwaysOnTop: opts.alwaysOnTop,
@@ -148,6 +156,14 @@ export function createTauriPlatform(): Platform {
     },
     inputIdle: () => invoke<{ keys: number; any: number; unseen: boolean }>('input_idle'),
     openLink: (url: string) => invoke<void>('open_link', { url }),
+    card: {
+      open: () => invoke<void>('open_card'),
+      close: () => invoke<void>('close_card'),
+    },
+    events: {
+      emit: (name: AppEvent) => emit(name),
+      on: (name: AppEvent, cb: () => void) => subscribe<unknown>(name, () => cb()),
+    },
     autostart: {
       isEnabled: () => invoke<boolean>('autostart_get'),
       setEnabled: (on: boolean) => invoke<void>('autostart_set', { on }),

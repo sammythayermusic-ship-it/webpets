@@ -1,0 +1,255 @@
+/* The "Get to know me" card (src/ui/card.ts). Its own window in the app (card.html), an overlay in the
+   browser. A plain, friendly settings sheet: system type, soft cards, pill chips; follows dark mode. */
+
+.gtk-window {
+  margin: 0;
+  background: var(--gtk-bg);
+}
+
+.gtk-window,
+.gtk-overlay {
+  --gtk-bg: #f2f2f7;
+  --gtk-panel: #ffffff;
+  --gtk-ink: #1c1c1e;
+  --gtk-dim: #6e6e73;
+  --gtk-line: rgba(60, 60, 67, 0.18);
+  --gtk-accent: #ff8a1f;
+  --gtk-accent-ink: #ffffff;
+  --gtk-chip: #f2f2f7;
+  --gtk-danger: #d70015;
+}
+
+@media (prefers-color-scheme: dark) {
+  .gtk-window,
+  .gtk-overlay {
+    --gtk-bg: #1c1c1e;
+    --gtk-panel: #2c2c2e;
+    --gtk-ink: #f2f2f7;
+    --gtk-dim: #a1a1a6;
+    --gtk-line: rgba(235, 235, 245, 0.16);
+    --gtk-chip: #3a3a3c;
+    --gtk-danger: #ff453a;
+  }
+}
+
+/* Browser only: the card over the habitat page. */
+.gtk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: auto;
+  background: rgba(20, 22, 28, 0.55);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.gtk-overlay .gtk-card {
+  max-width: 440px;
+  border-radius: 14px;
+  background: var(--gtk-bg);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+}
+
+.gtk-card {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 22px 20px 18px;
+  font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--gtk-ink);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.gtk-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.gtk-sub {
+  margin: 2px 0 14px;
+  color: var(--gtk-dim);
+}
+
+.gtk-section {
+  background: var(--gtk-panel);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 0 0 10px;
+  box-shadow: 0 0 0 0.5px var(--gtk-line);
+}
+
+.gtk-h2,
+.gtk-label {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.gtk-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.gtk-row + .gtk-chips,
+.gtk-chips + .gtk-row {
+  margin-top: 8px;
+}
+
+.gtk-input,
+.gtk-select {
+  font: inherit;
+  color: var(--gtk-ink);
+  background: var(--gtk-chip);
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 10px;
+  outline: none;
+  min-width: 0;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.gtk-input {
+  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.gtk-select {
+  flex: 1;
+  max-width: 100%;
+}
+
+.gtk-input:focus,
+.gtk-select:focus {
+  box-shadow: 0 0 0 3px rgba(255, 138, 31, 0.35);
+}
+
+.gtk-hint {
+  margin: 6px 0 0;
+  min-height: 1em;
+  color: var(--gtk-dim);
+  font-size: 12px;
+}
+
+.gtk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gtk-chips:empty {
+  display: none;
+}
+
+.gtk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  color: var(--gtk-ink);
+  background: var(--gtk-chip);
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+
+.gtk-chip.gtk-on {
+  background: var(--gtk-accent);
+  color: var(--gtk-accent-ink);
+}
+
+.gtk-chip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.gtk-mine .gtk-chip {
+  cursor: default;
+  padding-right: 4px;
+}
+
+.gtk-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+.gtk-x {
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.8;
+  cursor: pointer;
+  padding: 0 5px;
+}
+
+.gtk-add,
+.gtk-done,
+.gtk-forget {
+  font: inherit;
+  font-weight: 600;
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.gtk-add {
+  background: var(--gtk-chip);
+  color: var(--gtk-ink);
+}
+
+.gtk-add:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.gtk-forget {
+  background: transparent;
+  color: var(--gtk-danger);
+  padding-left: 0;
+}
+
+.gtk-confirm .gtk-note {
+  flex-basis: 100%;
+}
+
+.gtk-confirm .gtk-forget {
+  background: var(--gtk-danger);
+  color: #fff;
+  padding-left: 14px;
+}
+
+.gtk-note {
+  margin: 0 0 6px;
+  color: var(--gtk-dim);
+  font-size: 12px;
+}
+
+.gtk-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.gtk-done {
+  background: var(--gtk-accent);
+  color: var(--gtk-accent-ink);
+  padding: 8px 22px;
+}

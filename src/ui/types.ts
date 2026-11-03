@@ -1,6 +1,7 @@
 // UI contract types (owner: ui builder). Everything is plain DOM over the Pixi canvas.
 
 import type { AppStore } from '../app/types';
+import type { ProfileStore } from '../app/profile';
 import type { Platform } from '../platform/types';
 import type { HabitatScene, Rect } from '../render/types';
 import type { Species } from '../sim/types';
@@ -18,6 +19,8 @@ export interface UiDeps {
   platform: Platform;
   scene: HabitatScene;
   audio: AudioApi;
+  /** What the pets know about you (src/app/profile.ts). */
+  profile: ProfileStore;
   /** Ask main.ts to recompute and resend hit regions (call whenever your rects change). */
   requestHitRegions(): void;
 }

@@ -1,9 +1,10 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capabilities for the main habitat window: window drag/show/hide, events, and the store plugin. Everything else (tray, notifications, autostart, shortcut, positioning) goes through Rust commands.",
+  "description": "Capabilities for the habitat window and the Get to know me card: window drag/show/hide, events, and the store plugin. Everything else (tray, notifications, autostart, shortcut, positioning, focus, opening and closing the card) goes through Rust commands.",
   "windows": [
-    "main"
+    "main",
+    "card"
   ],
   "permissions": [
     "core:default",

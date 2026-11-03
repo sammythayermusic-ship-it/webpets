@@ -30,6 +30,7 @@ export interface PointerState {
 export type TrayAction =
   | 'feed'
   | 'pantry'
+  | 'card'
   | 'size-s'
   | 'size-m'
   | 'size-l'
@@ -131,7 +132,16 @@ export interface WindowApi {
    * "always on top" looked fine while the collection behaviour was silently never applied.
    */
   getLayering(): Promise<{ level: number; behavior: number }>;
+  /**
+   * Take the keyboard while you type to the pet, and give it back after (src-tauri/src/focus.rs). The
+   * only time the habitat window becomes key; `endTyping` hands focus back to the app you were in.
+   */
+  beginTyping(): Promise<void>;
+  endTyping(): Promise<void>;
 }
+
+/** Messages between the app's windows (the habitat and the "Get to know me" card). */
+export type AppEvent = 'profile-changed' | 'forget-me';
 
 /** How the habitat window relates to other windows, desktops and fullscreen apps. */
 export interface Layering {
@@ -195,6 +205,16 @@ export interface Platform {
   inputIdle(): Promise<{ keys: number; any: number; unseen: boolean }>;
   /** Open a plain https link in the default browser (a fact's source). */
   openLink(url: string): Promise<void>;
+  /** The "Get to know me" card: its own window in the app (focus.rs), an overlay in the browser. */
+  card: {
+    open(): Promise<void>;
+    close(): Promise<void>;
+  };
+  /** Tell every window something changed (the card saved your profile), and hear about it. */
+  events: {
+    emit(name: AppEvent): Promise<void>;
+    on(name: AppEvent, cb: () => void): () => void;
+  };
   autostart: {
     isEnabled(): Promise<boolean>;
     setEnabled(on: boolean): Promise<void>;

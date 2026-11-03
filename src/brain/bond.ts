@@ -14,6 +14,8 @@ export const BOND = Object.freeze({
   /** Nobody has fed, visited or talked for this long, and the bond starts to fade. */
   GRACE_MS: 24 * 3_600_000,
   FADE_PER_DAY: 5,
+  /** A close friend swims to the glass when you come back after this long away (strangers wait two hours). */
+  CLOSE_GREET_AWAY_MS: 3 * 60_000,
 });
 
 const DAY_MS = 24 * 3_600_000;

@@ -101,6 +101,8 @@ export function createFakePlatform(seedFiles: Record<string, unknown> = {}): Fak
       setLayering: async (opts) => {
         p.layeringCalls.push({ ...opts });
       },
+      beginTyping: async () => undefined,
+      endTyping: async () => undefined,
     },
     tray: {
       setChip: async (_rgba: Uint8Array, _size: TrayChipSize) => undefined,
@@ -114,6 +116,8 @@ export function createFakePlatform(seedFiles: Record<string, unknown> = {}): Fak
     },
     inputIdle: async () => ({ keys: Number.MAX_VALUE, any: 0, unseen: false }),
     openLink: async () => {},
+    card: { open: async () => undefined, close: async () => undefined },
+    events: { emit: async () => undefined, on: () => () => undefined },
     notify: async (title, body) => {
       p.notifications.push({ title, body });
     },

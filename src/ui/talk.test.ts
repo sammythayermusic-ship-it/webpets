@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { mulberry32 } from '../sim/test-helpers';
 import type { Utterance, Voice } from '../brain/types';
 import { createTalk, dayKeyOf, type LineWriter, type TalkEnv, type TalkMemory } from './talk';
+import { emptyProfile, type Profile } from '../brain/profile';
+import type { ChatVoice } from '../brain/types';
+import { FISH_CHAT } from '../species/fish/voice/chat';
 
 const voice: Voice = {
   lines: {
@@ -12,13 +15,19 @@ const voice: Voice = {
   },
   facts: [{ id: 'f1', text: 'Fish are cool.', source: { title: 'Src', url: 'https://example.org/f' } }],
   factFrames: { sarcastic: ['Fact: {fact}'], anxious: [], zen: [], hyper: [] },
+  chat: FISH_CHAT as ChatVoice,
+};
+const KNOWN = {
+  teams: [{ id: 'mlb:2', league: 'mlb' as const, espnId: '2', abbr: 'BOS', location: 'Boston', nickname: 'Red Sox', display: 'Boston Red Sox', aliases: [] }],
+  interests: [{ id: 'baking', label: 'baking', words: ['bake'] }],
 };
 
-function harness(over: Partial<TalkEnv> = {}) {
+function harness(over: Partial<TalkEnv> = {}, start: Profile | null = null) {
   let t = new Date(2026, 9, 31, 7, 0).getTime();
   const shown: Utterance[] = [];
   let saved: TalkMemory | null = null;
   let present = false;
+  let profile = start ?? emptyProfile(t);
   const env: TalkEnv = {
     now: () => t,
     rng: mulberry32(4),
@@ -30,6 +39,9 @@ function harness(over: Partial<TalkEnv> = {}) {
     busy: () => false,
     muted: () => false,
     stillTrue: () => true,
+    profile: () => profile,
+    setProfile: (p) => (profile = p),
+    known: () => KNOWN,
     situation: () => ['it is afternoon'],
     writer: null,
     dailyCapUsd: () => 0.25,
@@ -50,6 +62,7 @@ function harness(over: Partial<TalkEnv> = {}) {
     setPresent(b: boolean) {
       present = b;
     },
+    profile: () => profile,
   };
 }
 
@@ -152,6 +165,66 @@ describe('the talk controller', () => {
       await new Promise((r) => setTimeout(r, 0));
     }
     expect(calls).toBe(1);
+  });
+});
+
+describe('talking with you', () => {
+  it('asks before it keeps something, with buttons, and keeps it on a yes', () => {
+    const h = harness();
+    h.talk.chat('I love the Red Sox');
+    const ask = h.shown.at(-1)!;
+    expect(ask.text).toContain('Red Sox');
+    expect(ask.choices?.map((c) => c.value)).toEqual(['yes', 'no']);
+    h.talk.choose(ask.choices![0]!);
+    expect(h.profile().teams).toEqual(['mlb:2']);
+    expect(h.shown.at(-1)!.text).toContain('Red Sox');
+    expect(h.shown.at(-1)!.choices).toBeUndefined();
+  });
+
+  it('answers in its own voice, and each message warms the bond a little', () => {
+    const h = harness();
+    h.talk.chat('hi');
+    h.talk.chat('how are you?');
+    expect(h.shown.length).toBe(2);
+    for (const u of h.shown) expect(u.kind).toBe('chat');
+    expect(h.talk.bond().points).toBe(2);
+    expect(h.saved()!.chat.recent.map((e) => e.you)).toEqual(['hi', 'how are you?']);
+  });
+
+  it('once close, brings you up by name in its thoughts and at the door', () => {
+    const named = { ...emptyProfile(0), name: 'Sam', interests: ['baking'] };
+    const h = harness({}, named);
+    h.talk.setBondPoints(90);
+    h.advance(4 * 3600_000);
+    const personal = h.shown.filter((u) => u.text.includes('Sam') || u.text.includes('baking'));
+    expect(personal.length).toBeGreaterThan(0);
+  });
+
+  it('a stranger never uses your name', () => {
+    const named = { ...emptyProfile(0), name: 'Sam' };
+    const h = harness({}, named);
+    h.advance(6 * 3600_000);
+    expect(h.shown.some((u) => u.text.includes('Sam'))).toBe(false);
+  });
+
+  it('asks how you are the next time, if you said you were sad, once it knows you', () => {
+    const h = harness();
+    h.talk.setBondPoints(60);
+    h.talk.chat("I'm sad today");
+    h.advance(5 * 3600_000);
+    h.setPresent(true);
+    h.advance(2000);
+    const lines = FISH_CHAT.bond.sarcastic['mood-check'];
+    expect(h.shown.some((u) => lines.includes(u.text))).toBe(true);
+    expect(h.saved()!.chat.mood).toBeNull();
+  });
+
+  it('forgets what you said when asked, and keeps the bond', () => {
+    const h = harness();
+    h.talk.chat('hi');
+    h.talk.forgetChat();
+    expect(h.saved()!.chat.recent).toEqual([]);
+    expect(h.talk.bond().points).toBe(1);
   });
 });
 

@@ -1,16 +1,23 @@
 // Speech bubbles. The brain decides what the pet says and when (src/brain, glued in ./talk.ts); this
 // draws it: a soft bubble above the habitat, one at a time. Tap a fact to see where it comes from,
-// then tap the source to open it. Off when the tray's "Pet talks" is unticked, silent when the pet has died.
+// then tap the source to open it. A question the pet asks you ("Want me to remember that?") has its
+// answers as buttons under it. Off when the tray's "Pet talks" is unticked, silent when the pet has
+// died; what you type to it is still answered while it is muted, since you asked.
 
 import type { AppState } from '../app/types';
 import type { Rect } from '../render/types';
-import type { Utterance } from '../brain/types';
+import type { Choice, Utterance } from '../brain/types';
 import type { Reaction } from '../brain/talk';
+import type { Bond } from '../brain/bond';
+import type { Known } from '../brain/understand';
+import { TEAMS } from '../brain/data/teams';
+import { INTERESTS } from '../brain/data/interests';
 import { speciesModule } from '../species';
 import { createTalk, type TalkController, type TalkMemory, type Volunteer } from './talk';
 import type { SpeechHandle, UiDeps } from './types';
 import { el, rootSize } from './dom';
 import { labelFor } from './model';
+import { BRAIN_FILE } from '../app/persistence';
 
 export interface SpeechHandleExt extends SpeechHandle {
   /** Something happened to the pet (a knock on the glass, the welcome back after a montage). */
@@ -31,8 +38,21 @@ export interface SpeechHandleExt extends SpeechHandle {
   hold(b: boolean): void;
   /** Run the talk clock this many times faster (harness recordings); 1 is real time. */
   setTimeScale(k: number): void;
+  /** You typed something to the pet. */
+  chat(text: string): void;
+  /** Press a button under the bubble's question by its value (harness). */
+  choose(value: string): boolean;
+  /** The species can be typed to. */
+  canChat(): boolean;
+  bond(): Bond | null;
+  setBondPoints(points: number): void;
+  /** "Forget me": what you said in chat goes. */
+  forgetChat(): void;
   destroy(): void;
 }
+
+/** Teams and interests the pet can recognise in what you type. */
+export const KNOWN: Known = { teams: TEAMS, interests: INTERESTS };
 
 export interface SaidLine {
   at: number;
@@ -40,8 +60,7 @@ export interface SaidLine {
   kind: Utterance['kind'];
 }
 
-/** The file that keeps what the pet has said and when it last spoke, so a relaunch does not repeat itself. */
-export const BRAIN_FILE = 'brain.json';
+export { BRAIN_FILE };
 const BRAIN_VERSION = 1;
 /** Bubble bottom edge overlaps the habitat's opaque top by this much so it visibly "belongs" to the bowl. */
 const BUBBLE_OVERLAP = 8;
@@ -54,7 +73,11 @@ const TICK_MS = 1000;
 const DISK_SAVE_MS = 30_000;
 const TRANSCRIPT_MAX = 200;
 
+/** A question with buttons stays up this long for an answer. */
+const QUESTION_MS = 20_000;
+
 function durationFor(u: Utterance): number {
+  if (u.choices && u.choices.length > 0) return QUESTION_MS;
   const base = Math.min(9000, 2500 + u.text.length * 55);
   return u.more ? base + 2500 : base;
 }
@@ -75,7 +98,8 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
   const text = el('div', 'speech-text');
   const more = el('button', 'speech-more');
   more.type = 'button';
-  bubble.append(text, more);
+  const choicesRow = el('div', 'speech-choices');
+  bubble.append(text, more, choicesRow);
   bubble.hidden = true;
   root.append(bubble);
 
@@ -133,7 +157,27 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
     more.hidden = !m;
     if (m) more.textContent = expanded ? `${m.label} ↗` : 'Where’s that from?';
     bubble.classList.toggle('expanded', expanded);
+    renderChoices(current.choices ?? []);
     position();
+  }
+
+  function renderChoices(choices: readonly Choice[]): void {
+    choicesRow.replaceChildren();
+    choicesRow.hidden = choices.length === 0;
+    for (const c of choices) {
+      const b = el('button', 'speech-choice', c.label);
+      b.type = 'button';
+      b.addEventListener('mousedown', (e) => e.stopPropagation());
+      b.addEventListener('mouseenter', () => (hovering = true));
+      b.addEventListener('mouseleave', () => (hovering = false));
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        hovering = false;
+        hide();
+        talk?.choose(c);
+      });
+      choicesRow.append(b);
+    }
   }
 
   function show(u: Utterance): void {
@@ -223,6 +267,9 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
         load: () => doc,
         save,
         show,
+        profile: () => deps.profile.get(),
+        setProfile: (p) => deps.profile.set(p),
+        known: () => KNOWN,
       });
     });
 
@@ -244,6 +291,7 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
   }, IDLE_POLL_MS);
 
   function react(moment: Reaction): void {
+    if (moment === 'tap') talk?.bondEvent('knock');
     talk?.react(moment);
   }
 
@@ -251,7 +299,10 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
   // One "fed" line per meal (on its first bite), and a "meal" line when the pinch is finished.
   let bitesThisMeal = 0;
   const offBite = scene.on('bite', () => {
-    if (bitesThisMeal === 0) react('fed');
+    if (bitesThisMeal === 0) {
+      talk?.bondEvent('fed');
+      react('fed');
+    }
     bitesThisMeal++;
   });
   const offGone = scene.on('flakes-gone', () => {
@@ -274,6 +325,8 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
       return;
     }
     if (s.lastFeedEvent !== prev.lastFeedEvent) bitesThisMeal = 0;
+    // Filling the holiday feeder before a trip is care too.
+    if (s.pet.pantry > prev.pet.pantry + 1) talk?.bondEvent('feeder');
     const label = labelFor(s.hunger);
     if (label === lastLabel) return;
     lastLabel = label;
@@ -293,8 +346,11 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
       if (!bubble.hidden) position();
     },
     getRects() {
-      if (bubble.hidden || more.hidden) return [];
-      return [{ x: bubble.offsetLeft + more.offsetLeft, y: bubble.offsetTop + more.offsetTop, w: more.offsetWidth, h: more.offsetHeight }];
+      if (bubble.hidden) return [];
+      const rect = (e: HTMLElement): Rect => ({ x: bubble.offsetLeft + e.offsetLeft, y: bubble.offsetTop + e.offsetTop, w: e.offsetWidth, h: e.offsetHeight });
+      const out: Rect[] = more.hidden ? [] : [rect(more)];
+      if (!choicesRow.hidden) for (const b of choicesRow.children) out.push(rect(b as HTMLElement));
+      return out;
     },
     transcript: () => said,
     typedAgo: () => typedAgoS,
@@ -310,6 +366,24 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
       virtualBase = now();
       clockBase = Date.now();
       timeScale = Math.max(1, k);
+    },
+    chat(line: string) {
+      talk?.chat(line);
+    },
+    choose(value: string) {
+      const c = current?.choices?.find((x) => x.value === value);
+      if (!c) return false;
+      hide();
+      talk?.choose(c);
+      return true;
+    },
+    canChat: () => (speciesModule(st().pet.species)?.voice.chat ?? null) !== null && st().pet.alive,
+    bond: () => talk?.bond() ?? null,
+    setBondPoints(points: number) {
+      talk?.setBondPoints(points);
+    },
+    forgetChat() {
+      talk?.forgetChat();
     },
     destroy() {
       offBite();

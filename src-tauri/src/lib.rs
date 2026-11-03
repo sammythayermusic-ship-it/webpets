@@ -4,6 +4,7 @@
 
 mod clock;
 mod commands;
+mod focus;
 /// Verification-only remote control; absent from a normal build. See `docs/HARNESS.md`.
 #[cfg(feature = "harness")]
 mod harness;
@@ -128,6 +129,10 @@ pub fn run() {
             commands::autostart_set,
             commands::quit_app,
             idle::input_idle,
+            focus::begin_typing,
+            focus::end_typing,
+            focus::open_card,
+            focus::close_card,
             links::open_link,
             voice::voice_status,
             voice::voice_write,
@@ -170,12 +175,12 @@ pub fn run() {
             window::spawn_safety_show(handle);
             Ok(())
         })
-        .on_window_event(|w, event| {
-            if let WindowEvent::Moved(position) = event {
-                if w.label() == window::MAIN_WINDOW {
-                    window::on_moved(w.app_handle(), *position);
-                }
+        .on_window_event(|w, event| match event {
+            WindowEvent::Moved(position) if w.label() == window::MAIN_WINDOW => {
+                window::on_moved(w.app_handle(), *position);
             }
+            WindowEvent::Destroyed if w.label() == focus::CARD_WINDOW => focus::on_card_destroyed(w.app_handle()),
+            _ => {}
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
