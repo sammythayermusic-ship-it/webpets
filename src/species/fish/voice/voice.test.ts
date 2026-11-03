@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Personality } from '../../../sim/types';
-import type { BondMoment, ChatIntent, Moment, TeachMoment } from '../../../brain/types';
+import type { BondMoment, ChatIntent, Moment, TeachMoment, WorldMoment } from '../../../brain/types';
 import { FISH_CHAT } from './chat';
 import { FISH_FACT_FRAMES } from './lines';
 import { FISH_VOICE } from './index';
+import { FISH_WORLD } from './world';
 
 const PERSONALITIES: readonly Personality[] = ['sarcastic', 'anxious', 'zen', 'hyper'];
 const MOMENTS: readonly Moment[] = [
@@ -163,6 +164,122 @@ describe('the goldfish talking with you', () => {
     const dupes = lines.filter((l, i) => lines.indexOf(l) !== i);
     expect(dupes).toEqual([]);
     const elsewhere = new Set([...allLines, ...PERSONALITIES.flatMap((p) => FISH_FACT_FRAMES[p])]);
+    expect(lines.filter((l) => elsewhere.has(l))).toEqual([]);
+  });
+});
+
+// Your teams' games and the news (world.ts). Every fact in these lines comes from a token.
+const WORLD_MOMENTS = Object.keys({
+  'game-day': 1, live: 1, won: 1, lost: 1, tied: 1, 'still-happy': 1, mope: 1, 'no-game': 1, news: 1, 'news-interest': 1,
+} satisfies Record<WorldMoment, 1>) as WorldMoment[];
+/** Per moment: the tokens every line needs, and the ones it may add ({name} is allowed anywhere). */
+const WORLD_TOKENS: Record<WorldMoment, { needs: readonly string[]; may: readonly string[] }> = {
+  'game-day': { needs: ['team'], may: ['opponent', 'time'] },
+  live: { needs: ['team', 'score'], may: ['opponent'] },
+  won: { needs: ['team', 'score'], may: ['opponent'] },
+  lost: { needs: ['team', 'score'], may: ['opponent'] },
+  tied: { needs: ['team', 'score'], may: ['opponent'] },
+  'still-happy': { needs: ['team'], may: [] },
+  mope: { needs: ['team'], may: [] },
+  'no-game': { needs: ['team'], may: [] },
+  news: { needs: ['headline'], may: [] },
+  'news-interest': { needs: ['interest', 'headline'], may: [] },
+};
+const WORLD_VALUES: Record<string, string> = {
+  team: 'Timberwolves', opponent: 'Trail Blazers', score: '117-112', time: '10:30 pm', interest: 'video games',
+  name: 'Bubbles', headline: '',
+};
+const MORE_UNKIND = /\b(suck\w*)\b/i;
+const GAMBLING = /\b(bet|betting|odds)\b/i;
+const PREDICTION = /\b(will|gonna|going to) (win|beat|lose)\b/i;
+
+interface WorldEntry { moment: WorldMoment; where: string; line: string }
+const worldEntries: WorldEntry[] = PERSONALITIES.flatMap((p) =>
+  WORLD_MOMENTS.flatMap((m) => FISH_WORLD[p][m].map((line) => ({ moment: m, where: `world.${p}.${m}`, line }))),
+);
+const fillWorld = (line: string): string => line.replace(/\{(\w+)\}/g, (_, t: string) => WORLD_VALUES[t] ?? `{${t}}`);
+
+describe('the goldfish on your teams and the news', () => {
+  it('is part of the fish voice', () => {
+    expect(FISH_VOICE.world).toBe(FISH_WORLD);
+  });
+
+  it('has enough to say: 5 per moment in every personality, 7 for a win or a loss', () => {
+    for (const p of PERSONALITIES) {
+      for (const m of WORLD_MOMENTS) {
+        expect(FISH_WORLD[p][m].length, `world.${p}.${m}`).toBeGreaterThanOrEqual(m === 'won' || m === 'lost' ? 7 : 5);
+      }
+    }
+  });
+
+  it('uses only the tokens each moment has, and the ones it needs in every line', () => {
+    for (const { moment, where, line } of worldEntries) {
+      const { needs, may } = WORLD_TOKENS[moment];
+      const allowed = new Set(['name', ...needs, ...may]);
+      for (const t of line.match(/\{[^}]*\}/g) ?? []) expect(allowed.has(t.slice(1, -1)), `${where}: ${line}`).toBe(true);
+      for (const t of needs) expect(line, `${where} needs {${t}}`).toContain(`{${t}}`);
+    }
+  });
+
+  it('ends with the headline, once, after its frame', () => {
+    for (const { moment, where, line } of worldEntries) {
+      const count = line.split('{headline}').length - 1;
+      if (moment === 'news' || moment === 'news-interest') {
+        expect(count, where).toBe(1);
+        expect(line, where).toMatch(/[^\s]( |: )\{headline\}$/);
+      } else {
+        expect(count, where).toBe(0);
+      }
+    }
+  });
+
+  it('reads naturally whatever the team, score or interest is', () => {
+    for (const { where, line } of worldEntries) {
+      expect(line, where).not.toMatch(/\{(team|opponent|interest)\}s\b/);
+      expect(line, where).not.toMatch(/\ban? \{(team|opponent|interest)\}/i);
+      expect(line, where).not.toMatch(/\{interest\} (is|are|was|were|has|have)\b/);
+      expect(line, where).not.toMatch(/(^|[.!?]\s+)\{interest\}/);
+      // The score is your team's number first, win or lose: never "by {score}".
+      expect(line, where).not.toMatch(/\bby \{score\}/i);
+    }
+  });
+
+  it('keeps frames short, and fits the bubble with long names filled in', () => {
+    for (const { where, line } of worldEntries) {
+      expect(line.replace('{headline}', '').length, `${where}: ${line}`).toBeLessThanOrEqual(70);
+      expect(fillWorld(line).length, `${where}: ${fillWorld(line)}`).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it('states no facts of its own: no numbers, no predictions', () => {
+    for (const { where, line } of worldEntries) {
+      expect(line, where).not.toMatch(/\d/);
+      expect(line, where).not.toMatch(PREDICTION);
+    }
+  });
+
+  it('is kind and clean: no unkind words, no crypto or gambling, no talk of being a program, no quotes, links, tags or emoji', () => {
+    for (const { where, line } of worldEntries) {
+      expect(line, where).not.toMatch(UNKIND);
+      expect(line, where).not.toMatch(MORE_UNKIND);
+      expect(line, where).not.toMatch(CRYPTO_SLANG);
+      expect(line, where).not.toMatch(GAMBLING);
+      expect(line, where).not.toMatch(NOT_ABOUT_ITSELF);
+      expect(line, where).not.toMatch(/["\u201C\u201D\u2018#]|https?:|www\./);
+      expect(line, where).not.toMatch(/\p{Extended_Pictographic}/u);
+      expect(line.trim(), where).toBe(line);
+    }
+  });
+
+  it('never repeats a line, here or from the rest of the voice', () => {
+    const lines = worldEntries.map((e) => e.line);
+    const dupes = lines.filter((l, i) => lines.indexOf(l) !== i);
+    expect(dupes).toEqual([]);
+    const elsewhere = new Set([
+      ...allLines,
+      ...PERSONALITIES.flatMap((p) => FISH_FACT_FRAMES[p]),
+      ...chatEntries.map((e) => e.line),
+    ]);
     expect(lines.filter((l) => elsewhere.has(l))).toEqual([]);
   });
 });

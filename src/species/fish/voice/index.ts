@@ -1,8 +1,15 @@
-// The goldfish's voice: its lines, its facts, how each personality brings a fact up, and what it says
-// when you talk with it (chat.ts).
+// The goldfish's voice: its lines, its facts, how each personality brings a fact up, what it says
+// when you talk with it (chat.ts), and what it says about your teams and the news (world.ts).
 import type { Voice } from '../../../brain/types';
 import { FISH_CHAT } from './chat';
 import { FISH_FACTS } from './facts';
 import { FISH_FACT_FRAMES, FISH_LINES } from './lines';
+import { FISH_WORLD } from './world';
 
-export const FISH_VOICE: Voice = { lines: FISH_LINES, facts: FISH_FACTS, factFrames: FISH_FACT_FRAMES, chat: FISH_CHAT };
+export const FISH_VOICE: Voice = {
+  lines: FISH_LINES,
+  facts: FISH_FACTS,
+  factFrames: FISH_FACT_FRAMES,
+  chat: FISH_CHAT,
+  world: FISH_WORLD,
+};
