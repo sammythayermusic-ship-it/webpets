@@ -236,8 +236,12 @@ Commands (invoke names; args/returns are camelCase JSON matching `src/platform/t
 | `quit_app` | – | – | |
 | `voice_status` | – | `{ hasKey }` | is a Keychain generic password set (service `com.sammythayer.webpets`, account `anthropic`) |
 | `voice_write` | `{ system, user }` | `{ text: string \| null, usd }` | one Claude-written line (Messages API, Claude Opus 5.5, low effort, default refusal fallbacks); `text` null on refusal, a cut-off reply or no key; `usd` is what it cost, for the daily cap. The key never crosses to TS |
-| `input_idle` | – | `{ keys, any }` | seconds since the last key press / any input (window server counters; no permission) |
+| `input_idle` | – | `{ keys, any, unseen }` | seconds since the last key press / any input (window server counters; no permission); `unseen`: the pet's own window is not on screen, or the Dock's full-screen backdrop is up (`idle.rs`) |
 | `open_link` | `{ url }` | – | `open <url>` for plain https links to a real host only; anything else is an error |
+| `begin_typing` | – | – | remembers the frontmost app, then makes the habitat window key (`focus.rs`): the only time it takes focus, while the chat field is open |
+| `end_typing` | – | – | hands focus back to the remembered app, unless the card window is open |
+| `open_card` | – | – | opens (or focuses) the "Get to know me" window, label `card`, `card.html`, 440×640, taking focus the same way |
+| `close_card` | – | – | closes it; its `Destroyed` event gives focus back |
 
 Events (Rust → TS, on the main window):
 
@@ -248,6 +252,11 @@ Events (Rust → TS, on the main window):
 | `pointer` | `PointerState` |
 | `window-moved` | `WindowGeometry` after snap/clamp/persist |
 | `wake` | none: a thread samples wall and monotonic every 5 s; emitted when wall delta − mono delta > 5 s |
+
+Between windows (TS → TS through the event system, `platform.events`): `profile-changed` (a window saved
+`profile.json`; the other reloads it) and `forget-me` (the card cleared the profile; the habitat window
+clears what the pet remembers of chats). The card window (`src/card.ts`) shares the store plugin's files
+with the habitat window: the plugin keeps one copy of a file per path in Rust, whichever window loads it.
 
 Moved handling: Rust records the time of each `WindowEvent::Moved`; a helper waits until 150 ms pass with no new
 Moved, then snaps, clamps, calls `set_position` only if it differs from `outer_position`, persists, and emits
@@ -283,7 +292,13 @@ document is written back.
 `graveyard.json` is **version 2**: version 1 records carry the same old pet shape and are upgraded on load, never
 dropped.
 
-Store files (Tauri store plugin, app-data dir): `pet.json`, `settings.json`, `graveyard.json`. TS reads/writes them
+`brain.json` (one per pet; a new pet starts it fresh) holds what the pet has said lately and which facts it has
+told (`memory`), its talk timing (`talk`), today's spend on written lines (`spend`), the bond (`bond`:
+`src/brain/bond.ts`) and chat (`chat`: the last four exchanges, how you said you felt, how often you brought
+each interest up). `profile.json` is about you, not a pet, and survives new pets: `{ version: 1, name, teams,
+interests, own, updatedAt }` (`src/brain/profile.ts`); "Forget me" writes an empty one.
+
+Store files (Tauri store plugin, app-data dir): `pet.json`, `settings.json`, `graveyard.json`, `brain.json`, `profile.json`. TS reads/writes them
 through `platform.store` (`PersistApi`: `load(file)`, `set(file, data)`, `save(file)`) which only ever touches the
 key `"doc"`; `src/app/persistence.ts` calls `set` (plugin `store.set('doc', data)`) immediately on every save and
 throttles `save` (plugin `store.save()`) to 500 ms, so the plugin's exit safety-save always writes the latest document. Rust writes only the top-level key

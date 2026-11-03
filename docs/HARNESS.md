@@ -78,6 +78,13 @@ its own so the next command lands inside the clip.
 | `talk` | `{ moment }` | `fact` or `thought`: the pet volunteers one now in its own voice, skipping the brain's timing; `fed`, `meal`, `tap`, `hungry`, `starving`, `feeder`, `welcome-back`: tells the brain it happened (it may or may not answer). Data has the last line said |
 | `talkSpeed` | `{ k }` | runs the talk clock `k` times faster, so an hour of chatter fits in a recording; 1 is real time |
 | `transcript` | – | what the pet has said lately: `{ lines: [{ at, text, kind }], typedAgoS, unseen, linkRect }`, newest last; `linkRect` is the bubble's source link (window-local CSS px) while one shows, else null |
+| `chat` | `{ text }` | as if typed into the chat field and sent; data has the reply when the library wrote it (a written reply comes later: read `transcript`) |
+| `choose` | `{ value }` | presses a button under the bubble's question (`yes`, `no`, or a team id); error if there is none |
+| `bond` | `{ points? }` | the bond `{ points, level, word, knocks }`; with `points` (0-100), sets it first |
+| `profile` | `{ set? }` | the profile; with `set` (`{ name?, teams?, interests?, own? }`), replaces it first, through the same checks as a saved file |
+| `forget` | – | "Forget me": empty profile, chat memory cleared (the bond stays) |
+| `chatField` | `{ open }` | opens or closes the chat field; data has its rect (window-local CSS px) |
+| `openCard` | – | opens the "Get to know me" window |
 | `snapshot` | `{ name }` | `scene.snapshot()` → `out/<name>.png`; data `{ file, bytes }`. The canvas only: speech bubbles are DOM and are not in it (capture the window for those) |
 | `stats` | `{ seconds }` | samples `debugState().advances/.steps` across the window: `{ advancesPerSec, stepsPerSec, fps, visibility, renderMs, elapsedMs }` |
 | `record` | `{ name, seconds, fps? }` | `canvas.captureStream(fps ?? 60)` + `MediaRecorder` → `out/<name>.mp4` or `.webm`; data `{ file, mime, bytes, seconds, fps }`. Detached. |
