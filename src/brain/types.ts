@@ -37,6 +37,64 @@ export interface Voice {
   facts: readonly Fact[];
   /** Templates containing `{fact}`, per personality ("Fun fact, since you didn't ask: {fact}"). */
   factFrames: Record<Personality, readonly string[]>;
+  /** Talking with you and getting to know you (Step E). A species without it cannot be typed to yet. */
+  chat?: ChatVoice;
+}
+
+/**
+ * What you typed, as far as the pet understands it without Claude (src/brain/understand.ts). A
+ * reply to each, per personality. `fact` asks for a fact and is answered from the facts, not lines.
+ */
+export type ChatIntent =
+  | 'hello' // hi, hey, good morning
+  | 'how-are-you' // how are you, you ok?
+  | 'what-doing' // what are you doing
+  | 'love' // I love you, you're my favourite
+  | 'praise' // you're cute, good fish, so pretty
+  | 'thanks' // thank you
+  | 'bye' // bye, goodnight, see you
+  | 'sad' // I'm sad, bad day
+  | 'happy' // I'm happy, great day, good news
+  | 'tired' // I'm tired, sleepy
+  | 'bored' // I'm bored
+  | 'hungry-talk' // are you hungry? want food?
+  | 'name-ask' // what's your name?
+  | 'joke' // tell me a joke
+  | 'question' // any other question
+  | 'unknown'; // anything else
+
+/**
+ * Getting to know you: the pet asks before it keeps anything, and says so when it has. Tokens:
+ * `{interest}` (a hobby, lower case: "baking", "video games"), `{team}` (a nickname: "Red Sox"),
+ * `{you}` (your name), `{thing}` (an interest or a team it already knew).
+ */
+export type TeachMoment =
+  | 'ask-interest' // "You like {interest}? Want me to remember that?"
+  | 'ask-team' // "You're a {team} fan? Want me to keep an eye on them?"
+  | 'which-team' // more than one team goes by that name: which one?
+  | 'ask-name' // "Can I call you {you}?"
+  | 'saved-interest'
+  | 'saved-team'
+  | 'saved-name' // uses {you}
+  | 'declined' // you said no: fine, it won't
+  | 'already-know'; // uses {thing}
+
+/**
+ * Lines that only come once the pet knows you (src/brain/bond.ts). Tokens as in `TeachMoment`.
+ */
+export type BondMoment =
+  | 'thought-you' // a thought about you, by name ({you})
+  | 'thought-interest' // a thought about something you like ({interest})
+  | 'thought-team' // a thought about your team ({team}); no results or scores, those come in Step F
+  | 'visit-close' // hello when you come back, by name ({you}), for a close friend
+  | 'mood-check' // you said you were sad or tired last time: is today better?
+  | 'joke-knock' // an inside joke about all the knocking on the glass
+  | 'joke-shared'; // an inside joke about a thing you both like ({interest})
+
+export interface ChatVoice {
+  chat: Record<Personality, Record<ChatIntent, readonly string[]>>;
+  teach: Record<Personality, Record<TeachMoment, readonly string[]>>;
+  bond: Record<Personality, Record<BondMoment, readonly string[]>>;
 }
 
 /** What the bubble shows, and what tapping it opens. */
@@ -44,6 +102,14 @@ export interface Utterance {
   /** Stable across launches, so the pet does not repeat itself ("thought:zen:1a2b3c", "fact:gf-012"). */
   id: string;
   text: string;
-  kind: Moment | 'fact';
+  kind: Moment | 'fact' | 'chat';
   more?: { label: string; url: string };
+  /** Buttons under the line, for a question the pet asked you ("Yes" / "No thanks", or which team). */
+  choices?: readonly Choice[];
+}
+
+export interface Choice {
+  label: string;
+  /** What choosing it says back to the chat ("yes", "no", or a team id). */
+  value: string;
 }

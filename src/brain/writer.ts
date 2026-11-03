@@ -14,6 +14,8 @@ export const WRITTEN_SHARE = 0.4;
 export const DEFAULT_DAILY_CAP_USD = 0.25;
 /** Longest line we accept (the bubble holds about this much). */
 export const MAX_WRITTEN_CHARS = 120;
+/** A reply in chat may run a little longer than a passing thought. */
+export const MAX_REPLY_CHARS = 160;
 
 const VOICE: Record<Personality, string> = {
   sarcastic: 'deadpan and dry; pretends not to care and plainly does; teases gently, never mean',
@@ -85,14 +87,62 @@ const BANNED = /https?:|www\.|#\w|@\w|\bAI\b|\bmodel\b|\bprompt\b|\bClaude\b|\bA
 // Emoji and pictographs: the bubble's font is not built for them, and the brief asks for words.
 const PICTOGRAPH = /\p{Extended_Pictographic}/u;
 
+export interface ReplyRequest {
+  species: Species;
+  personality: Personality;
+  name: string;
+  /** What the pet calls you, if you told it. */
+  you: string | null;
+  /** How close you are, in words ("good friends"). */
+  bond: string;
+  /**
+   * What the pet knows about you that this reply is about, and nothing more: the team or hobby you
+   * just mentioned ("the person follows the Red Sox"). The rest of the profile stays on the Mac.
+   */
+  about: readonly string[];
+  /** The last few exchanges, oldest first. */
+  recent: readonly { you: string; pet: string }[];
+  /** What you just typed. */
+  message: string;
+}
+
+/**
+ * A reply in chat. Same caching split as `buildLinePrompt`: the system prompt depends only on the
+ * pet. Stricter rules, because this is the one place a person, maybe a child, steers the topic.
+ */
+export function buildReplyPrompt(r: ReplyRequest): LinePrompt {
+  const system = [
+    `You are ${r.name}, ${SPECIES_LIFE[r.species]}. You are a pet in a desktop app used by kids and adults.`,
+    `Your personality: ${VOICE[r.personality]}.`,
+    'The person typed something to you. Reply out loud, in a speech bubble: one or two short sentences, at most 140 characters.',
+    'Rules:',
+    '- Kind and clean. Nothing a parent would mind a child reading. No romance, violence, scary topics, medical or legal advice.',
+    '- Stay in character as the pet. Never mention being an AI, a model, a prompt or an app.',
+    '- If they say something unkind, rude or unsafe, do not repeat it: reply gently and change the subject to your bowl.',
+    '- If they seem sad or worried, be warm and kind. If they say they are hurt, in danger or being hurt, gently say to tell a grown-up or someone they trust, right away.',
+    '- Never ask for or repeat personal details: where they live, their school, phone, passwords, photos, or anyone\'s full name.',
+    '- No facts, numbers, news, scores or claims about the real world. If asked, say you only know about life in your bowl.',
+    '- No links, hashtags, emoji or quotation marks.',
+    '- Reply with the line only.',
+  ].join('\n');
+  const lines = [
+    `How close you are: ${r.bond}.`,
+    ...(r.you !== null ? [`They like to be called ${r.you}.`] : []),
+    ...(r.about.length > 0 ? [`What you know that matters here: ${r.about.join('; ')}.`] : []),
+    ...(r.recent.length > 0 ? [`Just before:\n${r.recent.map((e) => `Them: ${e.you}\nYou: ${e.pet}`).join('\n')}`] : []),
+    `They just typed: ${r.message.slice(0, 300)}`,
+  ];
+  return { system, user: lines.join('\n') };
+}
+
 /** Accept a written line, tidied, or reject it (null) so a library line is said instead. */
-export function cleanLine(raw: string): string | null {
+export function cleanLine(raw: string, max: number = MAX_WRITTEN_CHARS): string | null {
   let s = raw.trim();
   // A model sometimes wraps the line in quotes or starts with the pet's name and a colon.
   s = s.replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/g, '');
   s = s.replace(/^[A-Z][\w ]{0,20}:\s+/, '');
   s = s.replace(/\s+/g, ' ');
-  if (s.length < 3 || s.length > MAX_WRITTEN_CHARS) return null;
+  if (s.length < 3 || s.length > max) return null;
   if (s.includes('\n') || BANNED.test(s) || PICTOGRAPH.test(s)) return null;
   return s;
 }

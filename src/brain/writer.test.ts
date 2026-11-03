@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addSpend, buildLinePrompt, canSpend, cleanLine, spendToday } from './writer';
+import { MAX_REPLY_CHARS, addSpend, buildLinePrompt, buildReplyPrompt, canSpend, cleanLine, spendToday } from './writer';
 
 describe('buildLinePrompt', () => {
   const req = {
@@ -20,6 +20,39 @@ describe('buildLinePrompt', () => {
     expect(a.user).toContain('it is evening; it ate an hour ago');
     expect(a.user).toContain('- The water is the water.');
     expect(b.user).not.toContain('lately');
+  });
+});
+
+describe('buildReplyPrompt', () => {
+  const req = {
+    species: 'fish' as const,
+    personality: 'anxious' as const,
+    name: 'Pebble',
+    you: 'Sam',
+    bond: 'good friends',
+    about: ['the person follows the Red Sox'],
+    recent: [{ you: 'hi', pet: 'Oh! Hello!' }],
+    message: 'the sox play tonight',
+  };
+
+  it('sends only the pet in the system prompt, and only what this reply needs in the message', () => {
+    const a = buildReplyPrompt(req);
+    const b = buildReplyPrompt({ ...req, you: null, about: [], recent: [], message: 'hi' });
+    expect(a.system).toBe(b.system);
+    expect(a.system).toMatch(/grown-up/);
+    expect(a.system).toMatch(/personal details/);
+    expect(a.user).toContain('called Sam');
+    expect(a.user).toContain('the person follows the Red Sox');
+    expect(a.user).toContain('Them: hi');
+    expect(a.user).toContain('They just typed: the sox play tonight');
+    expect(b.user).not.toContain('called');
+    expect(b.user).not.toContain('What you know');
+  });
+
+  it('lets a reply run a little longer than a thought', () => {
+    const long = 'I'.repeat(150) + '.';
+    expect(cleanLine(long)).toBeNull();
+    expect(cleanLine(long, MAX_REPLY_CHARS)).toBe(long);
   });
 });
 

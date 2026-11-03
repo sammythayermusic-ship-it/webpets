@@ -56,22 +56,22 @@ function remember(mem: SayMemory, id: string): SayMemory {
 }
 
 /**
- * A line for `moment` in this personality's voice. Prefers lines not in recent memory; when every line
- * of the pool is recent, takes the one said longest ago. Null when the pool is empty or no line can be filled.
+ * A line from `pool`, ids prefixed with `key` ("thought:zen", "chat:hello:zen"). Prefers lines not in
+ * recent memory; when every line of the pool is recent, takes the one said longest ago. Null when the
+ * pool is empty or no line can be filled.
  */
-export function sayLine(
-  voice: Voice,
-  personality: Personality,
-  moment: Moment,
+export function sayFromPool(
+  pool: readonly string[],
+  key: string,
+  kind: Utterance['kind'],
   mem: SayMemory,
   rng: Rng,
   vars: SayVars = {},
 ): { utterance: Utterance; memory: SayMemory } | null {
-  const pool = voice.lines[personality][moment] ?? [];
   const candidates: { id: string; text: string }[] = [];
   for (const t of pool) {
     const text = fill(t, vars);
-    if (text !== null) candidates.push({ id: `${moment}:${personality}:${lineId(t)}`, text });
+    if (text !== null) candidates.push({ id: `${key}:${lineId(t)}`, text });
   }
   if (candidates.length === 0) return null;
   const recent = new Set(mem.recent);
@@ -84,7 +84,19 @@ export function sayLine(
     const order = new Map(mem.recent.map((id, i) => [id, i] as const));
     chosen = candidates.reduce((a, b) => ((order.get(a.id) ?? 0) <= (order.get(b.id) ?? 0) ? a : b));
   }
-  return { utterance: { id: chosen.id, text: chosen.text, kind: moment }, memory: remember(mem, chosen.id) };
+  return { utterance: { id: chosen.id, text: chosen.text, kind }, memory: remember(mem, chosen.id) };
+}
+
+/** A line for `moment` in this personality's voice (see `sayFromPool`). */
+export function sayLine(
+  voice: Voice,
+  personality: Personality,
+  moment: Moment,
+  mem: SayMemory,
+  rng: Rng,
+  vars: SayVars = {},
+): { utterance: Utterance; memory: SayMemory } | null {
+  return sayFromPool(voice.lines[personality][moment] ?? [], `${moment}:${personality}`, moment, mem, rng, vars);
 }
 
 /**
