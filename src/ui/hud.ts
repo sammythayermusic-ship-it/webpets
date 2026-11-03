@@ -110,6 +110,12 @@ export function mountHud(root: HTMLElement, deps: UiDeps, opts: HudOptions = {})
   let captionRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
   function applyModel(m: HudModel): void {
+    // Outside the cache: whether the pet can be typed to is known only once the bubble is up.
+    const talk = Boolean(opts.onTalk && (opts.canTalk?.() ?? true) && m.alive);
+    if (talkBtn.hidden === talk) {
+      talkBtn.hidden = !talk;
+      relayout();
+    }
     const key = JSON.stringify(m);
     if (key === lastKey) return;
     lastKey = key;
@@ -120,7 +126,6 @@ export function mountHud(root: HTMLElement, deps: UiDeps, opts: HudOptions = {})
     nameText.data = `${m.name} `;
     id.textContent = m.id;
     feedBtn.disabled = !m.canFeed;
-    talkBtn.hidden = !(opts.onTalk && (opts.canTalk?.() ?? true) && m.alive);
     feedBtn.title = m.alive ? 'Feed' : `${m.name} has died`;
     pill.classList.toggle('dead', !m.alive);
     caption.textContent = captionText(m);
@@ -184,7 +189,10 @@ export function mountHud(root: HTMLElement, deps: UiDeps, opts: HudOptions = {})
 
   return {
     setVisible,
-    relayout,
+    relayout() {
+      render(store.getState());
+      relayout();
+    },
     getRects,
     destroy() {
       unsub();

@@ -232,11 +232,14 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   const deps = { store, platform, scene, audio, profile, requestHitRegions: refreshHitRegions };
   // TALK and a click on the pet open the chat field; it is mounted after the bubble it talks through.
   let openChat = (): void => undefined;
-  hud = mountHud(ui, deps, { onTalk: () => openChat(), canTalk: () => speech.canChat() });
+  let canChat = (): boolean => false;
+  hud = mountHud(ui, deps, { onTalk: () => openChat(), canTalk: () => canChat() });
   const grip = mountResizeGrip(ui, deps);
   devPanel = mountDevPanel(ui, deps);
   const speech = mountSpeech(ui, deps);
   const chatInput = mountChatInput(ui, deps, (text) => speech.chat(text));
+  canChat = () => speech.canChat();
+  hud.relayout();
   openChat = () => {
     if (speech.canChat()) chatInput.open();
   };

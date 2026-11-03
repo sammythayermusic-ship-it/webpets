@@ -64,7 +64,7 @@ export function mountChatInput(root: HTMLElement, deps: UiDeps, onSay: (text: st
       return;
     }
     open = true;
-    field.placeholder = `Say something to ${store.getState().pet.name}…`;
+    field.placeholder = 'Say something…';
     form.hidden = false;
     position();
     deps.requestHitRegions();
