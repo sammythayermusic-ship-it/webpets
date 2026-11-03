@@ -9,6 +9,9 @@
 #
 #   bash tools/mac/record_world.sh <out-dir>
 set -u
+# PARTS="news" records only some of the parts.
+PARTS=" ${PARTS:-win loss news} "
+has() { [[ "$PARTS" == *" $1 "* ]]; }
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 BIN=${WP_BIN:-/tmp/webpets-bin}
 mkdir -p "$BIN"
@@ -115,6 +118,7 @@ H world '{"do":"refresh","what":"news"}' >/dev/null
 H world '{"do":"refresh","what":"news"}' >/dev/null
 sleep 8
 
+if has win; then
 # ---- a win day -----------------------------------------------------------------------------------------
 startcap "$WID" win
 cap "Your team won (a test result, from the dev panel)"
@@ -126,7 +130,9 @@ cap "Still happy, later on"
 H talk '{"moment":"mood"}' >/dev/null
 sleep 8
 stopcap win
+fi
 
+if has loss; then
 # ---- a loss day ----------------------------------------------------------------------------------------
 sleep 7
 startcap "$WID" loss
@@ -139,7 +145,9 @@ cap "Still moping, later on"
 H talk '{"moment":"mood"}' >/dev/null
 sleep 8
 stopcap loss
+fi
 
+if has news; then
 # ---- a morning of news ---------------------------------------------------------------------------------
 sleep 7
 startcap "$WID" news
@@ -164,6 +172,7 @@ sleep 9
 H talk '{"moment":"news"}' >/dev/null
 sleep 9
 stopcap news
+fi
 
 H transcript > "$RUN/transcript.json"
 H world > "$RUN/world.json"

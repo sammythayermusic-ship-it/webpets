@@ -95,6 +95,7 @@ export function createWorld(env: WorldEnv): World {
   let fetchingSports = false;
   let fetchingNews = false;
   let lastMoodLine = Number.NEGATIVE_INFINITY;
+  let lastWasFeelGood = false;
   const due: WorldSay[] = [];
 
   function persist(): void {
@@ -200,9 +201,13 @@ export function createWorld(env: WorldEnv): World {
       }
     },
     news(interestFirst = false) {
-      const pool = interestFirst ? stories.filter((s) => s.interest !== undefined) : stories;
-      const s = pickStory(pool.length > 0 ? pool : stories, news, env.now(), env.rng, { serious: env.serious() });
+      // Turn and turn about: feel-good stories, then one about something you like. The interest
+      // searches return far more stories than the feel-good feeds, and would otherwise be all it said.
+      const wantInterest = interestFirst || lastWasFeelGood;
+      const pool = stories.filter((s) => (s.interest !== undefined) === wantInterest);
+      const s = pickStory(pool, news, env.now(), env.rng, { serious: env.serious() }) ?? pickStory(stories, news, env.now(), env.rng, { serious: env.serious() });
       if (!s) return null;
+      lastWasFeelGood = stories.find((x) => x.link === s.link)?.interest === undefined;
       const more = { label: s.source, url: s.link };
       const story = stories.find((x) => x.link === s.link);
       if (story?.interest !== undefined) return { moment: 'news-interest', vars: { interest: story.interest, headline: s.title }, more, key: `news:${s.link}` };

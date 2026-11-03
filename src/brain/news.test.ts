@@ -51,6 +51,8 @@ describe('what counts as happy news', () => {
       'The women’s boxing nights helping abuse survivors',
       'Judge accuses DOJ of weaponization',
       'Sinclair dinosaurs stolen for Halloween wedding',
+      'Bizarre Fruit-Eating Hell Chicken Suggests Dinosaurs Played a Role',
+      'Jurassic Park Meets Outlast in Terrifying Steam Game',
       'A'.repeat(NEWS.MAX_HEADLINE + 1),
     ])
       expect(safeHeadline(t), t).toBe(false);

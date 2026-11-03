@@ -112,6 +112,16 @@ describe('the world, in the app', () => {
     expect(h.w.news()).toBeNull();
   });
 
+  it('takes turns: a feel-good story, then one about something you like', async () => {
+    const h = harness({ ...fan, own: ['bird watching'] });
+    await h.advance(WORLD.NEWS_FIRST_MS + 1);
+    const first = h.w.news()!;
+    h.w.done(first);
+    expect(first.moment).toBe('news');
+    // The interest feed is offline in this harness, so the next one falls back to what there is.
+    expect(h.w.news()).toBeNull();
+  });
+
   it('says nothing when the fetch fails', async () => {
     const h = harness(fan);
     h.setBoard('not json');
