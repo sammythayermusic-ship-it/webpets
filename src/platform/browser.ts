@@ -436,6 +436,14 @@ export function createBrowserPlatform(): Platform {
       if (url.startsWith('https://')) window.open(url, '_blank', 'noopener');
       return Promise.resolve();
     },
+    // The page fetches directly; ESPN allows it, most news feeds do not (the pet then has no news).
+    world: {
+      fetch: async (url: string) => {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.text();
+      },
+    },
     // One page, so the card is an overlay on it: main.ts mounts it when this event fires.
     card: {
       open: async () => {

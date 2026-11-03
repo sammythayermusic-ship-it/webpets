@@ -49,6 +49,8 @@ export interface SettingsDoc {
   dailyCapUsd: number;
   /** The "Get to know me" card has been offered once (it opens by itself on the first launch only). */
   cardOffered: boolean;
+  /** News may include politics and other serious stories (off: light news only). Never crime or harm. */
+  seriousNews: boolean;
   dayNight: DayNightMode;
   launchAtLogin: boolean;
   /**
@@ -132,6 +134,7 @@ export interface AppActions {
   setNotificationsMuted(b: boolean): void;
   setTalkMuted(b: boolean): void;
   setCardOffered(b: boolean): void;
+  setSeriousNews(b: boolean): void;
   setDayNight(m: DayNightMode): void;
   setLaunchAtLogin(b: boolean): Promise<void>;
   /** Change any of the window layering flags; the rest keep their current values. */

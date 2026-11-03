@@ -50,7 +50,7 @@ export interface HarnessContext {
   speech?: Pick<
     SpeechHandleExt,
     | 'say' | 'react' | 'speak' | 'transcript' | 'setTimeScale' | 'getRects' | 'typedAgo' | 'unseen' | 'chat' | 'choose'
-    | 'bond' | 'setBondPoints' | 'forgetChat' | 'speakPersonal'
+    | 'bond' | 'setBondPoints' | 'forgetChat' | 'speakPersonal' | 'world' | 'speakNews'
   >;
   profile?: ProfileStore;
   chatInput?: Pick<ChatInputHandle, 'open' | 'close' | 'isOpen' | 'getRects'>;
@@ -422,6 +422,10 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
     case 'talk': {
       // Something happens to the pet, as far as the brain is concerned: it may or may not answer.
       const moment = str(cmd, 'moment');
+      if (moment === 'news') {
+        const said = needSpeech(ctx).speakNews();
+        return { moment, said, last: needSpeech(ctx).transcript().slice(-1)[0] ?? null };
+      }
       if (moment === 'personal') {
         // A thought about you, if the bond allows and it knows something.
         const said = needSpeech(ctx).speakPersonal();
@@ -486,6 +490,29 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
       if (bool(cmd, 'open')) ci.open();
       else ci.close();
       return { open: ci.isOpen(), rect: ci.getRects()[0] ?? null };
+    }
+    case 'world': {
+      // Step F: `refresh` (what: sports|news|all) fetches now; `force` pretends your first team's game
+      // just ended (result: won|lost, us, them; a test, said like a real one); otherwise the state.
+      const w = needSpeech(ctx).world();
+      if (!w) throw new Error('world: not loaded yet');
+      const action = typeof cmd['do'] === 'string' ? cmd['do'] : 'state';
+      if (action === 'refresh') {
+        const what = cmd['what'] === 'sports' || cmd['what'] === 'news' ? cmd['what'] : 'all';
+        await w.refresh(what);
+      } else if (action === 'force') {
+        const result = cmd['result'] === 'lost' ? 'lost' : 'won';
+        if (!w.forceResult(result, num(cmd, 'us'), num(cmd, 'them'))) throw new Error('world force: no team on the profile');
+      }
+      const snap = w.snapshot();
+      return {
+        mood: snap.sports.mood,
+        cheer: w.cheer(),
+        due: w.due(),
+        games: snap.games.map((g) => ({ team: g.teamId, opponent: g.opponent, state: g.state, us: g.us, them: g.them, start: new Date(g.start).toISOString() })),
+        stories: snap.stories,
+        told: snap.news.told.length,
+      };
     }
     case 'away': {
       const ms = num(cmd, 'ms');

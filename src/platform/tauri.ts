@@ -156,6 +156,9 @@ export function createTauriPlatform(): Platform {
     },
     inputIdle: () => invoke<{ keys: number; any: number; unseen: boolean }>('input_idle'),
     openLink: (url: string) => invoke<void>('open_link', { url }),
+    world: {
+      fetch: (url: string) => invoke<string>('world_fetch', { url }),
+    },
     card: {
       open: () => invoke<void>('open_card'),
       close: () => invoke<void>('close_card'),

@@ -205,6 +205,10 @@ export interface Platform {
   inputIdle(): Promise<{ keys: number; any: number; unseen: boolean }>;
   /** Open a plain https link in the default browser (a fact's source). */
   openLink(url: string): Promise<void>;
+  /** Fetch a scoreboard or a news feed (src-tauri/src/world.rs): plain https, listed hosts only. */
+  world: {
+    fetch(url: string): Promise<string>;
+  };
   /** The "Get to know me" card: its own window in the app (focus.rs), an overlay in the browser. */
   card: {
     open(): Promise<void>;

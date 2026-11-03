@@ -426,6 +426,11 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
         saveSettings();
       },
 
+      setSeriousNews(b) {
+        set({ settings: { ...get().settings, seriousNews: b } });
+        saveSettings();
+      },
+
       setDayNight(mode) {
         const settings: SettingsDoc = { ...get().settings, dayNight: mode };
         set({ settings, night: resolveNight(mode, get().nightOverride, now()), daylight: resolveDaylight(mode, get().nightOverride, now()) });

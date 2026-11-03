@@ -4,6 +4,7 @@ import type { AppState, ForcedState } from '../app/types';
 import type { Habitat, Rect, Species } from '../sim/types';
 import { DAY_MS, HOUR_MS } from '../sim/constants';
 import type { DevPanelHandle, UiDeps } from './types';
+import type { World } from './world';
 import { button, el, relRect, stopDrag } from './dom';
 import { eventLine, formatDate, formatOffset } from './format';
 import { labelFor } from './model';
@@ -83,7 +84,13 @@ function row(label: string, ...children: (HTMLElement | string)[]): HTMLDivEleme
   return r;
 }
 
-export function mountDevPanel(root: HTMLElement, deps: UiDeps): DevPanelHandleExt {
+/** Step F's test controls: a pretend result for your first team, and news on demand. */
+export interface DevPanelWorld {
+  world(): Pick<World, 'forceResult' | 'refresh'> | null;
+  speakNews(): boolean;
+}
+
+export function mountDevPanel(root: HTMLElement, deps: UiDeps, worldOpts?: DevPanelWorld): DevPanelHandleExt {
   const { store, scene, platform } = deps;
   const dev = () => store.getState().actions.dev;
 
@@ -244,6 +251,33 @@ export function mountDevPanel(root: HTMLElement, deps: UiDeps): DevPanelHandleEx
     }),
   );
 
+  // Step F: force your team's result (labelled a test), and news now.
+  const teamRow = row(
+    'TEAM',
+    button('TEST WIN', () => {
+      output.textContent = worldOpts?.world()?.forceResult('won', 5, 3) ? 'Test win for your first team.' : 'Add a team on the card first.';
+    }),
+    button('TEST LOSS', () => {
+      output.textContent = worldOpts?.world()?.forceResult('lost', 3, 5) ? 'Test loss for your first team.' : 'Add a team on the card first.';
+    }),
+  );
+  const serious = el('input');
+  serious.type = 'checkbox';
+  serious.checked = deps.store.getState().settings.seriousNews;
+  serious.title = 'Serious news (politics); never crime or harm';
+  serious.addEventListener('change', () => deps.store.getState().actions.setSeriousNews(serious.checked));
+  const newsRow = row(
+    'NEWS',
+    button('FETCH', () => {
+      void worldOpts?.world()?.refresh('news').then(() => (output.textContent = 'News fetched.'));
+    }),
+    button('SHARE ONE', () => {
+      output.textContent = worldOpts?.speakNews() ? '' : 'No fresh story yet: FETCH first.';
+    }),
+    serious,
+    'SERIOUS',
+  );
+
   panel.append(
     header,
     status,
@@ -257,6 +291,8 @@ export function mountDevPanel(root: HTMLElement, deps: UiDeps): DevPanelHandleEx
     simulateRow,
     skipNextRow,
     resetRow,
+    teamRow,
+    newsRow,
     output,
   );
   root.append(panel);

@@ -10,14 +10,15 @@ import type { Choice, Utterance } from '../brain/types';
 import type { Reaction } from '../brain/talk';
 import type { Bond } from '../brain/bond';
 import type { Known } from '../brain/understand';
-import { TEAMS } from '../brain/data/teams';
+import { LEAGUES, TEAMS } from '../brain/data/teams';
+import { createWorld, type World } from './world';
 import { INTERESTS } from '../brain/data/interests';
 import { speciesModule } from '../species';
 import { createTalk, type TalkController, type TalkMemory, type Volunteer } from './talk';
 import type { SpeechHandle, UiDeps } from './types';
 import { el, rootSize } from './dom';
 import { labelFor } from './model';
-import { BRAIN_FILE } from '../app/persistence';
+import { BRAIN_FILE, WORLD_FILE } from '../app/persistence';
 
 export interface SpeechHandleExt extends SpeechHandle {
   /** Something happened to the pet (a knock on the glass, the welcome back after a montage). */
@@ -50,6 +51,10 @@ export interface SpeechHandleExt extends SpeechHandle {
   forgetChat(): void;
   /** A thought about you, now (harness). */
   speakPersonal(): boolean;
+  /** Your teams' games and the news (Step F); null until its file has loaded. */
+  world(): World | null;
+  /** Share a headline now, if there is one (harness, dev panel). */
+  speakNews(): boolean;
   destroy(): void;
 }
 
@@ -222,6 +227,36 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
   });
   for (const p of root.querySelectorAll('.hud-pill')) hudWatch.observe(p, { attributes: true, attributeFilter: ['class'] });
 
+  // The world: scoreboards and news, kept in world.json ------------------------
+  let lastWorldSave = 0;
+  const makeWorld = (worldDoc: unknown): World => createWorld({
+    now,
+    rng: Math.random,
+    fetch: (url) => platform.world.fetch(url),
+    profile: () => deps.profile.get(),
+    leagues: LEAGUES,
+    teams: TEAMS,
+    interests: INTERESTS,
+    serious: () => st().settings.seriousNews,
+    load: () => worldDoc,
+    save: (doc) => {
+      platform.store.set(WORLD_FILE, doc).catch(() => undefined);
+      if (Date.now() - lastWorldSave > DISK_SAVE_MS) {
+        lastWorldSave = Date.now();
+        platform.store.save(WORLD_FILE).catch(() => undefined);
+      }
+    },
+  });
+  let world: World | null = null;
+  // A team added on the card: look at its scoreboard now rather than in ten minutes.
+  let lastTeams = deps.profile.get().teams.join();
+  const offProfile = deps.profile.subscribe((p) => {
+    if (p.teams.join() !== lastTeams) {
+      lastTeams = p.teams.join();
+      void world?.refresh('sports');
+    }
+  });
+
   // The brain --------------------------------------------------------------
   let talk: TalkController | null = null;
   let lastDiskSave = 0;
@@ -249,10 +284,9 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
     return out;
   }
 
-  platform.store
-    .load<unknown>(BRAIN_FILE)
-    .catch(() => null)
-    .then((doc) => {
+  Promise.all([platform.store.load<unknown>(BRAIN_FILE).catch(() => null), platform.store.load<unknown>(WORLD_FILE).catch(() => null)])
+    .then(([doc, worldDoc]) => {
+      world = makeWorld(worldDoc);
       talk = createTalk({
         now,
         rng: Math.random,
@@ -276,6 +310,7 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
         profile: () => deps.profile.get(),
         setProfile: (p) => deps.profile.set(p),
         known: () => KNOWN,
+        world: () => world,
       });
     });
 
@@ -392,12 +427,15 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
       talk?.forgetChat();
     },
     speakPersonal: () => talk?.speakPersonal() ?? false,
+    world: () => world,
+    speakNews: () => talk?.speakNews() ?? false,
     destroy() {
       offBite();
       offGone();
       unsub();
       clearInterval(tickTimer);
       clearInterval(idleTimer);
+      offProfile();
       hudWatch.disconnect();
       hide();
       bubble.remove();

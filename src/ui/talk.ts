@@ -22,7 +22,8 @@ import {
 import { BOND_WORDS, bondEvent, bondLevel, bondNow, bondPerks, emptyBond, normalizeBond, type Bond, type BondEvent } from '../brain/bond';
 import { clearMood, converse, emptyChat, moodToAsk, normalizeChat, withExchange, type ChatState, type Say } from '../brain/chat';
 import type { Profile } from '../brain/profile';
-import { understand, type Known } from '../brain/understand';
+import { understand, type Known, type Understood } from '../brain/understand';
+import type { World, WorldSay } from './world';
 
 /** What the controller keeps between launches (brain.json, one per pet). */
 export interface TalkMemory {
@@ -65,6 +66,8 @@ export interface TalkEnv {
   setProfile(p: Profile): void;
   /** Teams and interests it can recognise. */
   known(): Known;
+  /** Your teams' games and the news (Step F); null where there is none (tests, a pet without the lines). */
+  world?: () => World | null;
 }
 
 export interface TalkController {
@@ -92,6 +95,8 @@ export interface TalkController {
   forgetChat(): void;
   /** Say a thought about you now, if the bond allows and there is something to say (harness stills). */
   speakPersonal(): boolean;
+  /** Share a headline now, if there is a fresh one (harness, dev panel). */
+  speakNews(): boolean;
 }
 
 /** Local calendar day, "2026-10-31". */
@@ -109,6 +114,13 @@ const CLOSE_HELLO_SHARE = 0.6;
 const KNOCK_JOKE_AFTER = 20;
 /** Times you brought something up before it becomes an inside joke. */
 const SHARED_JOKE_AFTER = 2;
+/** Share of volunteered thoughts that share a headline when there is one: more in the morning. */
+const NEWS_SHARE = 0.3;
+const MORNING_NEWS_SHARE = 0.6;
+/** While your team's result still sets the mood, share of thoughts that are about it. */
+const MOOD_SHARE = 0.5;
+/** Words that make a question about your team a question about the game. */
+const GAME_WORDS = /\b(score|scores|game|games|match|playing|play|winning|losing|won|lost|win|doing)\b/;
 /** Chat intents the library answers itself even when Claude is available: they are its jokes and its greetings. */
 const LIBRARY_ONLY: ReadonlySet<ChatIntent> = new Set<ChatIntent>(['joke', 'hello', 'bye', 'thanks', 'name-ask']);
 /** Moments too important to lose to the gap after another bubble: said late rather than never. */
@@ -178,6 +190,45 @@ export function createTalk(env: TalkEnv): TalkController {
 
   function pickOne<T>(xs: readonly T[]): T | undefined {
     return xs.length === 0 ? undefined : xs[Math.min(xs.length - 1, Math.floor(env.rng() * xs.length))];
+  }
+
+  /** A line about the world, from the facts a fetch returned. Tapping a headline opens the story. */
+  function worldLine(w: WorldSay): Utterance | null {
+    const { species, personality, name } = env.pet();
+    const lines = env.voice(species)?.world?.[personality][w.moment] ?? [];
+    const r = sayFromPool(lines, `world:${w.moment}:${personality}`, w.more ? 'fact' : 'thought', memory, env.rng, { name, ...w.vars });
+    if (!r) return null;
+    memory = r.memory;
+    return w.more ? { ...r.utterance, more: w.more } : r.utterance;
+  }
+
+  /** Something about the world instead of a passing thought: how your team did, or a headline. */
+  function worldThought(): Utterance | null {
+    const world = env.world?.();
+    if (!world) return null;
+    if (env.rng() < MOOD_SHARE) {
+      const m = world.mood();
+      if (m) return worldLine(m);
+    }
+    const share = new Date(env.now()).getHours() < 12 ? MORNING_NEWS_SHARE : NEWS_SHARE;
+    if (env.rng() >= share) return null;
+    const n = world.news(env.rng() < 0.4);
+    if (!n) return null;
+    const u = worldLine(n);
+    if (u) world.done(n);
+    return u;
+  }
+
+  /** You asked how your team is doing: a question that names a team you follow, or mentions the game. */
+  function scoreAsk(u: Understood, text: string): string[] | null {
+    const mine = env.profile().teams;
+    if (mine.length === 0) return null;
+    const named = u.teams.flatMap((m) => m.ids).filter((id) => mine.includes(id));
+    const lower = text.toLowerCase();
+    const asking = u.intent === 'question' || lower.includes('?') || /\bhow\b/.test(lower);
+    if (!asking || !GAME_WORDS.test(lower)) return null;
+    if (u.teams.length > 0 && named.length === 0) return null;
+    return named;
   }
 
   /** A thought about you, if the bond allows and it knows something to say. */
@@ -301,6 +352,13 @@ export function createTalk(env: TalkEnv): TalkController {
     }
     if (v === 'visit' || v === 'welcome-back' || v === 'morning') {
       const u = closeHello();
+      if (u) {
+        say(u);
+        return;
+      }
+    }
+    if (v === 'thought') {
+      const u = worldThought();
       if (u) {
         say(u);
         return;
@@ -443,6 +501,19 @@ export function createTalk(env: TalkEnv): TalkController {
       if (r.say) speakVolunteer(r.say);
       if (r.say || changed) persist();
       if (owed !== null && !r.say && (!env.stillTrue(owed) || reactNow(owed))) owed = null;
+      // Game day, or a result: said as soon as the pet is up and you are not busy, once.
+      const world = env.world?.();
+      world?.tick();
+      const news = world?.due() ?? null;
+      if (news && !r.say && !env.muted() && env.pet().alive && env.awake() && !env.busy() && now - talk.lastSpokeAt >= TALK.REPLY_GAP_MS) {
+        const u = worldLine(news);
+        world!.done(news);
+        if (u) {
+          say(u);
+          talk = { ...talk, lastSpokeAt: now };
+          persist();
+        }
+      }
     },
     react(moment) {
       const said = reactNow(moment);
@@ -468,7 +539,22 @@ export function createTalk(env: TalkEnv): TalkController {
     chat(text) {
       const trimmed = text.trim();
       if (trimmed.length === 0) return;
-      converseAndReply(understand(trimmed, env.known()), null, trimmed);
+      const u = understand(trimmed, env.known());
+      const asked = scoreAsk(u, trimmed);
+      const world = env.world?.();
+      if (asked !== null && world) {
+        bond = bondEvent(bond, 'chat', env.now(), dayKeyOf(env.now()));
+        world.ask(asked).then(
+          (says) => {
+            const line = says[0] ? worldLine(says[0]) : null;
+            if (line) reply(line, trimmed);
+            else converseAndReply(u, null, trimmed);
+          },
+          () => converseAndReply(u, null, trimmed),
+        );
+        return;
+      }
+      converseAndReply(u, null, trimmed);
     },
     choose(choice) {
       converseAndReply(understand(choice.label, env.known()), choice.value, choice.label);
@@ -486,6 +572,16 @@ export function createTalk(env: TalkEnv): TalkController {
     forgetChat() {
       chatState = emptyChat();
       persist();
+    },
+    speakNews() {
+      const world = env.world?.();
+      const n = world?.news() ?? null;
+      const u = n ? worldLine(n) : null;
+      if (!n || !u) return false;
+      world!.done(n);
+      say(u);
+      persist();
+      return true;
     },
     speakPersonal() {
       const u = personalThought();

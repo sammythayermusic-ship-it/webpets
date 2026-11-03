@@ -24,6 +24,7 @@ import type { DevPanelHandle, HudHandle } from './ui';
 import { hungerLabel } from './sim';
 import { createProfileStore } from './app/profile';
 import { mountChatInput } from './ui/chatInput';
+import type { World } from './ui/world';
 import { mountCard, type CardHandle } from './ui/card';
 import { CARD_CLOSE_EVENT, CARD_OPEN_EVENT } from './platform/browser';
 import { BOND, BOND_WORDS, bondLevel, bondPerks } from './brain/bond';
@@ -215,9 +216,14 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   // The needs model feeds the behaviour: asked once per tick with whether the pet is napping. A close
   // friend (Step E's bond) also greets you at the glass after a short absence, not only a long one.
   let closeGreetUntil = 0;
+  // Your teams and the news (Step F) live with the bubble, which is mounted further down.
+  let worldOf: () => World | null = () => null;
   scene.setDrivesSource((napping) => {
     const d = store.getState().actions.drives(napping);
-    return Date.now() < closeGreetUntil && store.getState().present && !d.greet ? { ...d, greet: true } : d;
+    // Your team's result today (Step F): a win celebrates, a loss sulks.
+    const cheer = worldOf()?.cheer() ?? 0;
+    const greeted = Date.now() < closeGreetUntil && store.getState().present && !d.greet ? { ...d, greet: true } : d;
+    return cheer !== 0 ? { ...greeted, cheer } : greeted;
   });
   scene.on('bite', () => store.getState().actions.poke('bite'));
 
@@ -235,10 +241,11 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   let canChat = (): boolean => false;
   hud = mountHud(ui, deps, { onTalk: () => openChat(), canTalk: () => canChat() });
   const grip = mountResizeGrip(ui, deps);
-  devPanel = mountDevPanel(ui, deps);
+  devPanel = mountDevPanel(ui, deps, { world: () => worldOf(), speakNews: () => speech.speakNews() });
   const speech = mountSpeech(ui, deps);
   const chatInput = mountChatInput(ui, deps, (text) => speech.chat(text));
   canChat = () => speech.canChat();
+  worldOf = () => speech.world();
   hud.relayout();
   openChat = () => {
     if (speech.canChat()) chatInput.open();
