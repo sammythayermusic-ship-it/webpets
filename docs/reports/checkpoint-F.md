@@ -66,14 +66,14 @@ are rebuilt and installed.
 ## What I'm unsure about
 - **ESPN's scoreboards are public but unofficial.** No key or account, and widely used, but ESPN could
   change or block them. If that happens the fish just goes quiet about sports; nothing breaks.
-- **One bad headline found in testing, three more filtered.**
-  - Before the fixes, a run let through "Sinclair dinosaurs stolen for Halloween wedding", "Hell
+- **Three unsuitable headlines got through in testing, before the fixes.**
+  - The first runs let through "Sinclair dinosaurs stolen for Halloween wedding", "Hell
     Chicken" and a "Terrifying" game. Theft, scary words and "hell" are now on the never list.
   - A word filter will always miss something. The safest options would be the feel-good feeds only,
     no interest searches, for kids; that's your call.
 - **Several of your teams playing on one day:** the latest result sets the mood. A Bruins win and a
   Celtics loss on the same night leave it moping if the Celtics finished later.
-- **News and time zones:** the scoreboards go by ESPN's date (US Eastern), so a late game might count
+- **Scores and time zones:** the scoreboards go by ESPN's date (US Eastern), so a late game might count
   toward the wrong day if you live far away.
 - **Serious news is a dev panel switch for now.** It needs a proper home in a settings screen.
 - **The missed click:** in the news clip I cut five seconds where my click on "Where's that from?"
