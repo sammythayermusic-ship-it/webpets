@@ -125,7 +125,8 @@ The `record` step's own result file arrives when the clip is written, a moment a
   only be confirmed in the real app. If `MediaRecorder` is missing the result says so and `snapshot`
   still works.
 - `canvas.captureStream` records what the canvas renders. The DOM HUD, speech bubbles and dialogs are
-  not on the canvas and are not in the clip; `snapshot` has the same scope.
+  not on the canvas and are not in the clip; `snapshot` has the same scope. To record them, take
+  window stills (`tools/mac/window_stills.py`) and join them (`tools/mac/stills_to_clip.py`).
 - `species` reloads the page; the harness re-installs on the next boot, but a command dropped during
   the reload is picked up late or not at all. Wait a second, then `state`.
 - The harness does nothing about focus or occlusion: a window the compositor considers hidden still
