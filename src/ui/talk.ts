@@ -31,7 +31,7 @@ export interface TalkEnv {
   night(): boolean;
   /** The pet is up and about (not resting for the night). */
   awake(): boolean;
-  /** You are typing or otherwise busy. */
+  /** You are typing, or nobody can see the pet: nothing volunteered, and hunger waits. */
   busy(): boolean;
   muted(): boolean;
   /** Hunger that lost out to the gap after another bubble is said once the gap clears, if this is still true. */
@@ -157,6 +157,8 @@ export function createTalk(env: TalkEnv): TalkController {
   }
 
   function reactNow(moment: Reaction): boolean {
+    // Hunger waits until you can see it and are not mid-sentence; replies to what you just did do not.
+    if (OWED.has(moment) && env.busy()) return false;
     const r = react(talk, moment, { now: env.now(), muted: env.muted(), alive: env.pet().alive, rng: env.rng });
     talk = r.state;
     if (!r.say) return false;

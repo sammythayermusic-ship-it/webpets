@@ -23,8 +23,8 @@ export interface SpeechHandleExt extends SpeechHandle {
   transcript(): readonly SaidLine[];
   /** Seconds since you last typed, as the brain sees it (harness). */
   typedAgo(): number;
-  /** A full-screen window is in front, as the brain sees it (harness). */
-  fullscreenFront(): boolean;
+  /** Nobody can see the pet (off screen, or a full-screen app in front), as the brain sees it (harness). */
+  unseen(): boolean;
   /** Say a thought or a fact now, skipping the timing (harness stills). */
   speak(v: Volunteer): void;
   /** Keep quiet while something else has the stage (the "while you were gone" montage). */
@@ -84,7 +84,7 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
   let hovering = false;
   let typedAgoS = Number.MAX_VALUE;
-  let fullscreenFront = false;
+  let unseen = false;
   let timeScale = 1;
   let clockBase = Date.now();
   let virtualBase = clockBase;
@@ -214,7 +214,7 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
         present: () => st().present,
         night: () => st().night,
         awake: () => !st().night,
-        busy: () => typedAgoS < BUSY_TYPING_S || fullscreenFront,
+        busy: () => typedAgoS < BUSY_TYPING_S || unseen,
         muted: () => st().settings.talkMuted,
         stillTrue: (m) => labelFor(st().hunger) === m,
         situation,
@@ -234,11 +234,11 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
     platform.inputIdle().then(
       (i) => {
         typedAgoS = i.keys;
-        fullscreenFront = i.fullscreen;
+        unseen = i.unseen;
       },
       () => {
         typedAgoS = Number.MAX_VALUE;
-        fullscreenFront = false;
+        unseen = false;
       },
     );
   }, IDLE_POLL_MS);
@@ -298,7 +298,7 @@ export function mountSpeech(root: HTMLElement, deps: UiDeps): SpeechHandleExt {
     },
     transcript: () => said,
     typedAgo: () => typedAgoS,
-    fullscreenFront: () => fullscreenFront,
+    unseen: () => unseen,
     speak(v: Volunteer) {
       talk?.speak(v);
     },

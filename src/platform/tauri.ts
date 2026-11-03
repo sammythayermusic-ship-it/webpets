@@ -146,7 +146,7 @@ export function createTauriPlatform(): Platform {
       status: () => invoke<{ hasKey: boolean }>('voice_status'),
       write: (system: string, user: string) => invoke<{ text: string | null; usd: number }>('voice_write', { system, user }),
     },
-    inputIdle: () => invoke<{ keys: number; any: number; fullscreen: boolean }>('input_idle'),
+    inputIdle: () => invoke<{ keys: number; any: number; unseen: boolean }>('input_idle'),
     openLink: (url: string) => invoke<void>('open_link', { url }),
     autostart: {
       isEnabled: () => invoke<boolean>('autostart_get'),

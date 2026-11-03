@@ -1673,10 +1673,19 @@ What the notes above decided, as built, and the calls made on the way:
 - **Welcome back always gets said, and the pet keeps quiet during the montage.** The acceptance
   walk-through caught a goodnight said a second before the montage swallowing the welcome back
   (the 20 s gap). Coming home outranks the gap; the brain is held while the montage plays.
-- **"Busy" includes a full-screen window in front**, not just typing: `idle.rs` asks the window
-  server's on-screen list whether an ordinary window covers a whole display (menu bar strip
-  included, so a zoomed window does not count). Bounds and layers only, no titles, no permission;
+- **"Busy" includes nobody being able to see the pet**, not just typing. `idle.rs` reads the
+  window server's on-screen list (bounds, layers and owners; no titles, no permission): the pet is
+  unseen when its own habitat window is not on screen (another Space, a full-screen app has the
+  display, hidden), or when a full-screen Space is showing, which the Dock gives away by putting a
+  second window, a backdrop, under every app on that display. The first version looked for a window
+  covering a whole display, menu bar strip included; the recording showed it never fires on a
+  MacBook with a notch, where a full-screen window stops below the notch exactly where a zoomed one
+  starts. The fish then talked to an empty room for an hour behind full-screen Chrome.
   `core-graphics` and `core-foundation` at the versions the windowing layer already pulls in.
+- **Hunger is said late rather than never.** A hunger line that loses to the gap after another
+  bubble, or comes while you type or can't see the pet, is kept and said once it can be, if the
+  fish is still hungry. It is the line that tells you to feed it. Replies to what you just did are
+  not held back by typing.
 - **Recordings of the bubble are window captures.** The bubble is DOM, so the harness's canvas
   recorder cannot see it; `screencapture -l<window>` stills of the harness app, joined into a
   video, show exactly what is on screen and nothing behind the window.

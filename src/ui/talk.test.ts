@@ -88,6 +88,17 @@ describe('the talk controller', () => {
     expect(g.shown.map((u) => u.text)).toEqual(['Yum, Goldie.']);
   });
 
+  it('keeps hunger for when you are not busy (typing, or the pet out of sight)', () => {
+    let busy = true;
+    const h = harness({ busy: () => busy });
+    h.talk.react('hungry');
+    h.advance(30_000);
+    expect(h.shown).toEqual([]);
+    busy = false;
+    h.advance(2000);
+    expect(h.shown.map((u) => u.text)).toEqual(['Feed me.']);
+  });
+
   it('says nothing at all while muted', () => {
     const h = harness({ muted: () => true });
     h.talk.react('fed');

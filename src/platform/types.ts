@@ -188,8 +188,11 @@ export interface Platform {
     status(): Promise<{ hasKey: boolean }>;
     write(system: string, user: string): Promise<{ text: string | null; usd: number }>;
   };
-  /** Seconds since the last key press and since any input, and whether a full-screen window is in front (src-tauri/src/idle.rs). */
-  inputIdle(): Promise<{ keys: number; any: number; fullscreen: boolean }>;
+  /**
+   * Seconds since the last key press and since any input, and whether nobody can see the pet: its window is off
+   * screen (another Space, a full-screen app, hidden) or a full-screen app is in front (src-tauri/src/idle.rs).
+   */
+  inputIdle(): Promise<{ keys: number; any: number; unseen: boolean }>;
   /** Open a plain https link in the default browser (a fact's source). */
   openLink(url: string): Promise<void>;
   autostart: {
