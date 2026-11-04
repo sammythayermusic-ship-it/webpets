@@ -7,7 +7,7 @@ import { CAGE_FLOOR_RECT, CAGE_OPAQUE_RECT, CAGE_PET_ANCHOR, CAGE_SITES, CAGE_ST
 import {
   TERR_FLOOR_RECT, TERR_OPAQUE_RECT, TERR_PET_ANCHOR, TERR_SITES, TERR_STAND_Y,
 } from './terrarium';
-import { HAMSTER_VOICE } from './voice';
+import { HAMSTER_VOICE } from './voice/index';
 
 export const HAMSTER_MODULE: SpeciesModule = {
   species: 'hamster',

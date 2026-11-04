@@ -1835,3 +1835,28 @@ live-wallpaper apps do it; a widget-sized tank and a wallpaper tank are the same
 - Proposed as Step H in `AFTER-BAKEOFF.md`, after Step G: a square tank habitat, two sizes, one
   window per display, the live layer's cost at full screen.
 
+## 2026-11-03 — Step G: every pet gets the brain
+
+- **Nothing in the brain changed.** `src/brain` and `src/ui/talk.ts` were already species-blind after
+  Steps D to F2; the hamster had kept its Phase 0 line pools (five moments, no facts, no chat) and so
+  could not be typed to, followed no teams and marked no milestones. Step G is a whole voice for the
+  hamster in the fish's six-file shape (`src/species/hamster/voice/`: lines, facts, chat, world,
+  milestones, index), and a contract test (`src/species/voiceContract.test.ts`) that every implemented
+  species brings all of it, with no line shared between species. A new species now fails its tests
+  until it can talk, chat, follow your teams and have a birthday.
+- **Its own character, not the fish with the nouns swapped.** The fish's comedy is boredom and the round
+  bowl; the hamster's is appetite, hoarding and the wheel (pouches, the stash, digging, nocturnal,
+  running very hard toward nowhere). Lines name the glass, the house and the bedding, so they hold in
+  the terrarium and the cage alike, and never the bars. Counts: 300 lines (75 per personality, every
+  moment), 614 chat lines, 258 world lines, 112 milestone lines, 188 facts from 27 source pages
+  (Wikipedia, Guinness, National Geographic Kids, RSPCA, PDSA, the Merck Veterinary Manual, a
+  Hartpury University welfare study), each checked against the page's text.
+- **Body language from the same drives.** A win (`drives.cheer`) makes the hamster want the wheel three
+  times as much, run it half again as hard, and take a victory sprint every 25 seconds; a loss keeps it
+  to its house like a hiding animal, at 70% pace, with `act: 'sulk'` for the art. Hunger still
+  outranks a mood. (`behavior.ts`; tests in `drives.test.ts`.)
+- **The Claude prompt is species-aware** in the one place it was not: "change the subject to your
+  bowl" is now the species' home (bowl, terrarium, pond, coop), and the hamster's description matches
+  the terrarium it lives in.
+- **The e2e hamster test** now checks that TALK appears and opens the chat field for the hamster.
+

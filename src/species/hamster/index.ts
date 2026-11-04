@@ -10,4 +10,3 @@ export {
   HAMSTER_BODY,
   siteX,
 } from './layout';
-export { HAMSTER_LINES } from './lines';

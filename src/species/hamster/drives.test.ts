@@ -108,6 +108,27 @@ describe('hamster drives', () => {
     expect(travelled(lively)).toBeGreaterThan(travelled(tired) * 1.4);
   });
 
+  it('a win: wants the wheel more, runs it harder, and sprints it every so often', () => {
+    const km = (outs: PetOutput[]): number => outs.reduce((s, o) => s + (o.speciesDelta?.wheelKm ?? 0), 0);
+    const happy = run(2400, () => ({ drives: { ...calm, cheer: 1 } }), 13);
+    const plain = run(2400, () => ({ drives: calm }), 13);
+    expect(km(happy)).toBeGreaterThan(km(plain) * 1.5);
+    expect(happy.every((o) => o.act !== 'sulk')).toBe(true);
+  });
+
+  it('a loss: keeps to its house, walks slower, and sulks for the art', () => {
+    const bed = siteX(CAGE_SITES.bed!);
+    const sad = run(1200, () => ({ drives: { ...calm, cheer: -1 } }), 17);
+    const plain = run(1200, () => ({ drives: calm }), 17);
+    const meanDist = (os: PetOutput[]): number => os.reduce((s, o) => s + Math.abs(o.x - bed), 0) / os.length;
+    expect(meanDist(sad.slice(200))).toBeLessThan(meanDist(plain.slice(200)) * 0.6);
+    expect(sad.slice(50).every((o) => o.act === 'sulk')).toBe(true);
+    expect(plain.every((o) => o.act === undefined)).toBe(true);
+    // Hunger outranks a mood: a hungry hamster sits by the hopper, sulk or no sulk.
+    const hungry = run(200, () => ({ hunger: 20, label: 'hungry', drives: { ...calm, cheer: -1 } }), 17);
+    expect(hungry.every((o) => o.act === undefined)).toBe(true);
+  });
+
   it('a hyper covers more bedding than a zen hamster', () => {
     const by = (p: 'zen' | 'hyper'): number => travelled(run(1200, () => ({ personality: p }), 11));
     expect(by('hyper')).toBeGreaterThan(by('zen') * 1.2);

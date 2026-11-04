@@ -26,10 +26,13 @@ const VOICE: Record<Personality, string> = {
 
 const SPECIES_LIFE: Record<Species, string> = {
   fish: 'a goldfish in a round glass bowl with gravel, a few pebbles and a plant, floating on the corner of a computer screen',
-  hamster: 'a hamster in a cage with a wheel, bedding and a food hopper, floating on the corner of a computer screen',
+  hamster: 'a hamster in a glass terrarium with a wheel, a little wooden house, deep bedding, a food bowl and a water bottle, floating on the corner of a computer screen',
   frog: 'a frog in a little pond, floating on the corner of a computer screen',
   chicken: 'a chicken in a small coop, floating on the corner of a computer screen',
 };
+
+/** What the pet calls where it lives, for the rules that send a conversation back home. */
+const SPECIES_HOME: Record<Species, string> = { fish: 'your bowl', hamster: 'your terrarium', frog: 'your pond', chicken: 'your coop' };
 
 export interface LineRequest {
   species: Species;
@@ -118,10 +121,10 @@ export function buildReplyPrompt(r: ReplyRequest): LinePrompt {
     'Rules:',
     '- Kind and clean. Nothing a parent would mind a child reading. No romance, violence, scary topics, medical or legal advice.',
     '- Stay in character as the pet. Never mention being an AI, a model, a prompt or an app.',
-    '- If they say something unkind, rude or unsafe, do not repeat it: reply gently and change the subject to your bowl.',
+    `- If they say something unkind, rude or unsafe, do not repeat it: reply gently and change the subject to ${SPECIES_HOME[r.species]}.`,
     '- If they seem sad or worried, be warm and kind. If they say they are hurt, in danger or being hurt, gently say to tell a grown-up or someone they trust, right away.',
     '- Never ask for or repeat personal details: where they live, their school, phone, passwords, photos, or anyone\'s full name.',
-    '- No facts, numbers, news, scores or claims about the real world. If asked, say you only know about life in your bowl.',
+    `- No facts, numbers, news, scores or claims about the real world. If asked, say you only know about life in ${SPECIES_HOME[r.species]}.`,
     '- No links, hashtags, emoji or quotation marks.',
     '- Reply with the line only.',
   ].join('\n');

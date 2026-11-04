@@ -121,6 +121,18 @@ const GREET_SPEED = 3.6;
 const ERRAND_COOLDOWN = 40;
 
 /**
+ * Your team won (drives.cheer): a victory sprint on the wheel about this often, in ticks (25 s, as the
+ * fish's excited lap), on top of wanting the wheel more and running it harder in between.
+ */
+const CHEER_SPRINT_TICKS = 200;
+/** How much more a cheering hamster wants the wheel, and how much harder it runs it. */
+const CHEER_WHEEL_URGE = 3;
+const CHEER_WHEEL_PACE = 1.5;
+/** Your team lost (drives.cheer < 0): it keeps to its house, like a hiding animal, and walks slower. */
+const SULK_HIDE = 0.8;
+const SULK_PACE = 0.7;
+
+/**
  * Distance covered per tick at a full belly, in kilometres.
  *
  * Sized against a real animal rather than picked to look busy: 0.0002 km/tick at 8 ticks/s is about
@@ -212,6 +224,8 @@ export function createHamsterBehavior(): PetBehavior {
   /** A greeting dash in progress, toward this x. */
   let greetTo: number | null = null;
   let greeted = false;
+  /** Ticks of cheering since the last victory sprint. */
+  let cheerTicks = 0;
 
   const reset = (): void => {
     inited = false;
@@ -231,6 +245,7 @@ export function createHamsterBehavior(): PetBehavior {
     startle = null;
     greetTo = null;
     greeted = false;
+    cheerTicks = 0;
   };
 
   const init = (bounds: MoveBounds, halfW: number, halfH: number): void => {
@@ -256,8 +271,18 @@ export function createHamsterBehavior(): PetBehavior {
     const drives = input.drives ?? DEFAULT_DRIVES;
     const pers = PACE[input.personality ?? 'zen'];
     const attract = input.attract && input.attract.strength > 0 ? input.attract : null;
-    /** The pace this hamster walks at right now: hunger, how rested it is, and who it is. */
-    const pace = (label: HungerLabel): number => walkSpeed(label) * (0.55 + 0.6 * drives.activity) * pers.pace;
+    // Your team's result (drives.cheer): a win puts it on the wheel, a loss puts it in its house.
+    const cheer = Math.max(-1, Math.min(1, drives.cheer ?? 0));
+    const fedEnough = input.label !== 'hungry' && input.label !== 'starving';
+    const sulking = cheer < -0.5 && fedEnough;
+    const cheering = cheer > 0.5 && fedEnough;
+    /** How much it keeps to the house: what the needs model asks, or a sulk, whichever is more. */
+    const hide = Math.max(drives.hide, sulking ? SULK_HIDE : 0);
+    /** The pace this hamster walks at right now: hunger, how rested it is, who it is, and its mood. */
+    const pace = (label: HungerLabel): number =>
+      walkSpeed(label) * (0.55 + 0.6 * drives.activity) * pers.pace * (sulking ? SULK_PACE : 1);
+    if (cheering) cheerTicks += 1;
+    else cheerTicks = 0;
     if (turnCooldown > 0) turnCooldown -= 1;
     if (eatTicks > 0) eatTicks -= 1;
     if (errandCooldown > 0) errandCooldown -= 1;
@@ -364,7 +389,7 @@ export function createHamsterBehavior(): PetBehavior {
         nx = target;
         anim = errand.anim;
         lockFacing = true;
-        if (errand.site === 'wheel') ranThisTick = WHEEL_KM_PER_TICK * wheelRate(input.hunger);
+        if (errand.site === 'wheel') ranThisTick = WHEEL_KM_PER_TICK * wheelRate(input.hunger) * (cheering ? CHEER_WHEEL_PACE : 1);
         if (errandTicks === 0) stopErrand();
       } else {
         speed = ramp(speed, pace(input.label));
@@ -383,11 +408,19 @@ export function createHamsterBehavior(): PetBehavior {
       // Errands come more often to a lively animal; the hopper calls louder the more it wants the
       // surface-equivalent (a peckish hamster checks its food), and a hiding one does nothing but hide.
       const urgeOf = (e: Errand): number =>
-        e.urge * (0.5 + drives.activity) * (e.site === 'hopper' ? 1 + 2 * drives.surface : 1) * (drives.hide > 0.3 ? 0 : 1);
+        e.urge *
+        (0.5 + drives.activity) *
+        (e.site === 'hopper' ? 1 + 2 * drives.surface : 1) *
+        (e.site === 'wheel' && cheering ? CHEER_WHEEL_URGE : 1) *
+        (hide > 0.3 ? 0 : 1);
+      // A victory sprint: every so often a cheering hamster goes straight to the wheel, cooldown or not.
+      const sprint = cheering && cheerTicks >= CHEER_SPRINT_TICKS && greetTo === null ? (ERRANDS.find((e) => e.site === 'wheel' && e.available(input)) ?? null) : null;
+      if (sprint) cheerTicks = 0;
       const wanted =
-        errandCooldown === 0 && greetTo === null
+        sprint ??
+        (errandCooldown === 0 && greetTo === null
           ? (ERRANDS.find((e) => e.available(input) && rng() < urgeOf(e)) ?? null)
-          : null;
+          : null);
       if (wanted) {
         errand = wanted;
         errandTicks = 0;
@@ -402,9 +435,9 @@ export function createHamsterBehavior(): PetBehavior {
           tripScale = 0.75 + rng() * 0.45;
           // A hiding hamster keeps to the bedding pile; a curious one bends its wander toward the
           // pointer at the bars, never straight to it.
-          if (drives.hide > 0.3) {
+          if (hide > 0.3) {
             const bed = siteX(CAGE_SITES.bed ?? bounds.rect);
-            wanderTo = bed + (wanderTo - bed) * (1 - 0.8 * Math.min(1, drives.hide));
+            wanderTo = bed + (wanderTo - bed) * (1 - 0.8 * Math.min(1, hide));
           } else if (attract) {
             const k = Math.min(1, attract.strength * drives.approach) * ATTRACT_MAX;
             wanderTo += (attract.x - wanderTo) * k;
@@ -454,6 +487,8 @@ export function createHamsterBehavior(): PetBehavior {
     if (eatTicks > 0) anim = 'eat';
 
     const out: PetOutput = { x, y, facing, turning, anim, biteFlakeIndex: bite };
+    // The mood for the art: a sulking hamster droops like a sulking fish (scene.ts lowers its spirits).
+    if (sulking && input.alive && anim !== 'sleep') out.act = 'sulk';
     if (ranThisTick > 0) out.speciesDelta = { wheelKm: ranThisTick };
     return out;
   };

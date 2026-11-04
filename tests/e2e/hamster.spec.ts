@@ -4,7 +4,7 @@
 // while `createScene` still mounts the only habitat it was ever told about.
 
 import { expect, test } from '@playwright/test';
-import { gotoFresh, keepOffline, waitForBoot } from './support';
+import { BOWL_CENTER, gotoFresh, keepOffline, waitForBoot } from './support';
 
 test('switches to the hamster and comes back up in the cage', async ({ page }) => {
   keepOffline(page);
@@ -43,6 +43,17 @@ test('switches to the hamster and comes back up in the cage', async ({ page }) =
   // (40,12,261,211) rather than the bowl's (74,22,172,203), and that rect drives click-through.
   const box = await page.locator('#app canvas').boundingBox();
   expect(box).not.toBeNull();
+
+  // Every pet gets the brain (Step G): the hamster can be typed to, so the HUD offers TALK, and a
+  // click on it opens the chat field. The cage's centre is a permanent hit region, so hovering it
+  // brings up the HUD.
+  await page.mouse.move(BOWL_CENTER.x, BOWL_CENTER.y);
+  const pill = page.locator('.hud-pill');
+  await expect(pill).toBeVisible();
+  const talk = pill.getByRole('button', { name: 'TALK' });
+  await expect(talk).toBeVisible();
+  await talk.click();
+  await expect(page.locator('.chat-input .chat-field')).toBeVisible();
 
   expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
 });
