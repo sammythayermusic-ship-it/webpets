@@ -40,6 +40,10 @@ front() { lsappinfo info -only bundleid "$(lsappinfo front)" | sed -E 's/.*="(.*
 IDLE0=$(idle)
 echo "idle at start: ${IDLE0}s" >> "$LOG"
 [ "$IDLE0" -lt 100 ] && { echo "not idle (${IDLE0}s); stopping" | tee -a "$LOG"; exit 3; }
+# A locked screen is idle too, but every window is off-screen behind it, clicks land on the lock
+# screen, and WebKit holds the page as hidden (no bubble, no chat field). Wait for an unlock instead.
+locked() { ioreg -n Root -d1 | awk -F'= ' '/IOConsoleLocked/ {print $2; exit}'; }
+[ "$(locked)" = "Yes" ] && { echo "screen is locked; stopping" | tee -a "$LOG"; exit 3; }
 FRONT=$(front)
 read MX MY < <("$BIN/mousepos")
 restore() {

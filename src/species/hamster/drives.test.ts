@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createHamsterBehavior } from './behavior';
 import { CAGE_SITES, siteX } from './layout';
+import { TERR_SITES } from './terrarium';
+import type { Sites } from '../types';
 import { makeFloorBounds } from '../../render/water';
 import type { PetInput, PetOutput } from '../../render/types';
 import type { Drives } from '../../sim/needs';
@@ -40,8 +42,8 @@ function input(over: Partial<PetInput>, rng: Rng): PetInput {
   };
 }
 
-function run(ticks: number, make: (i: number) => Partial<PetInput>, seed = 7): PetOutput[] {
-  const b = createHamsterBehavior();
+function run(ticks: number, make: (i: number) => Partial<PetInput>, seed = 7, sites?: Sites): PetOutput[] {
+  const b = createHamsterBehavior(sites);
   const rng = seeded(seed);
   const outs: PetOutput[] = [];
   for (let i = 0; i < ticks; i += 1) outs.push(b.step(input(make(i), rng)));
@@ -127,6 +129,22 @@ describe('hamster drives', () => {
     // Hunger outranks a mood: a hungry hamster sits by the hopper, sulk or no sulk.
     const hungry = run(200, () => ({ hunger: 20, label: 'hungry', drives: { ...calm, cheer: -1 } }), 17);
     expect(hungry.every((o) => o.act === undefined)).toBe(true);
+  });
+
+  it('in the terrarium, the wheel and the house are where the terrarium put them', () => {
+    // The checkpoint G recording caught the cage's sites in the terrarium: victory sprints under the
+    // house (the cage's wheel x) and a sulk beside the wheel (the cage's bed x).
+    const cageWheel = siteX(CAGE_SITES.wheel!);
+    const terrWheel = siteX(TERR_SITES.wheel!);
+    const terrBed = siteX(TERR_SITES.bed!);
+    expect(Math.abs(cageWheel - terrWheel)).toBeGreaterThan(20); // or this test could not tell
+    const happy = run(2400, () => ({ drives: { ...calm, cheer: 1 } }), 13, TERR_SITES);
+    const running = happy.filter((o) => (o.speciesDelta?.wheelKm ?? 0) > 0);
+    expect(running.length).toBeGreaterThan(0);
+    for (const o of running) expect(Math.abs(o.x - terrWheel)).toBeLessThanOrEqual(3);
+    const sad = run(1200, () => ({ drives: { ...calm, cheer: -1 } }), 17, TERR_SITES);
+    const meanDist = (os: PetOutput[], to: number): number => os.reduce((s, o) => s + Math.abs(o.x - to), 0) / os.length;
+    expect(meanDist(sad.slice(200), terrBed)).toBeLessThan(meanDist(sad.slice(200), siteX(CAGE_SITES.bed!)));
   });
 
   it('a hyper covers more bedding than a zen hamster', () => {

@@ -1859,4 +1859,18 @@ live-wallpaper apps do it; a widget-sized tank and a wallpaper tank are the same
   bowl" is now the species' home (bowl, terrarium, pond, coop), and the hamster's description matches
   the terrarium it lives in.
 - **The e2e hamster test** now checks that TALK appears and opens the chat field for the hamster.
+- **The recording found a bug the tests could not: the terrarium hamster used the cage's sites.**
+  `behavior.ts` imported `CAGE_SITES` directly, so in the terrarium every errand went to the cage's
+  coordinates: the victory sprint "ran the wheel" at x≈96 (under the terrarium's house; the
+  terrarium's wheel is at x≈135) and the sulk "kept to its house" at x≈136 (the terrarium's wheel).
+  The wheel counter climbed, the tests passed (they used the cage), and the clip showed a hamster
+  celebrating in the wrong place. `SpeciesModule.createBehavior` now takes the layout it is mounted
+  in and the hamster reads `layout.sites`; `createHamsterBehavior(sites = CAGE_SITES)` keeps the
+  tests' default. `drives.test.ts` adds the terrarium case. The module's comment that "the sites are
+  data and nothing in the state machine names a cage" had been true of the intent only.
+- **Recording lessons, for every driver after this one.** Idle is not usable: a locked Mac is idle for
+  hours with every window off-screen and the page hidden (`ioreg -n Root -d1 | grep IOConsoleLocked`);
+  a harness pet driven all day has no energy and sleeps through the clip (`newPet` first); and a
+  driver that types must check the front app before every keystroke, because the user can come back
+  mid-recording (two of the four chat messages were refused for exactly that, and the clip shows it).
 

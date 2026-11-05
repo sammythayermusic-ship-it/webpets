@@ -15,6 +15,7 @@ import type { MoveBounds, PetAnim, PetBehavior, PetInput, PetOutput } from '../.
 import type { HungerLabel, Personality } from '../../sim/types';
 import type { Drives } from '../../sim/needs';
 import { dartSpeed } from '../../sim/motion';
+import type { Sites } from '../types';
 import { CAGE_SITES, siteX } from './layout';
 
 /** Ticks the eat animation is held after a bite. */
@@ -200,7 +201,11 @@ function ramp(current: number, target: number): number {
   return current + Math.sign(d) * ACCEL;
 }
 
-export function createHamsterBehavior(): PetBehavior {
+/**
+ * `sites` is where this habitat put the wheel, the house (`bed`), the hopper and the bottle; the
+ * cage's by default, which is what every test was written against. The terrarium passes its own.
+ */
+export function createHamsterBehavior(sites: Sites = CAGE_SITES): PetBehavior {
   let inited = false;
   /** Current ground speed, px/tick. Ramped toward what the branch wants rather than set outright. */
   let speed = 0;
@@ -335,7 +340,7 @@ export function createHamsterBehavior(): PetBehavior {
       stopErrand();
       startle = null;
       greetTo = null;
-      nx = moveTowardX(x, siteX(CAGE_SITES.bed ?? bounds.rect), 1.2);
+      nx = moveTowardX(x, siteX(sites.bed ?? bounds.rect), 1.2);
       anim = 'sleep';
       lockFacing = true;
     } else if (input.label === 'starving') {
@@ -346,7 +351,7 @@ export function createHamsterBehavior(): PetBehavior {
     } else if (input.label === 'hungry') {
       // ---- hungry: the wheel stops and it sits by the hopper facing out
       stopErrand();
-      const hopper = siteX(CAGE_SITES.hopper ?? bounds.rect);
+      const hopper = siteX(sites.hopper ?? bounds.rect);
       nx = moveTowardX(x, hopper, walkSpeed(input.label));
       anim = 'hungry';
       // Facing the camera is not expressible in a left/right facing, so the sprite's `hungry` state
@@ -378,7 +383,7 @@ export function createHamsterBehavior(): PetBehavior {
       }
     } else if (errand !== null) {
       // ---- on an errand: walking to it, then doing it for a while
-      const target = errand.site === null ? x : siteX(CAGE_SITES[errand.site] ?? bounds.rect);
+      const target = errand.site === null ? x : siteX(sites[errand.site] ?? bounds.rect);
       if (!errand.available(input)) {
         // Checked every tick, not only on arrival: the hopper can empty and a belly can empty while
         // the hamster is halfway there, and standing at an empty hopper miming a mouthful is worse
@@ -436,7 +441,7 @@ export function createHamsterBehavior(): PetBehavior {
           // A hiding hamster keeps to the bedding pile; a curious one bends its wander toward the
           // pointer at the bars, never straight to it.
           if (hide > 0.3) {
-            const bed = siteX(CAGE_SITES.bed ?? bounds.rect);
+            const bed = siteX(sites.bed ?? bounds.rect);
             wanderTo = bed + (wanderTo - bed) * (1 - 0.8 * Math.min(1, hide));
           } else if (attract) {
             const k = Math.min(1, attract.strength * drives.approach) * ATTRACT_MAX;

@@ -32,6 +32,7 @@ export const HAMSTER_MODULE: SpeciesModule = {
       sites: CAGE_SITES,
     },
   },
-  createBehavior: createHamsterBehavior,
+  // The sites of whichever habitat it is mounted in: the terrarium's wheel is not where the cage's is.
+  createBehavior: (layout) => createHamsterBehavior(layout.sites),
   voice: HAMSTER_VOICE,
 };

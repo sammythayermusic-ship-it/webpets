@@ -687,7 +687,7 @@ export function createScene(
         advance(Math.min(MAX_ACC_MS, now - lastAdvanceAt));
       });
 
-      m = { app, layers, player, behavior: species.createBehavior(), bounds, flakes, bubbles, sheen, advance, tick, watchdog, live, draw };
+      m = { app, layers, player, behavior: species.createBehavior(layout), bounds, flakes, bubbles, sheen, advance, tick, watchdog, live, draw };
       layoutHabitat();
       if (view) applyView(view, null);
       applyPointer();

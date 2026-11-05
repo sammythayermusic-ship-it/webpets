@@ -58,8 +58,13 @@ export interface SpeciesModule {
   readonly layouts: Readonly<Partial<Record<Habitat, SpeciesLayout>>>;
   /** Which habitat a newly created pet of this species gets. */
   readonly defaultHabitat: Habitat;
-  /** Fresh state machine per mount; never shared between scenes. */
-  createBehavior(): PetBehavior;
+  /**
+   * Fresh state machine per mount; never shared between scenes. Given the layout it runs in, so a
+   * behaviour that goes to places (the hamster's wheel, house and hopper) finds them where this
+   * habitat put them. It took the cage's sites for granted until Step G, when the terrarium hamster
+   * ran its victory sprints under the house and sulked beside the wheel.
+   */
+  createBehavior(layout: SpeciesLayout): PetBehavior;
   /** What it says and when (src/brain): lines per personality per moment, facts with sources. */
   readonly voice: Voice;
 }
