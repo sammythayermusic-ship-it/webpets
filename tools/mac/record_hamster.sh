@@ -47,6 +47,7 @@ locked() { ioreg -n Root -d1 | awk -F'= ' '/IOConsoleLocked/ {print $2; exit}'; 
 FRONT=$(front)
 read MX MY < <("$BIN/mousepos")
 restore() {
+  [ -n "$POLLPID" ] && kill "$POLLPID" 2>/dev/null
   # Back to the fish, so the other drivers find the pet they expect.
   H species '{"species":"fish","habitat":"bowl"}' >/dev/null
   "$BIN/clickat" "$MX" "$MY" move 50 >/dev/null 2>&1
@@ -79,7 +80,35 @@ at() { echo $((WX + $1)) $((WY + $2)); }
 move() { "$BIN/clickat" $(at "$1" "$2") move 200 >/dev/null; }
 click() { "$BIN/clickat" $(at "$1" "$2") click 200 >/dev/null; }
 away() { "$BIN/clickat" $((WX - 300)) $((WY + WH / 2)) move 50 >/dev/null; }
-startcap() { python3 "$REPO/tools/mac/window_stills.py" "$1" "$RUN/$2" "$RUN/stop-$2" 0.4 & CAPPID=$!; sleep 1; }
+startcap() {
+  # Warm up first: the first capture of a window after a reload can take seconds or fail outright
+  # ("could not create image from window"), and the part's opening seconds would have no stills.
+  local i t0
+  for i in 1 2 3; do
+    t0=$(ms)
+    screencapture -x -o "-l$1" "$RUN/warmup.png" 2>>"$LOG" && [ -s "$RUN/warmup.png" ] && break
+    echo "warm-up capture $i failed after $(( $(ms) - t0 )) ms" >> "$LOG"
+  done
+  echo "warm-up capture for $2 took $(( $(ms) - t0 )) ms" >> "$LOG"
+  rm -f "$RUN/warmup.png"
+  python3 "$REPO/tools/mac/window_stills.py" "$1" "$RUN/$2" "$RUN/stop-$2" 0.4 & CAPPID=$!; sleep 1
+}
+# WP_POLL=1 logs the pet's position and act once a second to <out>/poll.tsv, to check the stills
+# against (was it really on the wheel?).
+POLLPID=
+if [ "${WP_POLL:-0}" = 1 ]; then
+  ( while :; do
+      node "$REPO/tools/harness.mjs" state '{}' --app-data "$HAD" 2>/dev/null | python3 -c "
+import json,sys,time
+try:
+    d=json.load(sys.stdin)['data']; s=d['scene']
+    print(int(time.time()*1000), round(s['petPos']['x'],1), round(s['petPos']['y'],1), s.get('petAct','-'), s['petAnim'], d['visibility'], round(d['needs']['energy']['value'],2), sep='\t')
+except Exception as e: print(int(time.time()*1000), 'err', e, sep='\t')
+" >> "$RUN/poll.tsv"
+      sleep 1
+    done ) &
+  POLLPID=$!
+fi
 stopcap() { touch "$RUN/stop-$1"; wait "$CAPPID"; }
 # Type into the pet only while the harness has the keyboard; otherwise the keys would land elsewhere.
 typed() {

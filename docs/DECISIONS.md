@@ -1873,4 +1873,10 @@ live-wallpaper apps do it; a widget-sized tank and a wallpaper tank are the same
   a harness pet driven all day has no energy and sleeps through the clip (`newPet` first); and a
   driver that types must check the front app before every keystroke, because the user can come back
   mid-recording (two of the four chat messages were refused for exactly that, and the clip shows it).
+  Third take (2026-11-04): the first two `screencapture -l` calls after the species reload failed and
+  took eight seconds each, so the talk part had no stills for its first 16 s; `startcap` now takes a
+  throwaway capture first. `WP_POLL=1` logs position, act and animation once a second to `poll.tsv`,
+  which is how the win clip was checked (x = 135, the terrarium wheel, through both sprints) instead
+  of eyeballing thumbnails. And `newPet` does not clear your team's mood (it is yours, in
+  `world.json`), so a take recorded after a forced loss starts with a sulking pet.
 

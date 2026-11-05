@@ -1,23 +1,31 @@
 # Checkpoint G — every pet gets the brain
 
-Date: 2026-11-03. Brief: `docs/AFTER-BAKEOFF.md`, Step G.
-
-> **DRAFT (2026-11-04).** The code is done and committed (`9b659ea`, `c90b5c6`), every test passes and
-> both apps are installed. The four clips are NOT recorded yet: two nights of trying met a locked Mac
-> and then Sammy coming back mid-clip, and the one usable take caught the terrarium bug fixed in
-> `c90b5c6`. To finish: `bash tools/mac/record_hamster.sh <out>` while the Mac is unlocked and idle,
-> `stills_to_clip.py` each part into `checkpoint-G/`, check the stills, delete this note.
+Date: 2026-11-04. Brief: `docs/AFTER-BAKEOFF.md`, Step G.
 
 ## What to look at
-Everything is in `checkpoint-G/`, recorded in the installed harness app. The pet is a fresh hamster in
-the glass terrarium, close to you, following the Celtics.
-- **`clip-talk.mp4`:** a thought in its own voice, a knock on the glass, and a fact with its source.
-- **`clip-chat.mp4`:** typing to the hamster. A click on it opens the chat; "hi!", "what are you
-  doing?", "tell me a joke", "I had a rough day"; Esc gives the keyboard back.
-- **`clip-win.mp4`:** a test win for your team. The result line, then victory sprints on the wheel,
-  and a happy line later.
-- **`clip-loss.mp4`:** a test loss. The result line, then it keeps to its house, slowly, and a mopey
-  line later.
+Everything is in `checkpoint-G/`, recorded in the installed harness app (`tools/mac/record_hamster.sh`).
+The pet is a fresh hamster in the glass terrarium, close to you, following the Celtics. Two takes: chat
+and loss are from the first (the hamster is Marlin), talk and win from a second an hour later (Goldie),
+after the first take's talk part lost its opening seconds to a slow window capture.
+- **`clip-talk.mp4`** (35 s): it opens on the best-friends milestone bubble, with Share this, that the
+  setup earned by setting the bond high; then a thought in its own voice ("A little sulk about the
+  Celtics. Then a seed. Then a smaller sulk." — your team's mood is about you, not the pet, so the new
+  hamster inherited the loss from the first take); a knock on the glass ("That was loud! Was that you?
+  Please say it was you."); and a fact with "Where's that from?" underneath (a male European hamster
+  and its ten burrows).
+- **`clip-chat.mp4`** (31 s): typing to the hamster. A click on it opens the field; "hi!", "what are
+  you doing?", "tell me a joke", "I had a rough day", each answered in the bubble (the second answer
+  is the Celtics' real result from that evening, which was due); Esc gives the keyboard back.
+- **`clip-win.mp4`** (50 s): a test win for your team. The result line with Share this ("A big win for
+  the Celtics, 112-104! I can come out of the house now!"), then two victory sprints at the wheel with
+  a lap to the bowl between them, and a happy line later ("Nothing scary happened today. The Celtics
+  won. I am glowing."). The one-second position log kept alongside (`WP_POLL=1`) has it at x = 135,
+  the terrarium's wheel, in the excited animation for 16 s in the first sprint and from 36 s to the end
+  of the clip in the second.
+- **`still-wheel.png`:** the second sprint, 41 s after the result.
+- **`clip-loss.mp4`** (45 s): a test loss. The result line ("Oh no. The Celtics lost, 98-107. I hope
+  they have snacks at home."), then it keeps to its house at the left, slowly, and a mopey line later
+  ("Still sad for the Celtics, but the wheel is helping. Slowly.").
 - **The lines:** `src/species/hamster/voice/` (lines, facts, chat, world, milestones).
 
 ## What's built
@@ -54,7 +62,9 @@ the glass terrarium, close to you, following the Celtics.
 
 ## Numbers
 - Tests: 650 unit tests (41 new), 33 Rust tests and 6 browser tests pass; the type check is clean.
-  Both apps are rebuilt and installed.
+  Both apps are rebuilt and installed; the clips are from the rebuilt harness app.
+- Recording: both takes had `visibility: visible` and energy 1.0 at the start; all four typed
+  messages went in (the front app was the harness each time).
 - The hamster's voice is 2,220 lines of TypeScript; the fish's is 2,157.
 
 ## What I'm unsure about
@@ -66,9 +76,17 @@ the glass terrarium, close to you, following the Celtics.
   pet had been driven all day and its energy was at zero, so it slept through everything, and the
   bubble stopped painting while WebKit held the page as hidden. The second started on a locked
   screen: idle, but every window off-screen behind the lock, and the page hidden again. The driver
-  now starts from a fresh pet, refuses a locked screen, and brings the pointer in first. Worth
-  remembering for every recording: check `state` for `visibility` and `energy` before trusting the
-  stills.
+  now starts from a fresh pet, refuses a locked screen, and brings the pointer in first. The third
+  lost the first 16 s of the talk part: the first two window captures after the species reload failed
+  ("could not create image from window"), eight seconds each, so the driver now takes a throwaway
+  capture before each part. Worth remembering for every recording: check `state` for `visibility`
+  and `energy` before trusting the stills, and run with `WP_POLL=1` when a clip has to show the pet
+  somewhere in particular.
+- **The first thought is a sulk.** `newPet` makes a new pet but your team's mood lives in `world.json`
+  with you, so the second take's hamster was still sad from the first take's forced loss until the
+  win arrived. That is the design (the mood is yours), but it means the talk clip's thought reads as
+  a non sequitur unless you know. Tell me if you would rather the clip were re-recorded with the mood
+  cleared.
 - **No new art.** The hamster's sprites are the Phase 0 set; a sprint on the wheel is the hamster at
   the wheel with the wheel's own spin, not a new running pose. PHASE-NEXT Step 4 (animation quality)
   is where that belongs.
