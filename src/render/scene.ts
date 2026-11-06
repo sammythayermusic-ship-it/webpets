@@ -30,7 +30,7 @@ import { createExpressionGate } from './expression';
 import { createPacer, type Pacer } from './pacer';
 import { createLiveLayer, type LiveLayer, type LiveParticle } from './live/bowlLayer';
 import { spiritsFor } from './live/spine';
-import { createAmbient, type Ambient, type AmbientEvent } from './ambient';
+import { createAmbient, lightTint, type Ambient, type AmbientEvent } from './ambient';
 import { sameDaylight } from '../sim/daylight';
 import { loadBitmap } from './assets';
 import type { HabitatScene, Manifest, ManifestHabitat, ManifestSprite, MoveBounds, PetBehavior, SceneEvent, SceneView } from './types';
@@ -684,6 +684,9 @@ export function createScene(
         m.bubbles.update(dtMs, rng);
         if (m.live) m.live.setParticles(particlesOf(m.flakes.container, flakeParts), particlesOf(m.bubbles.container, bubbleParts));
         m.layers.update(dtMs);
+        // A sprite pet sits in the room's light: the plates were lit for each hour, so the pet takes the
+        // same measured tint (the live fish has a light rig of its own).
+        if (m.live === null && habitat.ambient) m.player.sprite.tint = lightTint(m.layers.daylight(), habitat.ambient.tints);
         m.ambient?.update({
           dtMs,
           nowMs: Date.now(),

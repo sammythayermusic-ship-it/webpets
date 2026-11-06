@@ -189,7 +189,7 @@ function renderError(err: unknown): void {
 
 /** Fields of AppState that toSceneView reads; anything else changing does not need a scene update. */
 function sceneInputsChanged(s: AppState, prev: AppState): boolean {
-  return s.pet !== prev.pet || s.hunger !== prev.hunger || s.night !== prev.night || s.latches !== prev.latches;
+  return s.pet !== prev.pet || s.hunger !== prev.hunger || s.night !== prev.night || s.daylight !== prev.daylight || s.latches !== prev.latches;
 }
 
 async function boot(platform: Platform): Promise<{ store: AppStore; scene: HabitatScene }> {
