@@ -15,7 +15,7 @@ import { DEFAULT_CONSTANTS, HOUR_MS } from '../sim/constants';
 import { hungerLabel } from '../sim/hunger';
 import { hungerFrom } from '../sim/math';
 import type { DayNightMode } from './types';
-import { resolveNight } from './daynight';
+import { resolveNight, type LightOverride } from './daynight';
 
 /** The hunger the pet had at `t` inside a reconciled span, honouring the auto-feeds that happened before `t`. */
 export function hungerDuring(prev: PetState, events: readonly SimEvent[], t: number): number {
@@ -35,7 +35,7 @@ export function hungerDuring(prev: PetState, events: readonly SimEvent[], t: num
 export interface RegimeSource {
   pet: PetState;
   dayNight: DayNightMode;
-  nightOverride: boolean | null;
+  nightOverride: LightOverride;
   present: boolean;
   /** Hunger as the store last derived it; used for a short span where the gap is not worth walking. */
   hunger: number;

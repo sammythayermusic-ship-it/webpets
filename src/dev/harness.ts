@@ -327,6 +327,15 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
       actions.dev.setNightOverride(value);
       return { night: ctx.store.getState().night };
     }
+    case 'hour': {
+      // Pins the local clock hour the light follows (7 morning, 12 noon, 18 evening, 22 night);
+      // null follows the real clock again. The sim's night follows the same curve.
+      const value = cmd['value'];
+      if (value !== null && (typeof value !== 'number' || !Number.isFinite(value))) throw new Error('hour: "value" must be a number or null');
+      actions.dev.setNightOverride(value);
+      const st = ctx.store.getState();
+      return { hour: value, night: st.night, daylight: st.daylight };
+    }
     case 'scale':
       await actions.setScale(num(cmd, 'steps'));
       return { scale: ctx.store.getState().settings.scale };

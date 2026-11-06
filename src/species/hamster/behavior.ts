@@ -11,7 +11,7 @@
 // hamster moves along a line and picks targets by NAME. Almost every branch below resolves to "walk to
 // this site, then do the thing that happens there".
 
-import type { MoveBounds, PetAnim, PetBehavior, PetInput, PetOutput } from '../../render/types';
+import type { MoveBounds, PetAct, PetAnim, PetBehavior, PetInput, PetOutput } from '../../render/types';
 import type { HungerLabel, Personality } from '../../sim/types';
 import type { Drives } from '../../sim/needs';
 import { dartSpeed } from '../../sim/motion';
@@ -118,6 +118,9 @@ const STARTLE_TICKS = 8;
 /** A greeting dash's speed. */
 const GREET_SPEED = 3.6;
 
+/** Making its bed before it sleeps: two seconds of digging. */
+export const DIG_TICKS = 16;
+
 /** Ticks the hamster potters after any errand before it may want another. */
 const ERRAND_COOLDOWN = 40;
 
@@ -141,7 +144,7 @@ const SULK_PACE = 0.7;
  * single-digit kilometres — the range a real hamster actually covers. `speciesData.wheelKm` is meant
  * to be a number someone could one day put on a leaderboard, so a fantasy rate would be worse than none.
  */
-const WHEEL_KM_PER_TICK = 0.0002;
+export const WHEEL_KM_PER_TICK = 0.0002;
 
 /** Ticks between re-rolls of the wander target while pottering on the bedding. */
 const WANDER_EVERY = 24;
@@ -231,6 +234,9 @@ export function createHamsterBehavior(sites: Sites = CAGE_SITES): PetBehavior {
   let greeted = false;
   /** Ticks of cheering since the last victory sprint. */
   let cheerTicks = 0;
+  /** Making its bed: ticks of digging left, and whether this sleep has had its dig yet. */
+  let digTicks = 0;
+  let dugThisSleep = false;
 
   const reset = (): void => {
     inited = false;
@@ -251,6 +257,8 @@ export function createHamsterBehavior(sites: Sites = CAGE_SITES): PetBehavior {
     greetTo = null;
     greeted = false;
     cheerTicks = 0;
+    digTicks = 0;
+    dugThisSleep = false;
   };
 
   const init = (bounds: MoveBounds, halfW: number, halfH: number): void => {
@@ -288,6 +296,10 @@ export function createHamsterBehavior(sites: Sites = CAGE_SITES): PetBehavior {
       walkSpeed(label) * (0.55 + 0.6 * drives.activity) * pers.pace * (sulking ? SULK_PACE : 1);
     if (cheering) cheerTicks += 1;
     else cheerTicks = 0;
+    if (!input.asleep && !drives.nap) {
+      dugThisSleep = false;
+      digTicks = 0;
+    }
     if (turnCooldown > 0) turnCooldown -= 1;
     if (eatTicks > 0) eatTicks -= 1;
     if (errandCooldown > 0) errandCooldown -= 1;
@@ -308,6 +320,7 @@ export function createHamsterBehavior(sites: Sites = CAGE_SITES): PetBehavior {
     let nx = x;
     let lockFacing = false;
     let ranThisTick = 0;
+    let act: PetAct | undefined;
 
     if (input.flakes.length > 0) {
       // ---- food on the bedding outranks everything, including the wheel
@@ -340,9 +353,21 @@ export function createHamsterBehavior(sites: Sites = CAGE_SITES): PetBehavior {
       stopErrand();
       startle = null;
       greetTo = null;
-      nx = moveTowardX(x, siteX(sites.bed ?? bounds.rect), 1.2);
+      const bedX = siteX(sites.bed ?? bounds.rect);
+      nx = moveTowardX(x, bedX, 1.2);
       anim = 'sleep';
       lockFacing = true;
+      // Making its bed: arriving at the bed, it digs the bedding over for a couple of seconds before it
+      // settles (head down, the bedding flying -- the renderer reads the act). Once per sleep.
+      if (!dugThisSleep && Math.abs(nx - bedX) <= ARRIVE_EPS) {
+        dugThisSleep = true;
+        digTicks = DIG_TICKS;
+      }
+      if (digTicks > 0) {
+        digTicks -= 1;
+        anim = 'eat';
+        act = 'dig';
+      }
     } else if (input.label === 'starving') {
       // ---- starving: lies flat, does not travel
       stopErrand();
@@ -395,6 +420,7 @@ export function createHamsterBehavior(sites: Sites = CAGE_SITES): PetBehavior {
         anim = errand.anim;
         lockFacing = true;
         if (errand.site === 'wheel') ranThisTick = WHEEL_KM_PER_TICK * wheelRate(input.hunger) * (cheering ? CHEER_WHEEL_PACE : 1);
+        if (errand.site === 'bottle') act = 'drink';
         if (errandTicks === 0) stopErrand();
       } else {
         speed = ramp(speed, pace(input.label));
@@ -494,6 +520,7 @@ export function createHamsterBehavior(sites: Sites = CAGE_SITES): PetBehavior {
     const out: PetOutput = { x, y, facing, turning, anim, biteFlakeIndex: bite };
     // The mood for the art: a sulking hamster droops like a sulking fish (scene.ts lowers its spirits).
     if (sulking && input.alive && anim !== 'sleep') out.act = 'sulk';
+    if (act !== undefined) out.act = act;
     if (ranThisTick > 0) out.speciesDelta = { wheelKm: ranThisTick };
     return out;
   };

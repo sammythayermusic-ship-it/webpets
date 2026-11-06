@@ -240,3 +240,39 @@ describe('hamster behavior', () => {
     expect(after.anim).toBe(fresh.anim);
   });
 });
+
+describe('making its bed and drinking (Step 3: the habitat reacts to these)', () => {
+  it('digs at the bed for two seconds before it sleeps, once per sleep', async () => {
+    const { DIG_TICKS } = await import('./behavior');
+    const outs = run(400, () => input({ asleep: true }));
+    const digs = outs.filter((o) => o.act === 'dig');
+    expect(digs.length).toBe(DIG_TICKS);
+    // all of it at the bed, head down, and then it sleeps
+    const bed = siteX(CAGE_SITES.bed ?? CAGE_FLOOR_RECT);
+    for (const o of digs) {
+      expect(Math.abs(o.x - bed)).toBeLessThanOrEqual(2);
+      expect(o.anim).toBe('eat');
+    }
+    const lastDig = outs.lastIndexOf(digs.at(-1) as PetOutput);
+    expect(outs.slice(lastDig + 1).every((o) => o.anim === 'sleep' && o.act !== 'dig')).toBe(true);
+  });
+
+  it('digs again the next time it goes to bed, not before', () => {
+    const b = createHamsterBehavior();
+    let digs = 0;
+    for (let i = 0; i < 1200; i += 1) {
+      const asleep = i < 300 || i >= 700;
+      if (b.step(input({ asleep })).act === 'dig') digs += 1;
+    }
+    expect(digs).toBe(32);
+  });
+
+  it('says it is drinking while it stands at the bottle', () => {
+    const rng = seeded(7);
+    const outs = run(6000, () => input({}, rng));
+    const drinking = outs.filter((o) => o.act === 'drink');
+    expect(drinking.length).toBeGreaterThan(0);
+    const bottle = siteX(CAGE_SITES.bottle ?? CAGE_FLOOR_RECT);
+    for (const o of drinking) expect(Math.abs(o.x - bottle)).toBeLessThanOrEqual(3);
+  });
+});

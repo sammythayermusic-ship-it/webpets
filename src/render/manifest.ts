@@ -1,6 +1,6 @@
 // Manifest schema validation + fetch. Pure (no Pixi) so it is testable in node.
 
-import type { FrameSource, LayerName, LiveSpec, Manifest, ManifestHabitat, ManifestLayer, ManifestSprite, ManifestSpriteState } from './types';
+import type { AmbientSpec, FrameSource, LayerName, LightTints, LiveSpec, Manifest, ManifestHabitat, ManifestLayer, ManifestSprite, ManifestSpriteState } from './types';
 import type { Rect } from '../sim/types';
 
 export const MANIFEST_URL = '/manifest.json';
@@ -122,9 +122,12 @@ function layer(v: unknown, path: string): ManifestLayer {
   if (!LAYER_NAMES.has(name)) throw new ManifestError(`${path}.name`, `unknown layer "${name}"`);
   const out: ManifestLayer = { name: name as LayerName, z: num(v['z'], `${path}.z`) };
   if (v['file'] !== undefined) out.file = assetPath(v['file'], `${path}.file`);
-  if (v['night'] !== undefined) {
-    if (out.file === undefined) throw new ManifestError(`${path}.night`, 'a night variant needs a day file');
-    out.night = assetPath(v['night'], `${path}.night`);
+  // The light variants (Step 3 reads all three; until then dawn and dusk were dropped right here,
+  // which is one of the two reasons the bowl's dawn and dusk plates were never on screen).
+  for (const k of ['night', 'dawn', 'dusk'] as const) {
+    if (v[k] === undefined) continue;
+    if (out.file === undefined) throw new ManifestError(`${path}.${k}`, `a ${k} variant needs a day file`);
+    out[k] = assetPath(v[k], `${path}.${k}`);
   }
   if (v['blend'] !== undefined) {
     const b = v['blend'];
@@ -157,7 +160,77 @@ function habitat(v: unknown, path: string): ManifestHabitat {
     petAnchor: pair(v['petAnchor'], `${path}.petAnchor`),
     opaqueRect: rect(v['opaqueRect'], `${path}.opaqueRect`),
     ...(v['live'] === undefined ? {} : { live: liveKind(v['live'], `${path}.live`) }),
+    ...(v['ambient'] === undefined ? {} : { ambient: ambientSpec(v['ambient'], `${path}.ambient`) }),
   };
+}
+
+/** A rect measured off a model: fractional grid px. */
+function numRect(v: unknown, path: string): Rect {
+  if (!isRecord(v)) throw new ManifestError(path, 'expected a rect object');
+  return { x: num(v['x'], `${path}.x`), y: num(v['y'], `${path}.y`), w: num(v['w'], `${path}.w`), h: num(v['h'], `${path}.h`) };
+}
+
+function rgb(v: unknown, path: string): [number, number, number] {
+  if (!Array.isArray(v) || v.length !== 3) throw new ManifestError(path, 'expected [r, g, b]');
+  return [num(v[0], `${path}[0]`), num(v[1], `${path}[1]`), num(v[2], `${path}[2]`)];
+}
+
+function lightTints(v: unknown, path: string): LightTints {
+  if (!isRecord(v)) throw new ManifestError(path, 'expected { dawn, dusk, night }');
+  return { dawn: rgb(v['dawn'], `${path}.dawn`), dusk: rgb(v['dusk'], `${path}.dusk`), night: rgb(v['night'], `${path}.night`) };
+}
+
+function files(v: unknown, path: string): string[] {
+  if (!Array.isArray(v) || v.length === 0) throw new ManifestError(path, 'expected a non-empty array of files');
+  return v.map((f, i) => assetPath(f, `${path}[${i}]`));
+}
+
+function ambientSpec(v: unknown, path: string): AmbientSpec {
+  if (!isRecord(v)) throw new ManifestError(path, 'expected an ambient object');
+  const out: AmbientSpec = { tints: lightTints(v['tints'], `${path}.tints`) };
+  const w = v['wheel'];
+  if (w !== undefined) {
+    if (!isRecord(w)) throw new ManifestError(`${path}.wheel`, 'expected an object');
+    out.wheel = {
+      rect: rect(w['rect'], `${path}.wheel.rect`),
+      loopDeg: positive(w['loopDeg'], `${path}.wheel.loopDeg`),
+      frames: files(w['frames'], `${path}.wheel.frames`),
+      hub: numPair(w['hub'], `${path}.wheel.hub`),
+      tints: lightTints(w['tints'], `${path}.wheel.tints`),
+    };
+  }
+  const b = v['bottle'];
+  if (b !== undefined) {
+    if (!isRecord(b)) throw new ManifestError(`${path}.bottle`, 'expected an object');
+    out.bottle = { spout: numPair(b['spout'], `${path}.bottle.spout`), water: numRect(b['water'], `${path}.bottle.water`), dropTo: num(b['dropTo'], `${path}.bottle.dropTo`) };
+  }
+  if (v['door'] !== undefined) out.door = numRect(v['door'], `${path}.door`);
+  if (v['air'] !== undefined) out.air = numRect(v['air'], `${path}.air`);
+  const h = v['hood'];
+  if (h !== undefined) {
+    if (!Array.isArray(h) || h.length !== 2) throw new ManifestError(`${path}.hood`, 'expected two points');
+    out.hood = [numPair(h[0], `${path}.hood[0]`), numPair(h[1], `${path}.hood[1]`)];
+  }
+  const c = v['critter'];
+  if (c !== undefined) {
+    if (!isRecord(c)) throw new ManifestError(`${path}.critter`, 'expected an object');
+    const kind = c['kind'];
+    if (kind !== 'snail' && kind !== 'moth') throw new ManifestError(`${path}.critter.kind`, 'expected "snail" | "moth"');
+    const p = c['path'];
+    out.critter = {
+      kind,
+      frames: files(c['frames'], `${path}.critter.frames`),
+      size: numPair(c['size'], `${path}.critter.size`),
+      fps: positive(c['fps'], `${path}.critter.fps`),
+      ...(p === undefined
+        ? {}
+        : (() => {
+            const r = isRecord(p) ? p : {};
+            return { path: { cx: num(r['cx'], `${path}.critter.path.cx`), cy: num(r['cy'], `${path}.critter.path.cy`), rx: num(r['rx'], `${path}.critter.path.rx`), ry: num(r['ry'], `${path}.critter.path.ry`) } };
+          })()),
+    };
+  }
+  return out;
 }
 
 function liveKind(v: unknown, path: string): LiveSpec {
@@ -166,6 +239,7 @@ function liveKind(v: unknown, path: string): LiveSpec {
   return {
     kind: 'fish-bowl',
     ...(v['contents'] === undefined ? {} : { contents: assetPath(v['contents'], `${path}.contents`) }),
+    ...(v['plants'] === undefined ? {} : { plants: assetPath(v['plants'], `${path}.plants`) }),
   };
 }
 

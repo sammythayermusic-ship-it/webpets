@@ -20,6 +20,7 @@ import { METRES_PER_GRID_PX, cameraFrustum, cameraPose, depthWander, fishScale, 
 import { FISH_MOUTH_AHEAD } from '../../species/fish/layout';
 import { createSpine, type FacingSign, type Spine, type SpineState } from './spine';
 import { WATER_FRAGMENT, WATER_VERTEX } from './shaders';
+import { PURE_DAY, type Daylight } from '../../sim/daylight';
 
 /** Quality tiers: `lean` halves the fish render target and dims the shafts/caustics. */
 export type LiveTier = 'full' | 'lean';
@@ -41,7 +42,19 @@ export interface LiveLayerOptions {
    * falls back to day; a missing decor means Pixi keeps drawing it; a missing mask means the whole
    * plate is treated as a thing.
    */
-  plates: { day: ImageBitmap; night: ImageBitmap | null; decorDay: ImageBitmap | null; decorNight: ImageBitmap | null; contents: ImageBitmap | null };
+  plates: {
+    day: ImageBitmap;
+    night: ImageBitmap | null;
+    decorDay: ImageBitmap | null;
+    decorNight: ImageBitmap | null;
+    contents: ImageBitmap | null;
+    /** Step 3: the dawn and dusk sets (a missing one falls back to day) and the plant mask. */
+    dawn?: ImageBitmap | null;
+    dusk?: ImageBitmap | null;
+    decorDawn?: ImageBitmap | null;
+    decorDusk?: ImageBitmap | null;
+    plants?: ImageBitmap | null;
+  };
   rng: () => number;
 }
 
@@ -68,6 +81,12 @@ export interface LiveLayer {
   resetPose(x: number, y: number, facing: FacingSign): void;
   setPhase(phase: ScenePhase): void;
   setNight(t: number): void;
+  /** Time of day as the four weights, already eased by the caller (the layer stack). */
+  setDaylight(w: Daylight): void;
+  /** 0 clear .. 1 dirty: where the water is heading; it clouds over ~20 s and clears over ~40 s. */
+  setMurk(target: number): void;
+  /** The water's current cloudiness, for the debug state. */
+  murk(): number;
   setPointer(gx: number | null, gy: number | null): void;
   setParallax(dx: number, dy: number): void;
   setTier(tier: LiveTier): void;
@@ -127,8 +146,97 @@ export const NIGHT: RigColours = {
   env: 0.22,
 };
 
-function lerpColor(out: THREE.Color, a: THREE.Color, b: THREE.Color, t: number): THREE.Color {
-  return out.copy(a).lerp(b, t);
+// Dawn and dusk, as c_plates.py lights the plates: a low warm key that has moved -- to the right and
+// front in the morning, to the left and behind in the evening -- a cool or violet fill, a dim sky.
+export const DAWN: RigColours = {
+  key: [new THREE.Color(1.0, 0.74, 0.56), 1.9],
+  fill: [new THREE.Color(0.55, 0.7, 1.0), 0.5],
+  rim: [new THREE.Color(0.6, 0.78, 1.0), 0.9],
+  hemiSky: new THREE.Color(0.62, 0.66, 0.82),
+  hemiGround: new THREE.Color(0.45, 0.36, 0.3),
+  hemi: 0.5,
+  env: 0.34,
+};
+export const DUSK: RigColours = {
+  key: [new THREE.Color(1.0, 0.58, 0.32), 2.1],
+  fill: [new THREE.Color(0.62, 0.52, 0.95), 0.45],
+  rim: [new THREE.Color(1.0, 0.62, 0.4), 1.8],
+  hemiSky: new THREE.Color(0.72, 0.58, 0.55),
+  hemiGround: new THREE.Color(0.42, 0.3, 0.22),
+  hemi: 0.45,
+  env: 0.3,
+};
+/** Where the key comes from at dawn and dusk, from c_plates.py's light positions (Blender x, z, -y). */
+export const KEY_DIR_DAWN = new THREE.Vector3(1.05, 0.05, 0.55).normalize();
+export const KEY_DIR_DUSK = new THREE.Vector3(-1.0, 0.03, -0.35).normalize();
+
+
+/**
+ * The plant mask at grid resolution, as one channel: coverage times height up the blade, box-blurred
+ * twice by two grid px so the displacement field fades out around a blade instead of stopping at its
+ * edge (a field that stops at the edge tears the blade off the water behind it).
+ */
+export function plantWeights(rgba: Uint8ClampedArray, w: number, h: number): Uint8Array {
+  let a = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i += 1) a[i] = (rgba[i * 4] ?? 0) / 255;
+  const r = 2;
+  for (let pass = 0; pass < 2; pass += 1) {
+    const b = new Float32Array(w * h);
+    for (let y = 0; y < h; y += 1) {
+      for (let x = 0; x < w; x += 1) {
+        let sum = 0;
+        let n = 0;
+        for (let dx = -r; dx <= r; dx += 1) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= w) continue;
+          sum += a[y * w + xx] ?? 0;
+          n += 1;
+        }
+        b[y * w + x] = sum / n;
+      }
+    }
+    const c = new Float32Array(w * h);
+    for (let y = 0; y < h; y += 1) {
+      for (let x = 0; x < w; x += 1) {
+        let sum = 0;
+        let n = 0;
+        for (let dy = -r; dy <= r; dy += 1) {
+          const yy = y + dy;
+          if (yy < 0 || yy >= h) continue;
+          sum += b[yy * w + x] ?? 0;
+          n += 1;
+        }
+        c[y * w + x] = sum / n;
+      }
+    }
+    a = c;
+  }
+  const out = new Uint8Array(w * h * 4);
+  for (let i = 0; i < w * h; i += 1) {
+    const v = Math.round(Math.min(1, (a[i] ?? 0) * 1.6) * 255);
+    out[i * 4] = v;
+    out[i * 4 + 3] = 255;
+  }
+  return out;
+}
+
+function plantMaskTexture(bmp: ImageBitmap, grid: readonly [number, number]): THREE.DataTexture {
+  const [w, h] = grid;
+  const c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
+  const ctx = c.getContext('2d') as OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
+  const data = new Uint8Array(w * h * 4);
+  if (ctx) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bmp, 0, 0, w, h);
+    data.set(plantWeights(ctx.getImageData(0, 0, w, h).data, w, h));
+  }
+  const t = new THREE.DataTexture(data, w, h);
+  t.flipY = false;
+  t.minFilter = THREE.LinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.needsUpdate = true;
+  return t;
 }
 
 export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
@@ -411,6 +519,11 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
   clear.needsUpdate = true;
   const decorDay = opts.plates.decorDay ? plateTexture(opts.plates.decorDay) : clear;
   const decorNight = opts.plates.decorNight ? plateTexture(opts.plates.decorNight) : decorDay;
+  const bgDawn = opts.plates.dawn ? plateTexture(opts.plates.dawn) : bgDay;
+  const bgDusk = opts.plates.dusk ? plateTexture(opts.plates.dusk) : bgDay;
+  const decorDawn = opts.plates.decorDawn ? plateTexture(opts.plates.decorDawn) : decorDay;
+  const decorDusk = opts.plates.decorDusk ? plateTexture(opts.plates.decorDusk) : decorDay;
+  const plantsTex = opts.plates.plants ? plantMaskTexture(opts.plates.plants, habitat.grid) : null;
   // No mask: a 1x1 white texture, every plate pixel is a thing.
   const solid = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
   solid.needsUpdate = true;
@@ -437,6 +550,16 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
     uBgNight: { value: bgNight },
     uDecor: { value: decorDay },
     uDecorNight: { value: decorNight },
+    uBgDawn: { value: bgDawn },
+    uBgDusk: { value: bgDusk },
+    uDecorDawn: { value: decorDawn },
+    uDecorDusk: { value: decorDusk },
+    uLight: { value: new THREE.Vector4(0, 1, 0, 0) },
+    uPlants: { value: plantsTex ?? clear },
+    uPlantK: { value: plantsTex ? 1 : 0 },
+    uFishPos: { value: new THREE.Vector2(habitat.petAnchor[0], habitat.petAnchor[1]) },
+    uFishBend: { value: 0 },
+    uMurk: { value: 0 },
     uContents: { value: contents },
     uFish: { value: rt.texture },
     uCanvasCss: { value: new THREE.Vector2(1, 1) },
@@ -485,6 +608,12 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
   // ---- state -------------------------------------------------------------------------------------
   let phase: ScenePhase = 'alive';
   let nightT = 0;
+  let light: Daylight = PURE_DAY;
+  let murkT = 0;
+  let murkTarget = 0;
+  let lastPx: number | null = null;
+  let lastPy = 0;
+  let bend = 0;
   let tier: LiveTier = 'full';
   let wCss = 1;
   let hCss = 1;
@@ -497,21 +626,48 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
   let anim = 'idle';
   let depth = 0;
   let depthEase = 0;
-  const colA = new THREE.Color();
 
-  const applyNight = (): void => {
-    key.color = lerpColor(colA.clone(), DAY.key[0], NIGHT.key[0], nightT);
-    key.intensity = DAY.key[1] + (NIGHT.key[1] - DAY.key[1]) * nightT;
-    fill.color = lerpColor(colA.clone(), DAY.fill[0], NIGHT.fill[0], nightT);
-    fill.intensity = DAY.fill[1] + (NIGHT.fill[1] - DAY.fill[1]) * nightT;
-    rim.color = lerpColor(colA.clone(), DAY.rim[0], NIGHT.rim[0], nightT);
-    rim.intensity = DAY.rim[1] + (NIGHT.rim[1] - DAY.rim[1]) * nightT;
-    hemi.color = lerpColor(colA.clone(), DAY.hemiSky, NIGHT.hemiSky, nightT);
-    hemi.groundColor = lerpColor(colA.clone(), DAY.hemiGround, NIGHT.hemiGround, nightT);
-    hemi.intensity = DAY.hemi + (NIGHT.hemi - DAY.hemi) * nightT;
-    fishScene.environmentIntensity = DAY.env + (NIGHT.env - DAY.env) * nightT;
+  const uPhaseAlive = (): number => (phase === 'alive' ? 1 : 0);
+  const keyDir = new THREE.Vector3();
+  /** The rig as the weighted blend of the four, and the key's direction swung with it. */
+  const applyLight = (): void => {
+    const rigs: Array<[RigColours, number]> = [
+      [DAWN, light.dawn],
+      [DAY, light.day],
+      [DUSK, light.dusk],
+      [NIGHT, light.night],
+    ];
+    const blend = (pick: (r: RigColours) => [THREE.Color, number], out: THREE.Color): number => {
+      out.setRGB(0, 0, 0);
+      let sum = 0;
+      for (const [r, w] of rigs) {
+        const [c, i] = pick(r);
+        out.r += c.r * i * w;
+        out.g += c.g * i * w;
+        out.b += c.b * i * w;
+        sum += i * w;
+      }
+      if (sum > 1e-6) out.multiplyScalar(1 / sum);
+      return sum;
+    };
+    key.intensity = blend((r) => r.key, key.color);
+    fill.intensity = blend((r) => r.fill, fill.color);
+    rim.intensity = blend((r) => r.rim, rim.color);
+    hemi.intensity = blend((r) => [r.hemiSky, r.hemi], hemi.color);
+    blend((r) => [r.hemiGround, r.hemi], hemi.groundColor);
+    fishScene.environmentIntensity = rigs.reduce((a, [r, w]) => a + r.env * w, 0);
+    keyDir
+      .set(0, 0, 0)
+      .addScaledVector(KEY_DIR_DAWN, light.dawn)
+      .addScaledVector(KEY_DIR, light.day + light.night)
+      .addScaledVector(KEY_DIR_DUSK, light.dusk);
+    if (keyDir.lengthSq() < 1e-6) keyDir.copy(KEY_DIR);
+    key.position.copy(keyDir.normalize());
+    nightT = light.night;
     waterUniforms.uNight.value = nightT;
+    waterUniforms.uLight.value.set(light.dawn, light.day, light.dusk, light.night);
   };
+  const applyNight = applyLight;
 
   const resizeTarget = (): void => {
     const k = tier === 'full' ? 1 : 0.5;
@@ -562,9 +718,18 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       waterUniforms.uPhase.value = p === 'alive' ? 1 : 0.3;
       waterQuad.visible = p !== 'memorial';
     },
+    setDaylight(w) {
+      if (w.dawn === light.dawn && w.day === light.day && w.dusk === light.dusk && w.night === light.night) return;
+      light = w;
+      applyLight();
+    },
+    setMurk(target) {
+      murkTarget = Math.max(0, Math.min(1, target));
+    },
+    murk: () => murkT,
     setNight(t) {
-      if (t === nightT) return;
-      nightT = t;
+      if (t === nightT && light.dawn === 0 && light.dusk === 0) return;
+      light = { dawn: 0, day: 1 - t, dusk: 0, night: t };
       applyNight();
     },
     setPointer(gx, gy) {
@@ -601,6 +766,19 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
     },
     render(dtMs) {
       clock += dtMs / 1000;
+      // Dirty water clouds over ~20 s and clears over ~40 s after a feed.
+      const tau = murkTarget > murkT ? 7000 : 14000;
+      murkT += (murkTarget - murkT) * (1 - Math.exp(-dtMs / tau));
+      waterUniforms.uMurk.value = murkT;
+      // The fish's push on the plants follows its speed, eased so a turn does not flick them.
+      if (lastPx !== null && dtMs > 0) {
+        const v = Math.hypot(px - lastPx, py - lastPy) / (dtMs / 1000);
+        bend += (Math.min(1, v / 26) - bend) * (1 - Math.exp(-dtMs / 350));
+      }
+      lastPx = px;
+      lastPy = py;
+      waterUniforms.uFishPos.value.set(px, py);
+      waterUniforms.uFishBend.value = bend * uPhaseAlive();
       sharedUniforms.uTime.value = clock;
       waterUniforms.uTime.value = clock;
       // WINDOW_PAD lives in the scene; it is handed over through resize's cssPerGrid and the pad
@@ -670,6 +848,9 @@ export function createLiveLayer(opts: LiveLayerOptions): LiveLayer {
       if (bgNight !== bgDay) bgNight.dispose();
       decorDay.dispose();
       if (decorNight !== decorDay) decorNight.dispose();
+      for (const t of [bgDawn, bgDusk]) if (t !== bgDay) t.dispose();
+      for (const t of [decorDawn, decorDusk]) if (t !== decorDay) t.dispose();
+      plantsTex?.dispose();
       contents.dispose();
       clear.dispose();
       solid.dispose();

@@ -230,6 +230,8 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
     return cheer !== 0 ? { ...greeted, cheer } : greeted;
   });
   scene.on('bite', () => store.getState().actions.poke('bite'));
+  // Step 3: the habitat's ambient events are sound hooks; no sound files exist yet, so all are silent.
+  scene.onAmbient((e) => audio.play(e));
 
   // 3. UI components and wiring.
   let hud: HudHandle | null = null;

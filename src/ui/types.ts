@@ -6,7 +6,11 @@ import type { Platform } from '../platform/types';
 import type { HabitatScene, Rect } from '../render/types';
 import type { Species } from '../sim/types';
 
-export type SfxName = 'feed' | 'alert' | 'death';
+/**
+ * A sound the app can play: its own three, and (Step 3) every ambient event the habitat emits. Each is
+ * `assets/audio/<species>/<name>.ogg`; a missing file is skipped once and stays silent.
+ */
+export type SfxName = 'feed' | 'alert' | 'death' | import('../render/ambient').AmbientEvent;
 
 export interface AudioApi {
   play(name: SfxName): void;

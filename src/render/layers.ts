@@ -9,6 +9,7 @@
 // a time. Keeping one set of coordinates for art, procedural sprites and hit regions alike is what
 // lets the art's resolution change without touching anything that reasons about position.
 
+import { PURE_DAY, PURE_NIGHT, overlayAlphas, type Daylight } from '../sim/daylight';
 import { Container, Graphics, Rectangle, Sprite, Texture } from 'pixi.js';
 import type { LayerName, ManifestHabitat, ManifestLayer, ScenePhase } from './types';
 import { makeWaterBounds } from './water';
@@ -68,7 +69,12 @@ const SLOT_OF: Readonly<Record<Exclude<LayerName, 'shadow'>, SlotName>> = {
 export const STARVING_TINT = 0xe6ffe6;
 /** Cool blue the habitat fades toward at night, matching the wash the painted night layer used. */
 export const NIGHT_TINT = 0x465496;
-const NIGHT_FADE_MS = 2000;
+/**
+ * How quickly a change of light settles, as a time constant: a pinned hour or a jump across the
+ * dawn ramp arrives over about two seconds, and the minute-by-minute drift of the real clock is far
+ * slower than this, so it follows the hour exactly.
+ */
+const LIGHT_TAU_MS = 650;
 /** How long the starving colour shift takes. Short, but not a single frame. */
 const STARVING_FADE_MS = 600;
 const BLINK_MS = 500;
@@ -86,9 +92,13 @@ export interface LayerStack {
   readonly slots: Readonly<Record<SlotName, Container>>;
   /** The eased night amount, 0..1, for anything else that lights itself by it. */
   nightT(): number;
+  /** The eased weights of the four light sets, for anything else that lights itself by them. */
+  daylight(): Daylight;
   setPantryFraction(f: number): void;
   setPantryLow(low: boolean): void;
   setNight(on: boolean): void;
+  /** Time of day as the four weights (src/app/daynight.ts); eased here. */
+  setDaylight(w: Daylight): void;
   setPhase(phase: ScenePhase): void;
   setStarving(b: boolean): void;
   /** Grid px offset applied to glass and decor_front (parallax). Fractional: the slide is continuous. */
@@ -127,6 +137,29 @@ function fileSprite(
   return { sprite: s, artScale };
 }
 
+/**
+ * One frame of easing from `cur` toward `target`: exponential with LIGHT_TAU_MS, snapping when it is
+ * within a thousandth, and returning `cur` itself when nothing moved so the caller can skip the
+ * repaint. Both ends sum to one, so every blend between them does too.
+ */
+export function easeLight(cur: Daylight, target: Daylight, dtMs: number): Daylight {
+  const far = Math.max(
+    Math.abs(cur.dawn - target.dawn),
+    Math.abs(cur.day - target.day),
+    Math.abs(cur.dusk - target.dusk),
+    Math.abs(cur.night - target.night),
+  );
+  if (far === 0) return cur;
+  if (far < 1e-3) return target;
+  const k = 1 - Math.exp(-Math.max(0, dtMs) / LIGHT_TAU_MS);
+  return {
+    dawn: cur.dawn + (target.dawn - cur.dawn) * k,
+    day: cur.day + (target.day - cur.day) * k,
+    dusk: cur.dusk + (target.dusk - cur.dusk) * k,
+    night: cur.night + (target.night - cur.night) * k,
+  };
+}
+
 export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<string, Texture>): LayerStack {
   const root = new Container({ label: 'habitat:back' });
   const front = new Container({ label: 'habitat:front' });
@@ -139,11 +172,12 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
   /** Every sprite the world tint applies to: the habitat's own art, whichever variant is showing. */
   const worldSprites: Sprite[] = [];
   /**
-   * Layers with a rendered night variant: the day sprite and the night sprite drawn over it, whose
-   * alpha IS the night amount. These are excluded from the night tint (they would be lit twice) but
-   * still take the starving tint.
+   * Layers with rendered light variants: the day sprite with dawn, dusk and night drawn over it in that
+   * order, alphas from `overlayAlphas` so the stack is exactly the weighted blend. A variant a layer
+   * does not have gives its weight to day. These are excluded from the night tint (they would be lit
+   * twice) but still take the starving tint.
    */
-  const nightPairs: Array<{ day: Sprite; night: Sprite }> = [];
+  const lightSets: Array<{ day: Sprite; dawn: Sprite | null; dusk: Sprite | null; night: Sprite | null }> = [];
   let pantryFill: Sprite | null = null;
   /** Art px per grid px for the pantry_fill texture; its crop rect addresses TEXELS, not grid px. */
   let pantryArt = 1;
@@ -198,17 +232,25 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
     }
     slot.addChild(sprite);
     const isWorld = l.name === 'bg' || l.name === 'memorial' || l.name === 'decor_back' || l.name === 'decor_front' || l.name === 'glass';
-    const nightTex = l.night === undefined ? undefined : textures.get(l.night);
-    if (isWorld && nightTex !== undefined) {
-      const night = new Sprite({ texture: nightTex, label: `${l.name}:night` });
-      night.scale.set(1 / layerArtScale(l.night as string, nightTex, habitat.grid));
-      night.alpha = 0;
-      night.visible = false;
-      if (l.blend === 'multiply') night.blendMode = 'multiply';
-      slot.addChild(night);
-      nightPairs.push({ day: sprite, night });
-    } else if (isWorld) {
-      worldSprites.push(sprite);
+    const variant = (which: 'dawn' | 'dusk' | 'night'): Sprite | null => {
+      const file = l[which];
+      const tex = file === undefined ? undefined : textures.get(file);
+      if (file === undefined || tex === undefined) return null;
+      const v = new Sprite({ texture: tex, label: `${l.name}:${which}` });
+      v.scale.set(1 / layerArtScale(file, tex, habitat.grid));
+      v.alpha = 0;
+      v.visible = false;
+      if (l.blend === 'multiply') v.blendMode = 'multiply';
+      slot.addChild(v);
+      return v;
+    };
+    if (isWorld) {
+      // Added in the order they stack: dawn, dusk, night over day.
+      const dawn = variant('dawn');
+      const dusk = variant('dusk');
+      const nightV = variant('night');
+      if (dawn || dusk || nightV) lightSets.push({ day: sprite, dawn, dusk, night: nightV });
+      else worldSprites.push(sprite);
     }
   }
 
@@ -240,8 +282,8 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
    * whole bowl changed colour in a single frame. Both were the last stepped things in a renderer that
    * had gone continuous everywhere else.
    */
-  let nightT = 0;
-  let nightTargetT = 0;
+  let light: Daylight = PURE_DAY;
+  let lightTarget: Daylight = PURE_DAY;
   let starvingT = 0;
 
   const applyPantry = (): void => {
@@ -278,20 +320,36 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
   };
 
   const applyWorldTint = (): void => {
-    const tint = mixTint(towards(NIGHT_TINT, nightT), towards(STARVING_TINT, starvingT));
+    const tint = mixTint(towards(NIGHT_TINT, light.night), towards(STARVING_TINT, starvingT));
     for (const sp of worldSprites) sp.tint = tint;
-    // A rendered night is a crossfade, not a tint. The starving shift still applies to both halves.
+    // A rendered light is a crossfade, not a tint. The starving shift still applies to every set.
     const starve = towards(STARVING_TINT, starvingT);
-    for (const { day, night } of nightPairs) {
-      day.tint = starve;
-      night.tint = starve;
-      night.alpha = nightT;
-      night.visible = nightT > 0 && day.visible;
+    for (const set of lightSets) {
+      // A variant this layer was not rendered in lends its weight to day.
+      const w: Daylight = {
+        dawn: set.dawn ? light.dawn : 0,
+        dusk: set.dusk ? light.dusk : 0,
+        night: set.night ? light.night : 0,
+        day: 0,
+      };
+      w.day = Math.max(0, 1 - w.dawn - w.dusk - w.night);
+      const a = overlayAlphas(w);
+      set.day.tint = starve;
+      for (const [sp, alpha] of [
+        [set.dawn, a.dawn],
+        [set.dusk, a.dusk],
+        [set.night, a.night],
+      ] as const) {
+        if (!sp) continue;
+        sp.tint = starve;
+        sp.alpha = alpha;
+        sp.visible = alpha > 0.001 && set.day.visible;
+      }
     }
     // A habitat that still ships a painted night overlay keeps working; the bowl no longer has one.
     if (night) {
-      night.alpha = nightT;
-      night.visible = nightT > 0;
+      night.alpha = light.night;
+      night.visible = light.night > 0;
     }
   };
 
@@ -302,7 +360,8 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
     root,
     front,
     slots,
-    nightT: () => nightT,
+    nightT: () => light.night,
+    daylight: () => light,
     setPantryFraction(f) {
       const v = Math.max(0, Math.min(1, Number.isFinite(f) ? f : 0));
       if (v === pantryFraction) return;
@@ -317,7 +376,10 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
       applyPantry();
     },
     setNight(on) {
-      nightTargetT = on ? 1 : 0;
+      lightTarget = on ? PURE_NIGHT : PURE_DAY;
+    },
+    setDaylight(w) {
+      lightTarget = w;
     },
     setPhase(phase) {
       const showMemorial = phase === 'memorial';
@@ -354,10 +416,10 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
         const step = deltaMS / ms;
         return v < target ? Math.min(target, v + step) : Math.max(target, v - step);
       };
-      const nextNight = toward(nightT, nightTargetT, NIGHT_FADE_MS);
+      const nextLight = easeLight(light, lightTarget, deltaMS);
       const nextStarving = toward(starvingT, starving ? 1 : 0, STARVING_FADE_MS);
-      if (nextNight !== nightT || nextStarving !== starvingT) {
-        nightT = nextNight;
+      if (nextLight !== light || nextStarving !== starvingT) {
+        light = nextLight;
         starvingT = nextStarving;
         applyWorldTint();
       }

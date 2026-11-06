@@ -12,6 +12,12 @@ import { speciesModule } from '../species';
 import { needsAt } from '../sim/needs';
 import { regimeNow } from '../app/needsBridge';
 
+function overrideLabel(o: boolean | number | null): string {
+  if (o === null) return 'none';
+  if (typeof o === 'number') return `${o}:00`;
+  return o ? 'night' : 'day';
+}
+
 export interface DevPanelHandleExt extends DevPanelHandle {
   open(): void;
   close(): void;
@@ -182,6 +188,11 @@ export function mountDevPanel(root: HTMLElement, deps: UiDeps, worldOpts?: DevPa
     ['follow', 'follow settings'],
     ['day', 'force day'],
     ['night', 'force night'],
+    // Step 3: a pinned hour, so each light can be looked at without waiting for it.
+    ['7', 'morning (7:00)'],
+    ['12', 'noon (12:00)'],
+    ['18', 'evening (18:00)'],
+    ['22', 'night (22:00)'],
   ] as const) {
     const o = el('option', '', label);
     o.value = value;
@@ -189,7 +200,8 @@ export function mountDevPanel(root: HTMLElement, deps: UiDeps, worldOpts?: DevPa
   }
   nightSelect.addEventListener('change', () => {
     const v = nightSelect.value;
-    dev().setNightOverride(v === 'night' ? true : v === 'day' ? false : null);
+    const hour = Number(v);
+    dev().setNightOverride(v === 'night' ? true : v === 'day' ? false : v !== 'follow' && Number.isFinite(hour) ? hour : null);
   });
   const nightRow = row('NIGHT', nightSelect);
 
@@ -309,11 +321,12 @@ export function mountDevPanel(root: HTMLElement, deps: UiDeps, worldOpts?: DevPa
       `now ${formatClock(now)} (offset ${formatOffset(s.settings.devClockOffsetMs)})`,
       `${pet.name} ${pet.id} · ${pet.alive ? 'alive' : 'dead'} · ${pet.personality} · ${pet.rarity}`,
       `hunger ${hunger.toFixed(1)}% ${labelFor(hunger)} · pantry ${pet.pantry} · meals ${pet.meals}`,
-      `night ${s.night ? 'on' : 'off'} (override ${s.nightOverride === null ? 'none' : s.nightOverride ? 'night' : 'day'}) · scale ${s.settings.scale}x · ${s.hidden ? 'hidden' : 'shown'}`,
+      `night ${s.night ? 'on' : 'off'} (override ${overrideLabel(s.nightOverride)}) · scale ${s.settings.scale}x · ${s.hidden ? 'hidden' : 'shown'}`,
       needsLine(s, now),
     ];
     status.textContent = parts.join('\n');
-    nightSelect.value = s.nightOverride === null ? 'follow' : s.nightOverride ? 'night' : 'day';
+    nightSelect.value =
+      s.nightOverride === null ? 'follow' : typeof s.nightOverride === 'number' ? String(s.nightOverride) : s.nightOverride ? 'night' : 'day';
     speciesSelect.value = `${pet.species}/${pet.habitat}`;
   }
 

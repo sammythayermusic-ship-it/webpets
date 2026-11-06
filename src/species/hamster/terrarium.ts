@@ -46,7 +46,7 @@ export const TERR_SITES: Sites = Object.freeze({
  * not a mistake -- the shadow is part of the drawn habitat, and this rect is the window's
  * click-through contract, so it has to cover everything the user can see.
  */
-export const TERR_OPAQUE_RECT: Readonly<Rect> = Object.freeze({ x: 14, y: 15, w: 303, h: 200 });
+export const TERR_OPAQUE_RECT: Readonly<Rect> = Object.freeze({ x: 14, y: 15, w: 304, h: 200 });
 
 /** Where the hamster starts: on the bedding, mid-tank. */
 export const TERR_PET_ANCHOR: readonly [number, number] = Object.freeze([145, TERR_STAND_Y] as const);

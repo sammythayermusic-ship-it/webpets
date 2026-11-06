@@ -2,7 +2,7 @@
 
 import type { Habitat, HungerLabel, Personality, Rect, Rng, Species } from '../sim/types';
 import type { Drives } from '../sim/needs';
-import type { Daylight } from '../app/daynight';
+import type { Daylight } from '../sim/daylight';
 import type { Scale, TrayChipSize } from '../sim/constants';
 
 export type { Rect };
@@ -90,6 +90,49 @@ export interface ManifestHabitat {
    * back plates and the front glass in the same WebGL context as the plates.
    */
   live?: LiveSpec;
+  /** Step 3: the habitat's own life (see ambient.ts). Absent: a still habitat, as before. */
+  ambient?: AmbientSpec;
+}
+
+/** RGB multipliers, 0..1, for things drawn in code that must sit in a light set's colour. */
+export type LightTints = { dawn: [number, number, number]; dusk: [number, number, number]; night: [number, number, number] };
+
+/**
+ * A habitat's ambient life, all in grid px, every position measured off the model by
+ * `assets/3d/scripts/h_plates.py` (its `geom` job) rather than read off a picture.
+ */
+export interface AmbientSpec {
+  /** How the plates' colour shifts in each light set, measured from the renders; tints code-drawn things. */
+  tints: LightTints;
+  /** The wheel's turning part, its own layer: frames of one loop of its turn, drawn at `rect`. */
+  wheel?: {
+    rect: Rect;
+    /** The turn one loop of frames covers, degrees (one rung's spacing, or until the spokes repeat). */
+    loopDeg: number;
+    frames: string[];
+    /** The hub, for the wobble. */
+    hub: [number, number];
+    /** The day frames, tinted per light set (measured from the frames rendered in each set). */
+    tints: LightTints;
+  };
+  /** The water bottle: the spout's tip, the water column, and where a drip lands. */
+  bottle?: { spout: [number, number]; water: Rect; dropTo: number };
+  /** The house's doorway, which darkens while the hamster sleeps by it. */
+  door?: Rect;
+  /** The night light: the two ends of its glowing edge. */
+  hood?: [[number, number], [number, number]];
+  /** The air dust drifts in. */
+  air?: Rect;
+  /** The one small creature that is not a pet: a snail on the bowl's glass, a moth at the light. */
+  critter?: {
+    kind: 'snail' | 'moth';
+    frames: string[];
+    /** Drawn size, grid px (its real size at this habitat's scale). */
+    size: [number, number];
+    fps: number;
+    /** The snail's loop on the glass. */
+    path?: { cx: number; cy: number; rx: number; ry: number };
+  };
 }
 
 /** A habitat's live layer: which one, and the extra plates it needs that no Pixi layer draws. */
@@ -102,6 +145,12 @@ export interface LiveSpec {
    * the water, a bare back wall IS water.
    */
   contents?: string;
+  /**
+   * Step 3: the plant blades as seen through the glass, 4x the grid: G is coverage, R is how far up
+   * the blade (0 at the gravel, 1 at the tip). The water pass sways those pixels, and bends them away
+   * from the fish as it passes. Absent: the plants hold still.
+   */
+  plants?: string;
 }
 
 /**
@@ -192,7 +241,12 @@ export interface Manifest {
  * the gravel; holding a pebble in its mouth; spitting it out; gulping at the surface; looking out at
  * the viewer; resting low at night.
  */
-export type PetAct = 'hover' | 'peck' | 'mouthful' | 'spit' | 'gulp' | 'look' | 'rest' | 'sulk';
+/**
+ * What the pet is doing, for the art and the habitat around it. Step 3 adds the hamster's two that
+ * the habitat reacts to: `dig` (bedding flies as it makes its bed) and `drink` (a bubble rises in the
+ * bottle).
+ */
+export type PetAct = 'hover' | 'peck' | 'mouthful' | 'spit' | 'gulp' | 'look' | 'rest' | 'sulk' | 'dig' | 'drink';
 
 export type PetAnim = 'idle' | 'walk' | 'eat' | 'hungry' | 'sleep' | 'dead' | 'excited';
 
@@ -252,6 +306,8 @@ export interface HabitatScene {
   /** Window-local CSS px, null when the pointer left. Drives glass sheen and parallax. */
   setPointer(x: number | null, y: number | null): void;
   on(event: SceneEvent, cb: () => void): () => void;
+  /** Step 3: the habitat's ambient events (the wheel, the bottle, the moth...), for the audio hooks. */
+  onAmbient(cb: (e: import('./ambient').AmbientEvent) => void): () => void;
   /**
    * Where the behaviour's drives come from, asked once per simulation tick with whether the pet is
    * currently napping (for the nap hysteresis). Null means no needs model: the behaviour falls back

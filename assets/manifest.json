@@ -75,7 +75,47 @@
       },
       "live": {
         "kind": "fish-bowl",
-        "contents": "habitats/fish/bowl/contents.png"
+        "contents": "habitats/fish/bowl/contents.png",
+        "plants": "habitats/fish/bowl/plants.png"
+      },
+      "ambient": {
+        "tints": {
+          "dawn": [
+            0.878,
+            0.798,
+            0.777
+          ],
+          "dusk": [
+            0.841,
+            0.665,
+            0.581
+          ],
+          "night": [
+            0.393,
+            0.494,
+            0.579
+          ]
+        },
+        "critter": {
+          "kind": "snail",
+          "frames": [
+            "critters/snail/f_00.png",
+            "critters/snail/f_01.png",
+            "critters/snail/f_02.png",
+            "critters/snail/f_03.png"
+          ],
+          "size": [
+            18,
+            12
+          ],
+          "fps": 0.7,
+          "path": {
+            "cx": 160,
+            "cy": 114.5,
+            "rx": 49.2,
+            "ry": 13
+          }
+        }
       }
     },
     "hamster/cage": {
@@ -87,7 +127,10 @@
         {
           "name": "bg",
           "file": "habitats/hamster/cage/bg.png",
-          "z": 0
+          "z": 0,
+          "dawn": "habitats/hamster/cage/bg_dawn.png",
+          "dusk": "habitats/hamster/cage/bg_dusk.png",
+          "night": "habitats/hamster/cage/bg_night.png"
         },
         {
           "name": "memorial",
@@ -109,7 +152,10 @@
         {
           "name": "decor_front",
           "file": "habitats/hamster/cage/decor_front.png",
-          "z": 0
+          "z": 0,
+          "dawn": "habitats/hamster/cage/decor_front_dawn.png",
+          "dusk": "habitats/hamster/cage/decor_front_dusk.png",
+          "night": "habitats/hamster/cage/decor_front_night.png"
         }
       ],
       "water": {
@@ -141,6 +187,144 @@
         "y": 84,
         "w": 24,
         "h": 50
+      },
+      "ambient": {
+        "tints": {
+          "dawn": [
+            0.789,
+            0.813,
+            0.809
+          ],
+          "dusk": [
+            0.811,
+            0.625,
+            0.544
+          ],
+          "night": [
+            0.663,
+            0.677,
+            0.691
+          ]
+        },
+        "wheel": {
+          "rect": {
+            "x": 52,
+            "y": 56,
+            "w": 90,
+            "h": 90
+          },
+          "loopDeg": 180.0,
+          "frames": [
+            "habitats/hamster/cage/wheel/f_00.png",
+            "habitats/hamster/cage/wheel/f_01.png",
+            "habitats/hamster/cage/wheel/f_02.png",
+            "habitats/hamster/cage/wheel/f_03.png",
+            "habitats/hamster/cage/wheel/f_04.png",
+            "habitats/hamster/cage/wheel/f_05.png",
+            "habitats/hamster/cage/wheel/f_06.png",
+            "habitats/hamster/cage/wheel/f_07.png",
+            "habitats/hamster/cage/wheel/f_08.png",
+            "habitats/hamster/cage/wheel/f_09.png",
+            "habitats/hamster/cage/wheel/f_10.png",
+            "habitats/hamster/cage/wheel/f_11.png",
+            "habitats/hamster/cage/wheel/f_12.png",
+            "habitats/hamster/cage/wheel/f_13.png",
+            "habitats/hamster/cage/wheel/f_14.png",
+            "habitats/hamster/cage/wheel/f_15.png",
+            "habitats/hamster/cage/wheel/f_16.png",
+            "habitats/hamster/cage/wheel/f_17.png",
+            "habitats/hamster/cage/wheel/f_18.png",
+            "habitats/hamster/cage/wheel/f_19.png",
+            "habitats/hamster/cage/wheel/f_20.png",
+            "habitats/hamster/cage/wheel/f_21.png",
+            "habitats/hamster/cage/wheel/f_22.png",
+            "habitats/hamster/cage/wheel/f_23.png",
+            "habitats/hamster/cage/wheel/f_24.png",
+            "habitats/hamster/cage/wheel/f_25.png",
+            "habitats/hamster/cage/wheel/f_26.png",
+            "habitats/hamster/cage/wheel/f_27.png",
+            "habitats/hamster/cage/wheel/f_28.png",
+            "habitats/hamster/cage/wheel/f_29.png",
+            "habitats/hamster/cage/wheel/f_30.png",
+            "habitats/hamster/cage/wheel/f_31.png",
+            "habitats/hamster/cage/wheel/f_32.png",
+            "habitats/hamster/cage/wheel/f_33.png",
+            "habitats/hamster/cage/wheel/f_34.png",
+            "habitats/hamster/cage/wheel/f_35.png",
+            "habitats/hamster/cage/wheel/f_36.png",
+            "habitats/hamster/cage/wheel/f_37.png",
+            "habitats/hamster/cage/wheel/f_38.png",
+            "habitats/hamster/cage/wheel/f_39.png",
+            "habitats/hamster/cage/wheel/f_40.png",
+            "habitats/hamster/cage/wheel/f_41.png",
+            "habitats/hamster/cage/wheel/f_42.png",
+            "habitats/hamster/cage/wheel/f_43.png"
+          ],
+          "hub": [
+            96.0,
+            96.13
+          ],
+          "tints": {
+            "dawn": [
+              0.536,
+              0.704,
+              0.735
+            ],
+            "dusk": [
+              0.393,
+              0.435,
+              0.48
+            ],
+            "night": [
+              0.12,
+              0.407,
+              0.528
+            ]
+          }
+        },
+        "bottle": {
+          "spout": [
+            190.55,
+            89.81
+          ],
+          "water": {
+            "x": 182.4,
+            "y": 41.3,
+            "w": 16.3,
+            "h": 30.6
+          },
+          "dropTo": 98.8
+        },
+        "hood": [
+          [
+            120.73,
+            30.7
+          ],
+          [
+            242.91,
+            30.7
+          ]
+        ],
+        "air": {
+          "x": 50,
+          "y": 24,
+          "w": 236,
+          "h": 100
+        },
+        "critter": {
+          "kind": "moth",
+          "frames": [
+            "critters/moth/f_00.png",
+            "critters/moth/f_01.png",
+            "critters/moth/f_02.png",
+            "critters/moth/f_03.png"
+          ],
+          "size": [
+            17,
+            14.4
+          ],
+          "fps": 22
+        }
       }
     },
     "hamster/terrarium": {
@@ -152,7 +336,10 @@
         {
           "name": "bg",
           "file": "habitats/hamster/terrarium/bg.png",
-          "z": 0
+          "z": 0,
+          "dawn": "habitats/hamster/terrarium/bg_dawn.png",
+          "dusk": "habitats/hamster/terrarium/bg_dusk.png",
+          "night": "habitats/hamster/terrarium/bg_night.png"
         },
         {
           "name": "memorial",
@@ -174,12 +361,18 @@
         {
           "name": "decor_front",
           "file": "habitats/hamster/terrarium/decor_front.png",
-          "z": 0
+          "z": 0,
+          "dawn": "habitats/hamster/terrarium/decor_front_dawn.png",
+          "dusk": "habitats/hamster/terrarium/decor_front_dusk.png",
+          "night": "habitats/hamster/terrarium/decor_front_night.png"
         },
         {
           "name": "glass",
           "file": "habitats/hamster/terrarium/glass.png",
-          "z": 0
+          "z": 0,
+          "dawn": "habitats/hamster/terrarium/glass_dawn.png",
+          "dusk": "habitats/hamster/terrarium/glass_dusk.png",
+          "night": "habitats/hamster/terrarium/glass_night.png"
         }
       ],
       "water": {
@@ -203,7 +396,7 @@
       "opaqueRect": {
         "x": 14,
         "y": 15,
-        "w": 303,
+        "w": 304,
         "h": 200
       },
       "pantryRect": {
@@ -211,6 +404,114 @@
         "y": 18,
         "w": 24,
         "h": 50
+      },
+      "ambient": {
+        "tints": {
+          "dawn": [
+            0.82,
+            0.787,
+            0.739
+          ],
+          "dusk": [
+            0.627,
+            0.517,
+            0.425
+          ],
+          "night": [
+            0.534,
+            0.58,
+            0.607
+          ]
+        },
+        "wheel": {
+          "rect": {
+            "x": 98,
+            "y": 36,
+            "w": 76,
+            "h": 74
+          },
+          "loopDeg": 16.3636,
+          "frames": [
+            "habitats/hamster/terrarium/wheel/f_00.png",
+            "habitats/hamster/terrarium/wheel/f_01.png",
+            "habitats/hamster/terrarium/wheel/f_02.png",
+            "habitats/hamster/terrarium/wheel/f_03.png",
+            "habitats/hamster/terrarium/wheel/f_04.png",
+            "habitats/hamster/terrarium/wheel/f_05.png",
+            "habitats/hamster/terrarium/wheel/f_06.png",
+            "habitats/hamster/terrarium/wheel/f_07.png"
+          ],
+          "hub": [
+            134.82,
+            69.57
+          ],
+          "tints": {
+            "dawn": [
+              0.327,
+              0.551,
+              0.61
+            ],
+            "dusk": [
+              0.236,
+              0.328,
+              0.41
+            ],
+            "night": [
+              0.267,
+              0.466,
+              0.553
+            ]
+          }
+        },
+        "bottle": {
+          "spout": [
+            223.55,
+            89.4
+          ],
+          "water": {
+            "x": 215.6,
+            "y": 41.6,
+            "w": 16.0,
+            "h": 31.2
+          },
+          "dropTo": 98.4
+        },
+        "hood": [
+          [
+            102.09,
+            36.57
+          ],
+          [
+            238.82,
+            36.57
+          ]
+        ],
+        "air": {
+          "x": 26,
+          "y": 30,
+          "w": 238,
+          "h": 80
+        },
+        "critter": {
+          "kind": "moth",
+          "frames": [
+            "critters/moth/f_00.png",
+            "critters/moth/f_01.png",
+            "critters/moth/f_02.png",
+            "critters/moth/f_03.png"
+          ],
+          "size": [
+            17,
+            14.4
+          ],
+          "fps": 22
+        },
+        "door": {
+          "x": 48.3,
+          "y": 100.3,
+          "w": 27.6,
+          "h": 29.4
+        }
       }
     }
   },

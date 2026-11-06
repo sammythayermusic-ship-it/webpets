@@ -102,3 +102,16 @@ describe('overlayAlphas', () => {
     expect(m).toEqual({ dawn: 0, day: 0.75, dusk: 0, night: 0.25 });
   });
 });
+
+describe('a pinned hour (the dev panel and the harness, Step 3)', () => {
+  it('lights the habitat as that hour would, and the sim sleeps by it', async () => {
+    const { resolveDaylight, resolveNight, daylightForHour } = await import('./daynight');
+    const noon = Date.UTC(2026, 10, 5, 12);
+    expect(resolveDaylight('auto', 7, noon)).toEqual(daylightForHour(7));
+    expect(resolveDaylight('day', 18, noon)).toEqual(daylightForHour(18));
+    expect(resolveNight('auto', 22, noon)).toBe(true);
+    expect(resolveNight('auto', 12, noon)).toBe(false);
+    // wraps rather than breaking on a hour past midnight
+    expect(resolveDaylight('auto', 25, noon)).toEqual(daylightForHour(1));
+  });
+});

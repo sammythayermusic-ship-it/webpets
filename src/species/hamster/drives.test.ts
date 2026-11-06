@@ -125,7 +125,7 @@ describe('hamster drives', () => {
     const meanDist = (os: PetOutput[]): number => os.reduce((s, o) => s + Math.abs(o.x - bed), 0) / os.length;
     expect(meanDist(sad.slice(200))).toBeLessThan(meanDist(plain.slice(200)) * 0.6);
     expect(sad.slice(50).every((o) => o.act === 'sulk')).toBe(true);
-    expect(plain.every((o) => o.act === undefined)).toBe(true);
+    expect(plain.every((o) => o.act !== 'sulk')).toBe(true);
     // Hunger outranks a mood: a hungry hamster sits by the hopper, sulk or no sulk.
     const hungry = run(200, () => ({ hunger: 20, label: 'hungry', drives: { ...calm, cheer: -1 } }), 17);
     expect(hungry.every((o) => o.act === undefined)).toBe(true);

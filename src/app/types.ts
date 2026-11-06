@@ -6,7 +6,7 @@ import type { FeedResult, GraveRecord, Habitat, PetState, SimEvent, Species } fr
 import type { Drives, NeedsState, Stimulus } from '../sim/needs';
 import type { Scale } from '../sim/constants';
 import type { Layering } from '../platform/types';
-import type { Daylight } from './daynight';
+import type { Daylight, LightOverride } from './daynight';
 
 export type DayNightMode = 'auto' | 'day' | 'night';
 
@@ -103,7 +103,7 @@ export interface DevActions {
   /** Sets devClockOffsetMs = 0. Cannot undo skipped time: the pet stays where it is until real time catches up. */
   resetClock(): void;
   /** Dev-forced day/night override for the scene; null = follow settings. */
-  setNightOverride(night: boolean | null): void;
+  setNightOverride(night: LightOverride): void;
   /** Re-anchor any of the four needs at now (0..1 each); the others keep their anchors. */
   setNeeds(values: Partial<Record<'energy' | 'curiosity' | 'comfort' | 'stress', number>>): void;
   /**
@@ -171,7 +171,7 @@ export interface AppState {
   /** The four light sets' weights for the same moment and settings; `night` is its night past 0.5. */
   daylight: Daylight;
   /** Dev panel override; null = follow settings. */
-  nightOverride: boolean | null;
+  nightOverride: LightOverride;
   /** The pet's needs, anchored at the last tick or stimulus. Persisted inside the pet document. */
   needs: NeedsState;
   /** Runtime: the pointer is over the habitat. */

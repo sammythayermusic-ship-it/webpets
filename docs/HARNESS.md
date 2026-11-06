@@ -62,6 +62,7 @@ its own so the next command lands inside the clip.
 | `setPantry` | `{ n }` | `dev.setPantry(n)` |
 | `force` | `{ state }` | `dev.forceState`: `fed` `hungry` `starving` `dead` `asleep` |
 | `night` | `{ value: true\|false\|null }` | `dev.setNightOverride`; `null` follows settings again |
+| `hour` | `{ value: number\|null }` | pins the local hour the light and the sim's night follow (7 morning, 12 noon, 18 evening, 22 night); `null` follows the clock again. Data `{ hour, night, daylight }` |
 | `scale` | `{ steps }` | `actions.setScale(steps)` (eighths of the grid, 6–32) |
 | `layering` | `{ alwaysOnTop?, allDesktops?, overFullscreen?, onDesktop? }` | `actions.setLayering(patch)`; data is the level and behaviour read back off the window, and the settings |
 | `species` | `{ species, habitat }` | `dev.setSpecies`, scheduled 100 ms after the result is written because the app reloads; poll `state` afterwards |

@@ -30,6 +30,8 @@ import { createExpressionGate } from './expression';
 import { createPacer, type Pacer } from './pacer';
 import { createLiveLayer, type LiveLayer, type LiveParticle } from './live/bowlLayer';
 import { spiritsFor } from './live/spine';
+import { createAmbient, type Ambient, type AmbientEvent } from './ambient';
+import { sameDaylight } from '../sim/daylight';
 import { loadBitmap } from './assets';
 import type { HabitatScene, Manifest, ManifestHabitat, ManifestSprite, MoveBounds, PetBehavior, SceneEvent, SceneView } from './types';
 import type { Habitat, Species } from '../sim/types';
@@ -117,7 +119,16 @@ interface Mounted {
   live: LiveLayer | null;
   /** Draw one frame: one Pixi render, or back plates -> live layer -> front plates. */
   draw: (dtMs: number) => void;
+  /** Step 3: the habitat's own life (the wheel, dust, the bottle, the snail or the moth). */
+  ambient: Ambient | null;
 }
+
+/**
+ * Kilometres a hamster covers on the wheel in one tick at full pace: species/hamster/behavior.ts's
+ * WHEEL_KM_PER_TICK (ambient.test.ts pins the two together). The scene turns the per-tick distance
+ * the behaviour reports into how hard the wheel is driven, without knowing which species runs it.
+ */
+export const WHEEL_KM_FULL_PACE = 0.0002;
 
 /**
  * The live layer's quality tier switches to `lean` when a frame costs more than this, averaged, and
@@ -212,6 +223,12 @@ export function createScene(
   /** A tap on the glass waiting for the next step, grid px. */
   let pendingTap: { x: number; y: number } | null = null;
   const listeners: Record<SceneEvent, Set<() => void>> = { bite: new Set(), 'flakes-gone': new Set() };
+  const ambientListeners = new Set<(e: AmbientEvent) => void>();
+  const emitAmbient = (e: AmbientEvent): void => {
+    for (const cb of Array.from(ambientListeners)) cb(e);
+  };
+  /** How hard the hamster is driving the wheel this tick (0 when it is not on it). */
+  let wheelDrive = 0;
   /** Unbanked `speciesData` increments since the last drain. See `drainSpeciesDelta`. */
   let speciesAccum: Record<string, number> = {};
 
@@ -281,10 +298,17 @@ export function createScene(
     }
     if (!prev || prev.label !== next.label || prev.phase !== next.phase) {
       m.layers.setStarving(alive && next.label === 'starving');
+      // Dirty water: a starving fish's bowl clouds over, and clears after a feed.
+      if (m.live) {
+        const dirty = alive && next.label === 'starving';
+        const was = prev !== null && prev.phase === 'alive' && prev.label === 'starving';
+        m.live.setMurk(dirty ? 1 : 0);
+        if (prev && dirty !== was) emitAmbient(dirty ? 'water_murky' : 'water_clear');
+      }
     }
     if (!prev || prev.pantryFraction !== next.pantryFraction) m.layers.setPantryFraction(next.pantryFraction);
     if (!prev || prev.pantryLow !== next.pantryLow) m.layers.setPantryLow(next.pantryLow);
-    if (!prev || prev.night !== next.night) m.layers.setNight(next.night);
+    if (!prev || !sameDaylight(prev.daylight, next.daylight)) m.layers.setDaylight(next.daylight);
     if (!prev || prev.reducedMotion !== next.reducedMotion) {
       m.player.setReducedMotion(next.reducedMotion);
       applyPointer();
@@ -390,6 +414,8 @@ export function createScene(
     if (out.speciesDelta) {
       for (const [k, v] of Object.entries(out.speciesDelta)) speciesAccum[k] = (speciesAccum[k] ?? 0) + v;
     }
+    const km = out.speciesDelta?.['wheelKm'] ?? 0;
+    wheelDrive = km > 0 ? Math.min(1.3, km / WHEEL_KM_FULL_PACE) : 0;
   };
 
   const scene: HabitatScene = {
@@ -486,8 +512,11 @@ export function createScene(
       for (const l of habitat.layers) {
         if (l.file === undefined) continue;
         (l.name === 'bg' ? required : optional).push(l.file);
-        if (l.night !== undefined) optional.push(l.night);
+        for (const v of [l.night, l.dawn, l.dusk]) if (v !== undefined) optional.push(v);
       }
+      // The ambient life's frames: decorative, so lenient.
+      const amb = habitat.ambient;
+      if (amb) for (const f of [...(amb.wheel?.frames ?? []), ...(amb.critter?.frames ?? [])]) optional.push(f);
       for (const [state, st] of Object.entries(spriteDef.states)) {
         // Fans out: a strip contributes one path, a rendered sequence one per frame. Every idle frame
         // is required, which is stricter than before and deliberate — a pet missing a frame of its
@@ -500,7 +529,7 @@ export function createScene(
       const none = Promise.resolve(null);
       const bitmap = (file: string | undefined, lenient: boolean): Promise<ImageBitmap | null> =>
         liveSpec === undefined || file === undefined ? none : lenient ? loadBitmap(file).catch(() => null) : loadBitmap(file);
-      const [requiredTex, optionalTex, plateDay, plateNight, decorDay, decorNight, contents] = await Promise.all([
+      const [requiredTex, optionalTex, plateDay, plateNight, decorDay, decorNight, contents, plateDawn, plateDusk, decorDawn, decorDusk, plants] = await Promise.all([
         loadTextures(required, false),
         loadTextures(optional, true),
         // The live water refracts the bg plate AND the near decor, so it needs their pixels as
@@ -511,6 +540,11 @@ export function createScene(
         bitmap(decorLayer?.file, true),
         bitmap(decorLayer?.night, true),
         bitmap(liveSpec?.contents, true),
+        bitmap(bgLayer?.dawn, true),
+        bitmap(bgLayer?.dusk, true),
+        bitmap(decorLayer?.dawn, true),
+        bitmap(decorLayer?.dusk, true),
+        bitmap(liveSpec?.plants, true),
       ]);
       const textures = new Map([...optionalTex, ...requiredTex]);
 
@@ -555,6 +589,16 @@ export function createScene(
       const sheen = createSheen();
       if (aquatic) layers.slots.glass.addChild(sheen.sprite);
 
+      // Step 3: the habitat's own life. The wheel and the doorway sit behind the pet, dust and drips
+      // and the snail in front of it under the near decor, the moth outside the glass.
+      const ambient = habitat.ambient ? createAmbient(habitat.ambient, textures, rng) : null;
+      if (ambient) {
+        layers.slots.decor_back.addChild(ambient.back);
+        layers.slots.fx.addChild(ambient.front);
+        layers.slots.glass.addChild(ambient.top);
+        ambient.onEvent(emitAmbient);
+      }
+
       const stage: Container = app.stage;
       stage.addChild(layers.root);
       stage.addChild(layers.front);
@@ -565,7 +609,7 @@ export function createScene(
           gl: sharedGl,
           canvas: sharedCanvas,
           habitat,
-          plates: { day: plateDay, night: plateNight, decorDay, decorNight, contents },
+          plates: { day: plateDay, night: plateNight, decorDay, decorNight, contents, dawn: plateDawn, dusk: plateDusk, decorDawn, decorDusk, plants },
           rng,
         });
         live.resetPose(habitat.petAnchor[0], habitat.petAnchor[1], 1);
@@ -595,7 +639,7 @@ export function createScene(
         const r = m.app.renderer;
         r.resetState();
         r.render({ container: m.layers.root, clear: true });
-        m.live.setNight(m.layers.nightT());
+        m.live.setDaylight(m.layers.daylight());
         m.live.render(dtMs);
         r.resetState();
         r.render({ container: m.layers.front, clear: false });
@@ -640,6 +684,14 @@ export function createScene(
         m.bubbles.update(dtMs, rng);
         if (m.live) m.live.setParticles(particlesOf(m.flakes.container, flakeParts), particlesOf(m.bubbles.container, bubbleParts));
         m.layers.update(dtMs);
+        m.ambient?.update({
+          dtMs,
+          nowMs: Date.now(),
+          light: m.layers.daylight(),
+          alive: view?.phase === 'alive',
+          pet: { x: drawnX, y: drawnY, anim: m.player.state(), act: lastAct, facing: lastFacing },
+          wheelDrive,
+        });
         const t0 = performance.now();
         m.draw(dtMs);
         costMs = costMs === 0 ? performance.now() - t0 : costMs * 0.9 + (performance.now() - t0) * 0.1;
@@ -687,7 +739,7 @@ export function createScene(
         advance(Math.min(MAX_ACC_MS, now - lastAdvanceAt));
       });
 
-      m = { app, layers, player, behavior: species.createBehavior(layout), bounds, flakes, bubbles, sheen, advance, tick, watchdog, live, draw };
+      m = { app, layers, player, behavior: species.createBehavior(layout), bounds, flakes, bubbles, sheen, advance, tick, watchdog, live, draw, ambient };
       layoutHabitat();
       if (view) applyView(view, null);
       applyPointer();
@@ -749,6 +801,12 @@ export function createScene(
       applyPointer();
     },
 
+    onAmbient(cb) {
+      ambientListeners.add(cb);
+      return () => {
+        ambientListeners.delete(cb);
+      };
+    },
     on(event, cb) {
       listeners[event].add(cb);
       return () => {
@@ -820,7 +878,9 @@ export function createScene(
           : null,
         attention: Number(attention.toFixed(3)),
         expression: expression.current(),
-        ...(m.live ? { live: { tier: m.live.tier(), spine: { ...m.live.spineState() } as Record<string, number> } } : {}),
+        ...(m.live ? { live: { tier: m.live.tier(), murk: Math.round(m.live.murk() * 100) / 100, spine: { ...m.live.spineState() } as Record<string, number> } } : {}),
+        light: Object.fromEntries(Object.entries(m.layers.daylight()).map(([k, v]) => [k, Math.round(v * 100) / 100])),
+        ...(m.ambient ? { ambient: m.ambient.debug() } : {}),
       };
     },
 
@@ -853,10 +913,12 @@ export function createScene(
       cur.sheen.destroy();
       cur.player.destroy();
       cur.live?.destroy();
+      cur.ambient?.destroy();
       cur.layers.destroy();
       cur.app.destroy({ removeView: true }, { children: true });
       listeners.bite.clear();
       listeners['flakes-gone'].clear();
+      ambientListeners.clear();
     },
   };
 
