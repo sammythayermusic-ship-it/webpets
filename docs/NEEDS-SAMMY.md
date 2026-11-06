@@ -49,6 +49,15 @@ out of iCloud (`~/.cache/webpets/target`, about 3 GB), but the repo itself is st
 Desktop with ~13 GB free. Moving it (or turning off "Optimize Mac Storage") is the one fix; emptying
 the Trash and deleting `~/Desktop/webpets/src-tauri/target` (5.4 GB) would buy time.
 
+### Update, Step 3 (2026-11-05): iCloud has now evicted git itself
+865 files of the Desktop worktree were evicted overnight, including most of `src/`, the docs, and
+578 of git's own object files, so git in `~/Desktop/webpets` failed to read the repo ("mmap failed:
+Operation timed out") and `brctl download` brought nothing back in ten minutes. Nothing was lost:
+GitHub has every commit. Step 3 is being built in a clone outside iCloud, `~/.cache/webpets/work`,
+pushed to the same branch. Moving `~/Desktop/webpets` out of iCloud (or turning off "Optimize Mac
+Storage") is still the fix; until then, a fast-forward of `main` in your folder may fail when git
+cannot read its own files, and I will say so in the report when it does.
+
 ### Bubbles died on Oct 29 (2026-10-30) — nothing blocked
 Your pet in `WebPets.app` ran out of food while the app was not running (the clock never stops),
 and died about a day before the Step A build was installed. The app is showing the "While you were

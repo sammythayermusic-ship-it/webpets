@@ -1880,3 +1880,46 @@ live-wallpaper apps do it; a widget-sized tank and a wallpaper tank are the same
   of eyeballing thumbnails. And `newPet` does not clear your team's mood (it is yours, in
   `world.json`), so a take recorded after a forced loss starts with a sulking pet.
 
+
+## 2026-11-05 — PHASE-NEXT Step 3 plan: environments and ambient life
+
+Sammy passed the checkpoint G clips. Step 3 next, on C, for the bowl, the terrarium and the cage.
+
+**Where it stands.** The app already computes time of day as four weights (dawn, day, dusk, night,
+`src/app/daynight.ts`), and the bowl has a plate set for each, rendered on Oct 28. But the renderer
+never used them: the layer stack only crossfades a night plate, so the bowl's dawn and dusk renders
+have never been on screen, and the live layer's light only knows day and night. The cage and the
+terrarium have a day plate and a blue tint. The bowl's water already moves (Step B: surface waves,
+caustics on the gravel, light shafts, bubbles that wobble). The hamster's wheel is baked into the
+plate and has never turned.
+
+**The plan, in the brief's order.**
+1. *Time of day that does something.* The layer stack crossfades all four plate sets by the weights
+   (the exact blend `overlayAlphas` already computes), eased, with the tint kept only for art that has
+   no variant. The live layer's lights get dawn and dusk rigs matching the plates' (low warm key from
+   the right in the morning, from the left in the evening). The cage and the terrarium get dawn, dusk
+   and night plates from the bowl's rigs (`assets/3d/scripts/h_plates.py`), plus a small clip lamp on
+   each, built in the script, which is the only light at night. A dev/harness `hour` pins the clock
+   hour so each time of day can be shown on demand.
+2. *Water that is alive.* Dirty water: the water clouds green-brown while the fish is starving and
+   clears over about a minute after a feed. The plants sway, and bend away when the fish passes
+   (a plant mask rendered from the bowl camera; the water pass displaces only those pixels, a grid px
+   or so).
+3. *Air that is alive.* Dust motes drift in the light (by day in the key light's shaft, at night
+   round the lamp). The wheel is its own layer: rendered turning, one rung's worth of frames per
+   light set, spun by the hamster and coasting down after it hops off. The bottle's bubble rises when
+   it drinks and a drop falls now and then. Bedding scatters where it digs: a short dig before it
+   beds down (a new, tested micro-action).
+4. *Background life.* A snail on the bowl's glass, whose place is a function of the wall clock (an
+   inch an hour, so it is somewhere else each time you look). A moth round the lamp at night in both
+   hamster homes. Both rendered from primitives; neither can die or take attention.
+5. *Decor that reacts.* Plant sway and bend (2), the wheel's wobble and coast (3), the bottle's drip
+   (3), the house's doorway darker while the hamster is asleep inside its shadow.
+6. *Sound hooks.* Every ambient event above is a named event the audio module plays from
+   `assets/audio/<species>/<event>.ogg` if the file exists; none do yet.
+
+Checkpoint 3: each habitat recorded at morning, noon, evening and night with the pet asleep.
+
+**Working copy.** iCloud evicted most of the Desktop worktree and even git's own object files
+(865 files; `brctl download` returned nothing in ten minutes), so this step is built in a clone
+outside iCloud (`~/.cache/webpets/work`), pushed to the same branch. Logged in NEEDS-SAMMY.
