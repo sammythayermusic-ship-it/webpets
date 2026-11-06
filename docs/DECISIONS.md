@@ -1923,3 +1923,35 @@ Checkpoint 3: each habitat recorded at morning, noon, evening and night with the
 **Working copy.** iCloud evicted most of the Desktop worktree and even git's own object files
 (865 files; `brctl download` returned nothing in ten minutes), so this step is built in a clone
 outside iCloud (`~/.cache/webpets/work`), pushed to the same branch. Logged in NEEDS-SAMMY.
+
+## 2026-11-05 — Step 3 built: what changed on the way
+
+- **Dawn and dusk had three reasons never to show, not one.** The manifest parser kept only `night`
+  (dropping `dawn`, `dusk`, and would have dropped `ambient` and `live.plants`); the layer stack only
+  crossfaded night; and `sceneInputsChanged` in `main.ts` re-sent the view only when `night` flipped.
+  All three are fixed. The light-weight maths moved to `src/sim/daylight.ts` (pure) so the renderer
+  can use it without importing `app`; `app/daynight.ts` re-exports it.
+- **A pinned hour rides on the night override.** `nightOverride` became `LightOverride`
+  (boolean | hour | null); the dev panel and harness `hour` set a number, and the sim's night follows
+  the same curve.
+- **The hamster homes were re-rendered for every light,** day included, because the light bar is new
+  geometry. Day matches the old plates (wp_render2 never included `WP_TerrLight` or the bowl's bounce
+  card; the first trial with both was washed out and lost the cast shadow). The terrarium's alpha box
+  grew one grid px at the shadow's right edge (`TERR_OPAQUE_RECT` w 303 → 304).
+- **Blender gotcha worth keeping:** changing a render flag (`is_holdout`, `hide_render`) while
+  iterating `collection.all_objects` invalidates the collection's cache and the loop stops after the
+  first object. Take `list(...)` first. It cost a trial render of the wheel and of the plant mask.
+- **The wheel ships day frames only,** tinted per light set by colour ratios measured from frames
+  rendered in each set (`h_finish.py`). Four sets of the cage's 44 frames would be about 90 MB of
+  texture for one prop. The cage needs 44 frames because its 4 spokes and 22 rungs only repeat every
+  180 degrees; the terrarium's plain 22-rung wheel loops in 8 frames over one rung.
+- **The wheel's top speed is set by what frames can show:** a rung must move under half its spacing
+  per 60 fps frame or it appears to run backwards (8.6 rad/s); full pace is 5.2.
+- **Sprite pets take the room's light** (the habitat's measured tint), so a hamster at dusk or night
+  is lit like its home. The live fish keeps its own rig, which now blends four rigs and swings the
+  key with the hour.
+- **The checkpoint is recorded from the canvas** (harness `record`), so it needs no cursor, typing or
+  screen capture, only an unlocked screen. A fish naps by day only after five quiet minutes
+  (`NAP_QUIET_MS`), so the driver waits that long before the bowl's clips.
+- **Playwright's browsers had been purged** with `~/Library/Caches` (disk pressure); reinstalled with
+  `npx playwright install chromium` (94 MB).
