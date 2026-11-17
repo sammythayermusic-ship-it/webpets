@@ -1955,3 +1955,34 @@ outside iCloud (`~/.cache/webpets/work`), pushed to the same branch. Logged in N
   (`NAP_QUIET_MS`), so the driver waits that long before the bowl's clips.
 - **Playwright's browsers had been purged** with `~/Library/Caches` (disk pressure); reinstalled with
   `npx playwright install chromium` (94 MB).
+
+## 2026-11-17 — PHASE-NEXT Step 4 plan: animation quality
+
+Sammy passed checkpoint 3 ("Go to Step 4").
+
+**Where it stands.** The goldfish is a live rig whose every channel is eased (Step C), so it never
+cuts; what it lacks is weight: no brake when it stops, no curl when it bolts, no settle after. The
+hamster is sprites: six states, `dead` one frame, `walk` with no turn (a facing change is a cosine
+squash of the same drawing), and every change of state a hard cut. The acts the habitat now reacts to
+(`dig`, `drink`, the wheel run) are drawn with borrowed poses or none.
+
+**The plan.**
+1. *Full state coverage for the hamster,* rendered from the same rig (`assets/3d/scripts/h_anim.py`
+   keys new frame blocks on the rig in the loaded scene and renders them; the .blend is not saved):
+   `turn` (a real yaw through facing you), `liedown` and `wake` (into and out of sleep), `die` (the
+   fall onto its side that ends on `dead`), `startle`, `dig`, `drink`, `run`; and `eat` again, with
+   cheek pouches that fill as it chews.
+2. *Blends, not cuts.* The sprite player crossfades the outgoing frame into the incoming one, and a
+   state can name a transition to enter or leave by (`enterVia`, `exitVia` in the manifest), so idle
+   -> sleep plays the lie-down and sleep -> anything plays the wake. A turn plays the turn frames
+   instead of squashing the sprite. A state named after the behaviour's act (dig, drink, run,
+   startle) is played while that act lasts.
+3. *Secondary motion:* ears lag the body in the new blocks, the cheeks bounce as it chews; the fish's
+   pectorals flare forward when it brakes and its tail kicks when it sets off.
+4. *Weight:* a squash-and-settle spring on the sprite when the hamster stops, lands or finishes a
+   turn; the fish dips its nose and glides to a stop, and curls into a C before a startled dart.
+5. *Registration:* every new state's anchor is measured from its frames (alpha centroid against
+   idle's), and the art tests cover them.
+
+Checkpoint 4: a before/after recording of each pet doing the same things (wander, turn, stop, a tap,
+eating, bedtime), side by side. "Before" is recorded from the Step 3 build before anything changes.
