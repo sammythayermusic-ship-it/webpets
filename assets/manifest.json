@@ -941,7 +941,9 @@
           "anchor": [
             -0.26,
             6.59
-          ]
+          ],
+          "enterVia": "liedown",
+          "exitVia": "wake"
         },
         "dead": {
           "source": {
@@ -958,6 +960,333 @@
           "anchor": [
             -0.68,
             7.18
+          ],
+          "enterVia": "die"
+        },
+        "turn": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/hamster/turn/turn_0001.png",
+              "sprites/hamster/turn/turn_0002.png",
+              "sprites/hamster/turn/turn_0003.png",
+              "sprites/hamster/turn/turn_0004.png",
+              "sprites/hamster/turn/turn_0005.png",
+              "sprites/hamster/turn/turn_0006.png",
+              "sprites/hamster/turn/turn_0007.png"
+            ]
+          },
+          "frames": 7,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "loop": false,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        },
+        "liedown": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/hamster/liedown/liedown_0001.png",
+              "sprites/hamster/liedown/liedown_0002.png",
+              "sprites/hamster/liedown/liedown_0003.png",
+              "sprites/hamster/liedown/liedown_0004.png",
+              "sprites/hamster/liedown/liedown_0005.png",
+              "sprites/hamster/liedown/liedown_0006.png",
+              "sprites/hamster/liedown/liedown_0007.png",
+              "sprites/hamster/liedown/liedown_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": false,
+          "anchor": [
+            0.0,
+            0.0
+          ],
+          "returnTo": "sleep",
+          "offsets": [
+            [
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              -0.0
+            ],
+            [
+              0.023,
+              -0.585
+            ],
+            [
+              0.087,
+              -2.204
+            ],
+            [
+              0.165,
+              -4.193
+            ],
+            [
+              0.232,
+              -5.879
+            ],
+            [
+              0.26,
+              -6.59
+            ]
+          ]
+        },
+        "wake": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/hamster/wake/wake_0001.png",
+              "sprites/hamster/wake/wake_0002.png",
+              "sprites/hamster/wake/wake_0003.png",
+              "sprites/hamster/wake/wake_0004.png",
+              "sprites/hamster/wake/wake_0005.png",
+              "sprites/hamster/wake/wake_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": false,
+          "anchor": [
+            -0.26,
+            6.59
+          ],
+          "returnTo": "idle",
+          "offsets": [
+            [
+              -0.0,
+              0.0
+            ],
+            [
+              -0.067,
+              1.709
+            ],
+            [
+              -0.193,
+              4.881
+            ],
+            [
+              -0.26,
+              6.59
+            ],
+            [
+              -0.26,
+              6.59
+            ],
+            [
+              -0.26,
+              6.59
+            ]
+          ]
+        },
+        "die": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/hamster/die/die_0001.png",
+              "sprites/hamster/die/die_0002.png",
+              "sprites/hamster/die/die_0003.png",
+              "sprites/hamster/die/die_0004.png",
+              "sprites/hamster/die/die_0005.png",
+              "sprites/hamster/die/die_0006.png",
+              "sprites/hamster/die/die_0007.png",
+              "sprites/hamster/die/die_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": false,
+          "anchor": [
+            0.0,
+            0.0
+          ],
+          "returnTo": "dead",
+          "offsets": [
+            [
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              -0.0
+            ],
+            [
+              0.023,
+              -0.242
+            ],
+            [
+              0.102,
+              -1.08
+            ],
+            [
+              0.238,
+              -2.515
+            ],
+            [
+              0.431,
+              -4.548
+            ],
+            [
+              0.68,
+              -7.18
+            ]
+          ]
+        },
+        "startle": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/hamster/startle/startle_0001.png",
+              "sprites/hamster/startle/startle_0002.png",
+              "sprites/hamster/startle/startle_0003.png",
+              "sprites/hamster/startle/startle_0004.png",
+              "sprites/hamster/startle/startle_0005.png"
+            ]
+          },
+          "frames": 5,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "loop": false,
+          "anchor": [
+            0.0,
+            0.0
+          ],
+          "returnTo": "idle"
+        },
+        "dig": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/hamster/dig/dig_0001.png",
+              "sprites/hamster/dig/dig_0002.png",
+              "sprites/hamster/dig/dig_0003.png",
+              "sprites/hamster/dig/dig_0004.png",
+              "sprites/hamster/dig/dig_0005.png",
+              "sprites/hamster/dig/dig_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        },
+        "drink": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/hamster/drink/drink_0001.png",
+              "sprites/hamster/drink/drink_0002.png",
+              "sprites/hamster/drink/drink_0003.png",
+              "sprites/hamster/drink/drink_0004.png",
+              "sprites/hamster/drink/drink_0005.png",
+              "sprites/hamster/drink/drink_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        },
+        "run": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/hamster/run/run_0001.png",
+              "sprites/hamster/run/run_0002.png",
+              "sprites/hamster/run/run_0003.png",
+              "sprites/hamster/run/run_0004.png",
+              "sprites/hamster/run/run_0005.png",
+              "sprites/hamster/run/run_0006.png",
+              "sprites/hamster/run/run_0007.png",
+              "sprites/hamster/run/run_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
           ]
         }
       }

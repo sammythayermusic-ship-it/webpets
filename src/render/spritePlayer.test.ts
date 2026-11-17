@@ -225,3 +225,106 @@ describe('stride clock, for states that declare a stridePx', () => {
     expect(p.sprite.texture).toBe(before);
   });
 });
+
+describe('Step 4: blends, transitions, turns and weight', () => {
+  /** A hamster-shaped def: idle, walk, sleep entered by liedown and left by wake, dead by die, a turn. */
+  function makeRich() {
+    const strip = (n: number) => ({ source: { kind: 'strip' as const, file: `s${n}.png` }, frames: n, sequence: Array.from({ length: n }, (_, i) => i) });
+    const def: ManifestSprite = {
+      frame: [80, 80],
+      fps: 12,
+      body: { w: 56, h: 40 },
+      states: {
+        idle: { ...strip(4), loop: true },
+        walk: { ...strip(4), loop: true, stridePx: 16 },
+        sleep: { ...strip(4), loop: true, enterVia: 'liedown', exitVia: 'wake' },
+        liedown: { ...strip(6), loop: false, returnTo: 'sleep' },
+        wake: { ...strip(4), loop: false, returnTo: 'idle' },
+        dead: { ...strip(4), loop: true, enterVia: 'die' },
+        die: { ...strip(6), loop: false, returnTo: 'dead' },
+        turn: { ...strip(7), loop: false },
+      },
+    };
+    const textures = new Map([4, 6, 7].map((n) => [`s${n}.png`, tex(80 * n, 80)]));
+    return createSpritePlayer(def, textures, { turnMs: TURN_MS });
+  }
+  const run = (p: ReturnType<typeof makeRich>, ms: number): string[] => {
+    const seen: string[] = [];
+    for (let t = 0; t < ms; t += 16) {
+      p.advance(16);
+      if (seen.at(-1) !== p.state()) seen.push(p.state());
+    }
+    return seen;
+  };
+
+  it('lies down before it sleeps, and gets up before it does anything else', () => {
+    const p = makeRich();
+    p.play('idle');
+    p.play('sleep');
+    expect(p.state()).toBe('liedown');
+    expect(run(p, 1000)).toEqual(['liedown', 'sleep']);
+    p.play('walk');
+    expect(p.state()).toBe('wake');
+    expect(run(p, 1000)).toEqual(['wake', 'walk']);
+  });
+
+  it('falls before it lies dead, and a request repeated every tick does not restart the fall', () => {
+    const p = makeRich();
+    p.play('idle');
+    p.play('dead');
+    for (let i = 0; i < 20; i += 1) {
+      p.play('dead');
+      p.advance(16);
+    }
+    expect(run(p, 1000).at(-1)).toBe('dead');
+  });
+
+  it('a pet that is already asleep or dead when the scene mounts is shown so, without the transition', () => {
+    const p = makeRich();
+    p.play('sleep'); // the first request after creation
+    expect(p.state()).toBe('sleep');
+    p.jump('dead');
+    expect(p.state()).toBe('dead');
+  });
+
+  it('dissolves the outgoing frame over the incoming one instead of cutting', () => {
+    const p = makeRich();
+    p.play('idle');
+    p.play('walk');
+    const ghost = p.view.children[1] as { alpha: number; visible: boolean };
+    expect(ghost.visible).toBe(true);
+    expect(ghost.alpha).toBeCloseTo(1, 5);
+    p.advance(75);
+    expect(ghost.alpha).toBeGreaterThan(0.3);
+    expect(ghost.alpha).toBeLessThan(0.7);
+    p.advance(100);
+    expect(ghost.visible).toBe(false);
+  });
+
+  it('turns with real frames, unflipped, and lands on the new facing at full width', () => {
+    const p = makeRich();
+    p.play('idle');
+    p.setFacing(-1, true);
+    p.advance(100);
+    // mid-turn: drawn unflipped (the turn frames carry the yaw), never squashed to a sliver
+    expect(p.sprite.scale.x).toBeGreaterThan(0.5);
+    p.advance(400);
+    expect(p.sprite.scale.x).toBeLessThan(-0.9);
+  });
+
+  it('gives a little under its weight when it stops, then settles back, feet where they were', () => {
+    const p = makeRich();
+    p.setPosition(100, 100);
+    p.play('walk');
+    p.play('idle');
+    let lowest = 0;
+    for (let i = 0; i < 6; i += 1) {
+      p.advance(16);
+      lowest = Math.max(lowest, 1 - Math.abs(p.sprite.scale.y));
+    }
+    expect(lowest).toBeGreaterThan(0.01); // it squashed
+    for (let i = 0; i < 120; i += 1) p.advance(16);
+    expect(Math.abs(p.sprite.scale.y)).toBeCloseTo(1, 4); // and came back
+    expect(p.sprite.position.y).toBeCloseTo(100, 4);
+  });
+});

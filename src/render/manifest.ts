@@ -268,8 +268,10 @@ function spriteState(v: unknown, path: string): ManifestSpriteState {
     if (!Array.isArray(v['offsets']) || v['offsets'].length !== frames) {
       throw new ManifestError(`${path}.offsets`, `expected ${frames} [dx, dy] pairs`);
     }
-    out.offsets = v['offsets'].map((o, i) => pair(o, `${path}.offsets[${i}]`));
+    out.offsets = v['offsets'].map((o, i) => numPair(o, `${path}.offsets[${i}]`));
   }
+  if (v['enterVia'] !== undefined) out.enterVia = str(v['enterVia'], `${path}.enterVia`);
+  if (v['exitVia'] !== undefined) out.exitVia = str(v['exitVia'], `${path}.exitVia`);
   return out;
 }
 
@@ -282,6 +284,10 @@ function sprite(v: unknown, path: string): ManifestSprite {
   const states: Record<string, ManifestSpriteState> = {};
   for (const [name, def] of Object.entries(statesIn)) states[name] = spriteState(def, `${path}.states.${name}`);
   for (const [name, def] of Object.entries(states)) {
+    for (const k of ['enterVia', 'exitVia'] as const) {
+      const via = def[k];
+      if (via !== undefined && states[via] === undefined) throw new ManifestError(`${path}.states.${name}.${k}`, `unknown state "${via}"`);
+    }
     if (def.returnTo !== undefined && states[def.returnTo] === undefined) {
       throw new ManifestError(`${path}.states.${name}.returnTo`, `unknown state "${def.returnTo}"`);
     }

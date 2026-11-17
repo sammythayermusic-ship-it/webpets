@@ -14,14 +14,22 @@
 // per-tick constant in the behaviour — px/tick speeds, cooldowns, the wander rate — and invalidated
 // their tests. Interpolating a slow, correct simulation is the cheaper and safer half of that trade.
 
-import { Rectangle, Sprite, Texture } from 'pixi.js';
+import { Container, Rectangle, Sprite, Texture } from 'pixi.js';
 import { PET_FPS } from '../sim/constants';
 import { createSequencer, type SequenceDef } from './sequencer';
 import type { Expression } from './expression';
 import type { ManifestSprite, PetAnim } from './types';
 
 export interface SpritePlayer {
+  /** The drawn pet. Positioned, scaled and textured here; the scene adds `view`, not this. */
   readonly sprite: Sprite;
+  /**
+   * What the scene adds to its slot and shows, hides and tints: the pet, and above it the fading
+   * last frame of the state it just left (Step 4: blends, not cuts).
+   */
+  readonly view: Container;
+  /** Show `state` at once: no transition, no crossfade. For a pet that is already asleep or dead when the scene mounts. */
+  jump(state: string): void;
   play(state: string): void;
   /**
    * Advance every render-rate clock this player owns.
@@ -48,6 +56,21 @@ export interface SpritePlayer {
  * art's resolution leaves the bob alone.
  */
 const FALLBACK_REF_FRAME = 80;
+
+/** How long the outgoing state's last frame takes to fade off the incoming one. */
+export const CROSSFADE_MS = 150;
+/** A turn with real frames plays them over at least this long (they are drawn, not squashed). */
+export const TURN_FRAMES_MS = 360;
+/**
+ * The settle: a damped spring on squash, kicked when the pet stops, lands or finishes a turn. Stiff
+ * and well damped, so it reads as weight (a small give and back) rather than as a wobble.
+ */
+const SETTLE_K = 520;
+const SETTLE_C = 26;
+/** Kick sizes, as the spring's starting velocity (squash units per second). */
+const KICK_STOP = 0.9;
+const KICK_LAND = 1.6;
+const KICK_TURN = 0.6;
 
 /** Ceiling on frames advanced in one `advance()`, so a long stall cannot spin the sequencer. */
 const MAX_FRAMES_PER_ADVANCE = 16;
@@ -160,6 +183,31 @@ export function createSpritePlayer(
   const seq = createSequencer(sequences, options.initial ?? 'idle');
 
   const sprite = new Sprite({ texture: fallbackBase.texture, anchor: 0.5 });
+  // The outgoing state's last frame, drawn over the new one and fading: a cut becomes a dissolve.
+  const ghost = new Sprite({ texture: fallbackBase.texture, anchor: 0.5 });
+  ghost.alpha = 0;
+  ghost.visible = false;
+  const view = new Container({ label: 'pet' });
+  view.addChild(sprite, ghost);
+  let fadeClock = CROSSFADE_MS;
+  /** States to play in order after the current transition ends (exitVia, enterVia, the target). */
+  let queue: string[] = [];
+  /** What the caller last asked for, so a request repeated every tick does not restart a transition. */
+  let requested: string = options.initial ?? 'idle';
+  /** True until the first play() after creation or a resetPose: that one jumps. */
+  let fresh = true;
+  // The settle spring: squash amount and its velocity.
+  let settle = 0;
+  let settleV = 0;
+  const kick = (v: number): void => {
+    if (reducedMotion) return;
+    settleV += v;
+  };
+  const turnDef = def.states['turn'];
+  const hasTurnFrames = frames.has('turn') && turnDef !== undefined;
+  const turnSpan = (): number => (hasTurnFrames ? Math.max(turnMs, TURN_FRAMES_MS) : turnMs);
+  /** States a turn is drawn from: standing or walking. Anything else still flips with the squash. */
+  const turnsFrom = (st: string): boolean => st === 'idle' || st === 'walk';
   let px = 0;
   let py = 0;
   let reducedMotion = false;
@@ -183,11 +231,21 @@ export function createSpritePlayer(
   /** The flip tween: scale.x sweeps turnFrom -> turnTo as turnClock runs 0 -> turnMs. */
   let turnFrom: 1 | -1 = 1;
   let turnTo: 1 | -1 = 1;
-  let turnClock = turnMs;
+  let turnClock = Number.POSITIVE_INFINITY;
 
   const refresh = (): void => {
-    const state = seq.state();
-    const frame = seq.frame();
+    let state = seq.state();
+    let frame = seq.frame();
+    // A turn with real frames: while the flip is under way, draw the turn instead of squashing the
+    // standing pose. Always unflipped: frame 0 faces right and the last frame IS the mirrored first
+    // frame, so a right-to-left turn plays forward and a left-to-right one backward.
+    const span = turnSpan();
+    const turningNow = hasTurnFrames && !reducedMotion && turnClock < span && turnFrom !== turnTo && turnsFrom(state);
+    if (turningNow && turnDef) {
+      const k = Math.min(turnDef.frames - 1, Math.floor((turnClock / span) * turnDef.frames));
+      frame = turnTo === -1 ? k : turnDef.frames - 1 - k;
+      state = 'turn';
+    }
     const art = frames.get(state);
     let dx = 0;
     let dy = 0;
@@ -235,32 +293,83 @@ export function createSpritePlayer(
     // the fish's vertical axis actually projects to. It is also steeper at the pinch than a linear
     // ramp, so the sprite spends less time as a zero-width sliver. This replaces the pixel-art device
     // of drawing one 8 fps frame at half width.
-    const t = turnClock / turnMs;
-    const flip = t >= 1 ? turnTo : turnFrom * Math.cos(Math.PI * t);
+    const t = turnClock / span;
+    const flip = turningNow ? 1 : t >= 1 || hasTurnFrames ? turnTo : turnFrom * Math.cos(Math.PI * t);
+    const facing = turningNow ? 1 : turnTo;
+    // The settle: squash down and spread a little, about the feet rather than the middle, so the
+    // pet gives under its own weight instead of shrinking toward its centre.
+    const sq = reducedMotion ? 0 : Math.max(-0.12, Math.min(0.12, settle));
+    const settleY = 1 - sq;
+    const settleX = 1 + 0.6 * sq;
+    const feet = (def.body.h / 2) * ds;
     // texScale converts the texture's px to the frame's logical px, so the pet is drawn at the same
     // size whatever resolution the art was rendered at.
-    sprite.scale.set(flip * texScale, sy * texScale);
+    sprite.scale.set(flip * texScale * settleX, sy * texScale * settleY);
     // No rounding: quantising to whole grid px was the pixel-art contract and would step the very
     // motion this is meant to smooth.
-    sprite.position.set(px + dx * turnTo, py + dy);
+    sprite.position.set(px + dx * facing, py + dy + feet * (1 - settleY));
+  };
+
+  /** Change state, with the outgoing frame left to fade over the incoming one unless told not to. */
+  const startState = (state: string, blend: boolean): void => {
+    const before = seq.state();
+    if (blend && before !== state && !reducedMotion) {
+      ghost.texture = sprite.texture;
+      ghost.anchor.copyFrom(sprite.anchor);
+      ghost.scale.copyFrom(sprite.scale);
+      ghost.position.copyFrom(sprite.position);
+      ghost.alpha = 1;
+      ghost.visible = true;
+      fadeClock = 0;
+    }
+    seq.play(state);
+    // Only on a real state change, so a new state gets a whole frame's worth of time. Deliberately
+    // not reset for a `returnTo` handover inside advance(), which should flow continuously.
+    if (seq.state() !== before) {
+      frameAcc = 0;
+      distAcc = 0;
+      // Weight: stopping, and landing from a startle, give a little under the body.
+      if (before === 'walk' && state === 'idle') kick(KICK_STOP);
+    }
+    refresh();
   };
 
   refresh();
 
   return {
     sprite,
+    view,
     play(state) {
-      const before = seq.state();
-      seq.play(state);
-      // Only on a real state change, so a new state gets a whole frame's worth of time. Deliberately
-      // not reset for a `returnTo` handover inside advance(), which should flow continuously.
-      if (seq.state() !== before) {
-        frameAcc = 0;
-        distAcc = 0;
+      if (fresh) {
+        fresh = false;
+        requested = state;
+        queue = [];
+        startState(state, false);
+        return;
       }
-      refresh();
+      if (state === requested) return;
+      requested = state;
+      const cur = seq.state();
+      // The way there: leave by the current state's exit, enter by the target's entrance, then the
+      // target. A transition only counts if its art is there; otherwise it is simply skipped.
+      const curDef = def.states[cur];
+      const toDef = def.states[state];
+      const path: string[] = [];
+      if (curDef?.exitVia && frames.has(curDef.exitVia) && cur !== state) path.push(curDef.exitVia);
+      if (toDef?.enterVia && frames.has(toDef.enterVia) && cur !== toDef.enterVia && cur !== state) path.push(toDef.enterVia);
+      path.push(state);
+      const first = path.shift() as string;
+      queue = path;
+      startState(first, true);
+    },
+    jump(state) {
+      fresh = false;
+      requested = state;
+      queue = [];
+      startState(state, false);
     },
     advance(dtMs, distancePx = 0) {
+      const playingBefore = seq.state();
       // Which clock drives the frames depends on the state, not on the caller. A locomotor state
       // measures ground covered; everything else measures time. The turn tween below is always
       // time-based -- a pet that turns on the spot covers no distance, and freezing its turn until it
@@ -285,7 +394,36 @@ export function createSpritePlayer(
         // A stall long enough to hit the ceiling has no meaningful animation phase left to preserve.
         if (guard >= MAX_FRAMES_PER_ADVANCE) frameAcc = 0;
       }
-      if (turnClock < turnMs) turnClock = Math.min(turnMs, turnClock + dtMs);
+      // A transition has ended when the sequencer has handed over to its returnTo; the queue, if
+      // any, says where the caller actually wanted to go.
+      const now = seq.state();
+      if (now !== playingBefore) {
+        if (playingBefore === 'startle') kick(KICK_LAND);
+        const next = queue.shift();
+        if (next !== undefined && next !== now) startState(next, false);
+      }
+      const span = turnSpan();
+      if (turnClock < span) {
+        turnClock = Math.min(span, turnClock + dtMs);
+        if (turnClock >= span && hasTurnFrames) kick(KICK_TURN);
+      }
+      if (fadeClock < CROSSFADE_MS) {
+        fadeClock = Math.min(CROSSFADE_MS, fadeClock + dtMs);
+        ghost.alpha = 1 - fadeClock / CROSSFADE_MS;
+        ghost.visible = ghost.alpha > 0.001;
+      }
+      // The settle spring, integrated in small steps so a long frame cannot blow it up.
+      let left = Math.min(dtMs, 100) / 1000;
+      while (left > 0) {
+        const h = Math.min(left, 1 / 120);
+        settleV += (-SETTLE_K * settle - SETTLE_C * settleV) * h;
+        settle += settleV * h;
+        left -= h;
+      }
+      if (Math.abs(settle) < 1e-4 && Math.abs(settleV) < 1e-3) {
+        settle = 0;
+        settleV = 0;
+      }
       refresh();
     },
     setFacing(f, _turning) {
@@ -295,7 +433,7 @@ export function createSpritePlayer(
       turnFrom = turnTo;
       turnTo = f;
       // A fish spinning on the spot is exactly the motion the reduced-motion setting is about.
-      turnClock = reducedMotion ? turnMs : 0;
+      turnClock = reducedMotion ? turnSpan() : 0;
       refresh();
     },
     setPosition(x, y) {
@@ -312,7 +450,13 @@ export function createSpritePlayer(
       py = y;
       turnFrom = facing;
       turnTo = facing;
-      turnClock = turnMs;
+      turnClock = turnSpan();
+      fresh = true;
+      queue = [];
+      settle = 0;
+      settleV = 0;
+      fadeClock = CROSSFADE_MS;
+      ghost.visible = false;
       frameAcc = 0;
       // The stride clock too. Without this, ground banked by the outgoing pet survives into the
       // incoming one and it takes its first step early -- the same class of bug as leaving frameAcc
@@ -324,7 +468,7 @@ export function createSpritePlayer(
       return seq.state();
     },
     destroy() {
-      sprite.destroy();
+      view.destroy({ children: true });
       // Only the sub-rectangle Textures we built. `false` keeps the ImageSource, which belongs to the
       // scene's texture map either way.
       for (const f of frames.values()) {

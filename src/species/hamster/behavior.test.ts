@@ -276,3 +276,19 @@ describe('making its bed and drinking (Step 3: the habitat reacts to these)', ()
     for (const o of drinking) expect(Math.abs(o.x - bottle)).toBeLessThanOrEqual(3);
   });
 });
+
+describe('running the wheel (Step 4: the run art plays while it does)', () => {
+  it('says it is running while it turns the wheel, and only at the wheel', () => {
+    const rng = seeded(11);
+    const b = createHamsterBehavior();
+    const outs: PetOutput[] = [];
+    for (let i = 0; i < 8000; i += 1) outs.push(b.step(input({}, rng)));
+    const running = outs.filter((o) => o.act === 'run');
+    expect(running.length).toBeGreaterThan(0);
+    const wheel = siteX(CAGE_SITES.wheel ?? CAGE_FLOOR_RECT);
+    for (const o of running) {
+      expect(Math.abs(o.x - wheel)).toBeLessThanOrEqual(3);
+      expect(o.speciesDelta?.['wheelKm'] ?? 0).toBeGreaterThan(0);
+    }
+  });
+});

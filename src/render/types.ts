@@ -201,6 +201,13 @@ export interface ManifestSpriteState {
   returnTo?: string;
   /** Per-frame integer [dx, dy] offsets in grid px, same length as `frames`. */
   offsets?: Array<[number, number]>;
+  /**
+   * Step 4: a transition state to play on the way IN to this state from any other (sleep enters by
+   * `liedown`, dead by `die`) and on the way OUT of it to any other (sleep leaves by `wake`). The
+   * transition must be a non-looping state; the player hands over to the destination when it ends.
+   */
+  enterVia?: string;
+  exitVia?: string;
 }
 
 export interface ManifestSprite {
@@ -246,7 +253,7 @@ export interface Manifest {
  * the habitat reacts to: `dig` (bedding flies as it makes its bed) and `drink` (a bubble rises in the
  * bottle).
  */
-export type PetAct = 'hover' | 'peck' | 'mouthful' | 'spit' | 'gulp' | 'look' | 'rest' | 'sulk' | 'dig' | 'drink';
+export type PetAct = 'hover' | 'peck' | 'mouthful' | 'spit' | 'gulp' | 'look' | 'rest' | 'sulk' | 'dig' | 'drink' | 'run' | 'startle';
 
 export type PetAnim = 'idle' | 'walk' | 'eat' | 'hungry' | 'sleep' | 'dead' | 'excited';
 

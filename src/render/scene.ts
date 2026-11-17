@@ -274,7 +274,10 @@ export function createScene(
       m.live?.setPhase(next.phase);
       m.bubbles.setEnabled(alive);
       // With a live layer the Pixi sprite is never shown: the fish is a mesh.
-      m.player.sprite.visible = next.phase !== 'memorial' && m.live === null;
+      m.player.view.visible = next.phase !== 'memorial' && m.live === null;
+      // A pet already dead when the scene mounts is shown lying there, not falling over again at
+      // every launch: the fall is for the moment it happens.
+      if (!prev && next.phase !== 'alive') m.player.jump('dead');
       if (!alive) m.flakes.clear();
       if (alive && prev && prev.phase !== 'alive') {
         // New pet. The behaviour re-inits at the water centre on its next step, but the RENDER-side
@@ -397,7 +400,10 @@ export function createScene(
     // than being told the mood wants nothing, so the pet picks its face straight back up afterwards.
     const simDriving = out.anim !== 'idle';
     const expressed = simDriving ? expression.hold() : expression.update(moodAnim(mood));
-    m.player.play(simDriving ? out.anim : (expressed ?? 'idle'));
+    // A state named after what the pet is doing (dig, drink, run, startle) is drawn while it lasts;
+    // a species without that art simply carries on with its anim.
+    const actState = out.act !== undefined && spriteDef.states[out.act] !== undefined ? out.act : null;
+    m.player.play(actState ?? (simDriving ? out.anim : (expressed ?? 'idle')));
     m.player.setFacing(out.facing, out.turning);
     lastFacing = out.facing;
     // Roll the segment forward INSIDE the step loop. After a catch-up burst that leaves poseFrom and
@@ -579,7 +585,7 @@ export function createScene(
       // first time the view is applied.
       player.resetPose(habitat.petAnchor[0], habitat.petAnchor[1], 1);
       lastDrawn = null;
-      layers.slots.pet.addChild(player.sprite);
+      layers.slots.pet.addChild(player.view);
       // The DOMAIN, not the manifest's waterShape. Those two only coincide for the fish: the cage
       // carries a flattened ellipse purely to satisfy the schema, and feeding read it literally.
       const flakes = createFlakes(domain, bounds);
@@ -613,7 +619,7 @@ export function createScene(
           rng,
         });
         live.resetPose(habitat.petAnchor[0], habitat.petAnchor[1], 1);
-        player.sprite.visible = false;
+        player.view.visible = false;
         // The near decor (plants' near halves, the front pebbles) is INSIDE the water, so the live
         // pass draws it, refracted with everything else, over the fish. Pixi's copy would sit on top
         // undistorted and ghost against the refracted plate behind it.
@@ -686,7 +692,7 @@ export function createScene(
         m.layers.update(dtMs);
         // A sprite pet sits in the room's light: the plates were lit for each hour, so the pet takes the
         // same measured tint (the live fish has a light rig of its own).
-        if (m.live === null && habitat.ambient) m.player.sprite.tint = lightTint(m.layers.daylight(), habitat.ambient.tints);
+        if (m.live === null && habitat.ambient) m.player.view.tint = lightTint(m.layers.daylight(), habitat.ambient.tints);
         m.ambient?.update({
           dtMs,
           nowMs: Date.now(),

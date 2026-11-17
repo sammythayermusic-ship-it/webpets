@@ -165,3 +165,47 @@ describe('body language (step C)', () => {
     expect(run(high, 200, still(undefined, 1.2)).spread).toBeGreaterThan(1.1);
   });
 });
+
+describe('Step 4: weight', () => {
+  /** Drive the spine along x at a speed profile (grid px/s per frame), 60 fps. */
+  const drive = (speeds: number[]) => {
+    const sp = createSpine();
+    let x = 100;
+    sp.reset(x, 100, 1);
+    const out = [];
+    for (const v of speeds) {
+      x += v / 60;
+      out.push(sp.update({ dtMs: 1000 / 60, x, y: 100, facing: 1, anim: 'idle', rng: () => 0.5 }));
+    }
+    return out;
+  };
+
+  it('brakes when it stops: pectorals flared, fins fanned, nose dipped; then lets go', () => {
+    const cruise = Array(90).fill(40);
+    const stop = Array(150).fill(0);
+    const out = drive([...cruise, ...stop]);
+    const atStop = out.slice(90, 130);
+    expect(Math.max(...atStop.map((s) => s.brake))).toBeGreaterThan(0.6);
+    expect(Math.max(...atStop.map((s) => s.scull))).toBeGreaterThan(0.6);
+    expect(Math.max(...atStop.map((s) => s.spread))).toBeGreaterThan(1.08);
+    expect(Math.min(...atStop.map((s) => s.pitch))).toBeLessThan(-0.05);
+    expect(out.at(-1)!.brake).toBeLessThan(0.05);
+  });
+
+  it('settles after a stop: the nose rocks back past level and comes to rest', () => {
+    const out = drive([...Array(90).fill(40), ...Array(240).fill(0)]);
+    const after = out.slice(120).map((s) => s.pitch);
+    expect(Math.max(...after)).toBeGreaterThan(0.01); // it rocks up as the brake lets go
+    expect(Math.abs(out.at(-1)!.pitch)).toBeLessThan(0.02);
+  });
+
+  it('bolts from a standstill with a C-curl and hard tail beats, not from a cruise', () => {
+    const fromRest = drive([...Array(60).fill(0), ...Array(30).fill(60)]);
+    const peak = fromRest.slice(60).reduce((a, s) => (s.cstart > a.cstart ? s : a));
+    expect(peak.cstart).toBeGreaterThan(0.5);
+    expect(Math.abs(peak.turn)).toBeGreaterThan(0.015);
+    expect(peak.beatHz).toBeGreaterThan(3);
+    const fromCruise = drive([...Array(60).fill(30), ...Array(30).fill(60)]);
+    expect(Math.max(...fromCruise.map((s) => s.cstart))).toBe(0);
+  });
+});

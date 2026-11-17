@@ -61,6 +61,10 @@ export interface SpineState {
   scull: number;
   /** Fin spread: below 1 folded (sad, unwell), above 1 spread wide (excited). */
   spread: number;
+  /** Step 4: braking, 0..1 -- the pectorals flared forward and the nose dipped as it stops. */
+  brake: number;
+  /** Step 4: a startled bolt's C-curl, 0..1, decaying as it straightens out of it. */
+  cstart: number;
 }
 
 /** Amplitude at rest and the gain per grid px/s of speed; capped so a dart does not flap flat. */
@@ -90,6 +94,22 @@ const GULP_SPREAD_MS = 5000;
 /** A look: how far the face turns toward the camera, rad (a three-quarter view, not a full stare). */
 const LOOK_YAW = 0.95;
 const SCULL_TAU = 260;
+/**
+ * Step 4, weight. A goldfish stops by flaring its pectorals forward and dipping its nose, glides a
+ * little and settles; it bolts from a standstill with a C-curl of the whole body. Both are read off
+ * how fast its speed is changing (grid px/s per second), not off the behaviour, so any stop or any
+ * bolt gets them, whatever caused it.
+ */
+export const BRAKE_DECEL = 60;
+export const CSTART_ACCEL = 90;
+/** A bolt only counts from slow: a fish already cruising just speeds up. */
+const CSTART_FROM_SPEED = 14;
+const BRAKE_TAU = 140;
+const BRAKE_RELEASE_TAU = 240;
+const CSTART_TAU = 170;
+/** The settle: a damped spring on the nose's pitch, kicked as the brake lets go. */
+const BOB_K = 60;
+const BOB_C = 7;
 const SPREAD_TAU = 700;
 
 function ease(v: number, target: number, dtMs: number, tauMs: number): number {
@@ -150,6 +170,12 @@ export function createSpine(): Spine {
   let spread = 1;
   let lastAct = '';
   let actClock = 0;
+  let accel = 0;
+  let brake = 0;
+  let cstart = 0;
+  let cstartDir = 1;
+  let bob = 0;
+  let bobV = 0;
   let s: SpineState = {
     amp: AMP_REST,
     k: WAVE_NUMBER,
@@ -165,6 +191,8 @@ export function createSpine(): Spine {
     beatHz: BEAT_REST_HZ,
     scull: 0.5,
     spread: 1,
+    brake: 0,
+    cstart: 0,
   };
 
   const yawFor = (facing: FacingSign): number => (facing === 1 ? 0 : Math.PI);
@@ -183,7 +211,12 @@ export function createSpine(): Spine {
       mouthTarget = 0;
       eatClock = -1;
       gulpClock = -1;
-      s = { ...s, yaw, pitch, roll, mouth, speed, turn: 0 };
+      accel = 0;
+      brake = 0;
+      cstart = 0;
+      bob = 0;
+      bobV = 0;
+      s = { ...s, yaw, pitch, roll, mouth, speed, turn: 0, brake: 0, cstart: 0 };
     },
     update(input) {
       const dt = Math.max(0, Math.min(100, input.dtMs));
@@ -209,7 +242,28 @@ export function createSpine(): Spine {
         vx = ease(vx, ivx, dt, SPEED_TAU);
         vy = ease(vy, ivy, dt, SPEED_TAU);
       }
+      const speedBefore = speed;
       speed = ease(speed, Math.hypot(vx, vy), dt, SPEED_TAU);
+      if (dtS > 0) accel = ease(accel, (speed - speedBefore) / dtS, dt, 60);
+
+      // ---- weight: the brake as it stops, the C-curl as it bolts, the settle after
+      const braking = !dead && !asleep && accel < -BRAKE_DECEL && speed > 3;
+      const brakeBefore = brake;
+      brake = ease(brake, braking ? 1 : 0, dt, braking ? BRAKE_TAU : BRAKE_RELEASE_TAU);
+      if (brakeBefore > 0.15 && brake <= 0.15 && !braking) bobV += 2.6; // the nose rocks up past level as the dip clears
+      if (!dead && !asleep && cstart < 0.2 && accel > CSTART_ACCEL && speedBefore < CSTART_FROM_SPEED) {
+        cstart = 1;
+        // curl away from where it is going: the tail sweeps toward the new direction first
+        cstartDir = vx >= 0 ? 1 : -1;
+      }
+      cstart = ease(cstart, 0, dt, CSTART_TAU);
+      let left = dtS;
+      while (left > 0) {
+        const h = Math.min(left, 1 / 120);
+        bobV += (-BOB_K * bob - BOB_C * bobV) * h;
+        bob += bobV * h;
+        left -= h;
+      }
 
       // ---- gait: amplitude and beat from speed, muted by state
       let amp = clamp(AMP_REST + speed * AMP_PER_SPEED, AMP_REST, AMP_MAX);
@@ -235,6 +289,11 @@ export function createSpine(): Spine {
         amp = AMP_REST * 0.35;
         beat = 0.8;
       }
+      // a bolt drives the tail hard for its first beats
+      if (cstart > 0.05) {
+        amp = Math.max(amp, AMP_MAX * cstart);
+        beat = Math.max(beat, BEAT_MAX_HZ * cstart);
+      }
       phase = (phase + 2 * Math.PI * beat * dtS) % (2 * Math.PI * 1000);
 
       // ---- yaw: a real turn, and the body curls into it while it lasts
@@ -245,7 +304,7 @@ export function createSpine(): Spine {
       const before = yaw;
       yaw = dead ? ease(yaw, yawTarget, dt, YAW_TAU * 3) : ease(yaw, yawTarget, dt, YAW_TAU);
       yawVel = dtS > 0 ? (yaw - before) / dtS : 0;
-      const turn = clamp(-yawVel * TURN_GAIN, -TURN_MAX, TURN_MAX);
+      const turn = clamp(-yawVel * TURN_GAIN + cstartDir * cstart * TURN_MAX * 1.2, -TURN_MAX * 1.4, TURN_MAX * 1.4);
 
       // ---- pitch: nose follows the direction of travel (screen y is down, so negate)
       let pitchTarget = 0;
@@ -260,7 +319,8 @@ export function createSpine(): Spine {
         const along = Math.max(Math.abs(vx), 8);
         pitchTarget = clamp(-Math.atan2(vy, along) * PITCH_FOLLOW, -PITCH_MAX, PITCH_MAX);
       }
-      pitch = ease(pitch, pitchTarget, dt, PITCH_TAU);
+      pitch = ease(pitch, pitchTarget - 0.14 * brake, dt, PITCH_TAU);
+      const pitchOut = pitch + bob * 0.3;
 
       // ---- roll: belly-up when dead, a slight bank through a turn otherwise
       const rollTarget = dead ? Math.PI : clamp(-yawVel * 0.03, -0.12, 0.12);
@@ -305,14 +365,15 @@ export function createSpine(): Spine {
       const sway = asleep || act === 'rest' ? 0.0025 : hungry ? 0.0015 : dead ? 0.002 : 0;
       const flutter = dead ? 0.0004 : asleep ? 0.0008 : 0.0016 + speed * 0.00004;
 
-      // ---- pectorals: busy when hovering, easy while cruising, folded back in a dart
-      const scullTarget = dead ? 0 : hovering ? 1 : act === 'rest' || asleep ? 0.35 : clamp(0.75 - speed / 40, 0, 0.6);
-      scull = ease(scull, scullTarget, dt, SCULL_TAU);
-      // ---- fins folded or spread, with the mood (and fully folded in death)
-      const spreadTarget = dead ? 0.5 : clamp(input.spirits ?? 1, 0.5, 1.25);
-      spread = ease(spread, spreadTarget, dt, SPREAD_TAU);
+      // ---- pectorals: busy when hovering, easy while cruising, folded back in a dart, flared to brake
+      const scullBase = dead ? 0 : hovering ? 1 : act === 'rest' || asleep ? 0.35 : clamp(0.75 - speed / 40, 0, 0.6);
+      const scullTarget = Math.max(scullBase * (1 - cstart), brake);
+      scull = ease(scull, scullTarget, dt, SCULL_TAU * (brake > 0.3 ? 0.4 : 1));
+      // ---- fins folded or spread, with the mood (and fully folded in death); fanned to brake
+      const spreadTarget = dead ? 0.5 : (clamp(input.spirits ?? 1, 0.5, 1.25) + 0.18 * brake) * (1 - 0.25 * cstart);
+      spread = ease(spread, spreadTarget, dt, SPREAD_TAU * (brake > 0.3 || cstart > 0.3 ? 0.3 : 1));
 
-      s = { amp, k: WAVE_NUMBER, phase, turn, yaw, pitch, roll, mouth, sway, flutter, speed, beatHz: beat, scull, spread };
+      s = { amp, k: WAVE_NUMBER, phase, turn, yaw, pitch: pitchOut, roll, mouth, sway, flutter, speed, beatHz: beat, scull, spread, brake, cstart };
       return s;
     },
     state() {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createHamsterBehavior } from './behavior';
+import { createHamsterBehavior, STARTLE_FLINCH_TICKS } from './behavior';
 import { CAGE_SITES, siteX } from './layout';
 import { TERR_SITES } from './terrarium';
 import type { Sites } from '../types';
@@ -89,12 +89,18 @@ describe('hamster drives', () => {
     const before = o;
     const tap = { x: before.x - 5, y: 180 };
     const after: PetOutput[] = [b.step(input({ tap }, rng))];
-    for (let i = 0; i < 14; i += 1) after.push(b.step(input({}, rng)));
-    expect(after[6]!.x).toBeGreaterThan(before.x + 8); // away from the tap, which was to its left
-    const steps = after.slice(1, 8).map((p, i) => Math.abs(p.x - after[i]!.x));
+    for (let i = 0; i < 18; i += 1) after.push(b.step(input({}, rng)));
+    // First it flinches on the spot (the startle art), then it runs.
+    const F = STARTLE_FLINCH_TICKS;
+    for (const p of after.slice(0, F)) {
+      expect(p.act).toBe('startle');
+      expect(p.x).toBeCloseTo(before.x, 6);
+    }
+    expect(after[F + 6]!.x).toBeGreaterThan(before.x + 8); // away from the tap, which was to its left
+    const steps = after.slice(F + 1, F + 8).map((p, i) => Math.abs(p.x - after[F + i]!.x));
     expect(Math.max(...steps)).toBeGreaterThan(3);
     // then it stops
-    const tail = after.slice(12);
+    const tail = after.slice(F + 12);
     expect(tail.every((p) => Math.abs(p.x - tail[0]!.x) < 0.5)).toBe(true);
   });
 

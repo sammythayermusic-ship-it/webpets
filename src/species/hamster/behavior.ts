@@ -112,6 +112,8 @@ const PACE: Readonly<Record<Personality, { pace: number; hang: number }>> = {
 
 /** How far toward something interesting a wander target can be pulled, at full strength. */
 const ATTRACT_MAX = 0.55;
+/** A startle starts with a flinch on the spot this many ticks long (the art's five frames at 12 fps). */
+export const STARTLE_FLINCH_TICKS = 4;
 /** A startle: peak speed and the ticks it takes to bleed. */
 const STARTLE_PEAK = 4.5;
 const STARTLE_TICKS = 8;
@@ -387,12 +389,19 @@ export function createHamsterBehavior(sites: Sites = CAGE_SITES): PetBehavior {
       stopErrand();
       greetTo = null;
       if (input.tap && startle === null) startle = { dir: x >= input.tap.x ? 1 : -1, tick: 0 };
-      if (startle !== null) {
-        const burst = dartSpeed(startle.tick, STARTLE_PEAK, STARTLE_TICKS);
+      if (startle !== null && startle.tick < STARTLE_FLINCH_TICKS) {
+        // First the flinch, on the spot: a jump and a landing (the `startle` art), then the run.
+        startle.tick += 1;
+        speed = 0;
+        nx = x;
+        act = 'startle';
+        lockFacing = true;
+      } else if (startle !== null) {
+        const burst = dartSpeed(startle.tick - STARTLE_FLINCH_TICKS, STARTLE_PEAK, STARTLE_TICKS);
         startle.tick += 1;
         speed = burst;
         nx = moveTowardX(x, x + startle.dir * 80, burst);
-        if (startle.tick > STARTLE_TICKS * 1.5) {
+        if (startle.tick > STARTLE_FLINCH_TICKS + STARTLE_TICKS * 1.5) {
           startle = null;
           pauseTicks = PAUSE_MAX_TICKS;
         }
@@ -421,6 +430,7 @@ export function createHamsterBehavior(sites: Sites = CAGE_SITES): PetBehavior {
         lockFacing = true;
         if (errand.site === 'wheel') ranThisTick = WHEEL_KM_PER_TICK * wheelRate(input.hunger) * (cheering ? CHEER_WHEEL_PACE : 1);
         if (errand.site === 'bottle') act = 'drink';
+        if (errand.site === 'wheel' && ranThisTick > 0) act = 'run';
         if (errandTicks === 0) stopErrand();
       } else {
         speed = ramp(speed, pace(input.label));
