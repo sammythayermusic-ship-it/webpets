@@ -120,6 +120,9 @@ const STARTLE_TICKS = 8;
 /** A greeting dash's speed. */
 const GREET_SPEED = 3.6;
 
+/** Grid px per tick it walks to bed at, at least (about 2 s across the terrarium's width). */
+const BED_WALK_SPEED = 2.6;
+
 /** Making its bed before it sleeps: two seconds of digging. */
 export const DIG_TICKS = 16;
 
@@ -356,9 +359,14 @@ export function createHamsterBehavior(sites: Sites = CAGE_SITES): PetBehavior {
       startle = null;
       greetTo = null;
       const bedX = siteX(sites.bed ?? bounds.rect);
-      nx = moveTowardX(x, bedX, 1.2);
-      anim = 'sleep';
-      lockFacing = true;
+      // It WALKS to its bed (Step 4: it used to slide there in its sleeping pose), then digs, then
+      // lies down -- the lie-down is the art's `liedown`, which the sleep state is entered by.
+      const atBed = Math.abs(x - bedX) <= ARRIVE_EPS;
+      // brisk, whatever its drives say: asleep, activity reads zero and it would amble for a quarter minute
+      speed = atBed ? 0 : ramp(speed, Math.max(BED_WALK_SPEED, pace(input.label)));
+      nx = atBed ? x : moveTowardX(x, bedX, speed);
+      anim = atBed || Math.abs(nx - bedX) <= ARRIVE_EPS ? 'sleep' : 'idle';
+      lockFacing = anim === 'sleep';
       // Making its bed: arriving at the bed, it digs the bedding over for a couple of seconds before it
       // settles (head down, the bedding flying -- the renderer reads the act). Once per sleep.
       if (!dugThisSleep && Math.abs(nx - bedX) <= ARRIVE_EPS) {
