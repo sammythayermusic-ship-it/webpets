@@ -8,7 +8,8 @@ Everything a number can be measured for is measured here, not typed: each habita
 alpha bounding box of its bg plate, each light set's tint is its plate's mean colour over the day
 plate's, and each sprite's body box comes from its own silhouettes. A sprite state's anchor is NOT
 measured: every state of a pet is shot by one fixed camera with the rig standing in one place, so the
-frames are registered as rendered, and an anchor only undoes a shift this script itself applied. The positions the behaviours go to come from the Blender scripts'
+frames are registered as rendered, and an anchor only undoes a shift this script itself applied
+(or puts the fallen pose down on the ground: see `sprite`). The positions the behaviours go to come from the Blender scripts'
 geom files (projected model points). The result is also written to assets/habitats/.../geometry.json
 so the species layouts (src/species/*/layout.ts) have one place to read from.
 """
@@ -76,6 +77,12 @@ def feather_shadow(day_path, path):
     solid = smoothstep(0.35, 0.6, day)
     im[..., 3] *= solid + (1 - solid) * f
     Image.fromarray(np.clip(im + 0.5, 0, 255).astype(np.uint8)).save(path, optimize=True)
+
+
+def bottom(path):
+    """The lowest solid row of a frame, texels."""
+    a = np.asarray(Image.open(path).convert("RGBA"))[..., 3]
+    return int(np.where(a > 128)[0].max())
 
 
 def sil(path):
@@ -196,8 +203,20 @@ def sprite(man, key, src, folder, states, stride=None):
             st["stridePx"] = stride[name]
         out[name] = st
         boxes[name] = sil(os.path.join(dst, name, f"{name}_0001.png"))
-    # A transition needs no offsets here, for the same reason: its last frame is already where the
-    # state it leads to stands. (The hamster's do: its older states were registered by centroid.)
+    # The one pose the camera cannot register is the fallen one. The rig rolls over about its own
+    # origin, which stands above the ground, so a body on its back is rendered hanging in the air
+    # (the frog, 12 px up). It is put down: the lowest point of the fallen body goes where the lowest
+    # point of the standing one was, and the fall walks down to it frame by frame.
+    if "dead" in out and "idle" in out:
+        drop = (bottom(os.path.join(dst, "dead", "dead_0001.png")) - bottom(os.path.join(dst, "idle", "idle_0001.png"))) / k
+        # Only a body left in the air. One lying lower than it stood is lying on ground nearer the
+        # camera (the birds), which is where it fell.
+        drop = min(0.0, drop)
+        out["dead"]["anchor"][1] = round(drop, 2)
+        if "die" in out and drop < 0:
+            n = out["die"]["frames"]
+            out["die"]["offsets"] = [[0.0, round(-drop * (i / (n - 1)) ** 2, 3)] for i in range(n)]
+        print(f"sprite {key}: the fallen pose is put down by {-drop:+.2f} px", flush=True)
     if "die" in out and "dead" in out:
         out["dead"]["enterVia"] = "die"
     ws = [b[0] for b in boxes.values()]

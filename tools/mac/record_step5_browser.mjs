@@ -134,7 +134,7 @@ if (pets.includes('frog')) {
     await sleep(1200);
     await tapAt(120, 100);
   });
-  await part('frog', 'Feeding lets three crickets loose on the bank. It turns, waits for one to sit still, and takes it with its tongue.', 26, async () => {
+  await part('frog', 'A feed lets three crickets loose. It waits, then takes one with its tongue.', 26, async () => {
     await sleep(1500);
     await feed();
   });
@@ -154,7 +154,7 @@ if (pets.includes('frog')) {
 if (pets.includes('chicken')) {
   await setup('chicken', 'brooder');
   await part('chicken', 'A new chicken is a chick, in a brooder under a heat lamp.', 14);
-  await part('chicken', 'Feed drops on the straw, and it runs for it.', 14, async () => {
+  await part('chicken', 'Feed drops on the bedding, and it runs for it.', 14, async () => {
     await sleep(1000);
     await feed();
   });

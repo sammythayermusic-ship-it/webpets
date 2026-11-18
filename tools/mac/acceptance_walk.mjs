@@ -132,7 +132,9 @@ async function walk(species) {
   const fed = H('feed');
   const eating = await watch(species === 'frog' ? 30 : 25, (st, seen) => seen.includes('eat') || seen.includes('snap'));
   if (species === 'frog') snap('frog-hunting');
-  await sleep(species === 'frog' ? 14000 : 1500);
+  // The scene banks its counters to the pet now and then, not at once: give the catch time to show.
+  if (species === 'frog') await until((st) => (st.pet.speciesData?.cricketsCaught ?? 0) >= 1, 75);
+  else await sleep(1500);
   const after = state();
   const caught = after?.pet.speciesData?.cricketsCaught ?? 0;
   check(species, 'feed', fed && after && after.hunger > before.hunger + 30 && after.pet.meals === before.pet.meals + 1 && (eating.seen.includes('eat') || eating.seen.includes('snap')),
