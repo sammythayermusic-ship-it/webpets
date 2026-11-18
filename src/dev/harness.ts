@@ -660,7 +660,17 @@ export async function drainInbox(texts: readonly string[], ctx: HarnessContext, 
  * running is skipped, so commands never interleave. A poll that rejects is logged and the next tick
  * tries again. Returns a stop function.
  */
-export function startPoller(inbox: HarnessInbox, ctx: HarnessContext, io: HarnessIo, intervalMs = POLL_MS): () => void {
+export function startPoller(
+  inbox: HarnessInbox,
+  ctx: HarnessContext,
+  io: HarnessIo,
+  intervalMs = POLL_MS,
+  /** How to be called back every `ms`; returns a stop function. Defaults to a plain interval. */
+  every: (ms: number, cb: () => void) => () => void = (ms, cb) => {
+    const t = setInterval(cb, ms);
+    return () => clearInterval(t);
+  },
+): () => void {
   let busy = false;
   const tick = async (): Promise<void> => {
     if (busy) return;
@@ -674,8 +684,7 @@ export function startPoller(inbox: HarnessInbox, ctx: HarnessContext, io: Harnes
       busy = false;
     }
   };
-  const timer = setInterval(() => void tick(), intervalMs);
-  return () => clearInterval(timer);
+  return every(intervalMs, () => void tick());
 }
 
 /** Wires the poller to the two Rust commands. Only `installHarness` touches Tauri. */
@@ -690,6 +699,13 @@ export async function installHarness(ctx: HarnessContext): Promise<void> {
       await io.write(`${result.id}.result.json`, bytes);
     },
   };
-  startPoller({ poll: () => invoke<string[]>('harness_poll') }, ctx, io);
+  // Paced from a Worker, like the scene (render/pacer.ts): WebKit clamps or suspends a hidden page's
+  // own timers, and the harness window is hidden whenever a full-screen app is in front -- which is
+  // exactly when a background test needs it to keep answering.
+  const { createPacer } = await import('../render/pacer');
+  startPoller({ poll: () => invoke<string[]>('harness_poll') }, ctx, io, POLL_MS, (ms, cb) => {
+    const p = createPacer(ms, cb);
+    return () => p.stop();
+  });
   console.info('[harness] installed; polling the inbox every', POLL_MS, 'ms');
 }

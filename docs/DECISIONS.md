@@ -1986,3 +1986,48 @@ squash of the same drawing), and every change of state a hard cut. The acts the 
 
 Checkpoint 4: a before/after recording of each pet doing the same things (wander, turn, stop, a tap,
 eating, bedtime), side by side. "Before" is recorded from the Step 3 build before anything changes.
+
+## 2026-11-17 — Step 4 built: what changed on the way
+
+- **New hamster frames are keyed in the loaded scene, not in `wp_cage.py`.** `h_anim.py` adds frame
+  blocks from 2001 on to the existing rig and renders them; a check frame (idle's first) matched the
+  shipped one to render noise before anything else was rendered, which is what makes mixing old and
+  new frames safe. Blender 5's actions are layered: walk f-curves with `wb.fcurves_of`, never
+  `action.fcurves`.
+- **A turn is seven frames, unflipped.** The rig yaws from facing right through facing you to the
+  mirror of facing right, so the last frame is the flipped first frame: right-to-left plays forward,
+  left-to-right backward, and the hand-over to the mirrored sprite moves nothing. It takes 360 ms
+  rather than the old 125 ms squash. The squash stays for species without turn art and for states a
+  turn is not drawn from (anything but standing and walking).
+- **A transition cannot have one anchor.** It starts in one state's registration and ends in
+  another's, so `liedown`, `wake` and `die` carry their start state's anchor plus per-frame offsets
+  that walk to the end state's, along the same curve the pose follows (`h_anim_finish.py`). Offsets
+  in the manifest may now be fractional. `die` ends exactly on the shipped `dead` frame.
+- **`enterVia` / `exitVia` in the manifest** route the player: sleep is entered by `liedown` and left
+  by `wake`, dead is entered by `die`. A request repeated every tick does not restart a transition,
+  and a pet that is already dead when the scene mounts is shown lying there (`player.jump`).
+- **The player owns a `view`, not just a sprite:** the pet, and over it the fading last frame of the
+  state it left (150 ms). The scene adds, shows, hides and tints the view.
+- **A state named after the act is drawn while the act lasts** (dig, drink, run, startle); a species
+  without that art carries on with its anim. The hamster's startle is now a four-tick flinch on the
+  spot and then the run, and the wheel errand reports `run`.
+- **The hamster used to slide to bed in its sleeping pose** (`anim: 'sleep'` while still walking, at
+  a fixed 1.2 px a tick). It now walks there briskly, digs, and lies down. Found by tracing the drawn
+  states ten times a second, not by eye: at window size the slide was easy to miss.
+- **The fish's weight is read off its own acceleration,** not off the behaviour: any stop brakes
+  (pectorals forward, fins fanned, nose dipped, then a rock back past level) and any bolt from slow
+  curls (a C-start with hard tail beats). Gentle swimming triggers neither, measured in the live
+  scene: 0 of each over 8 s of wandering, both above 0.75 on a tap and on a feed.
+- **Before/after was recorded in headless Chromium,** not the harness app: with a full-screen app in
+  front, the harness window is on no Space and its command poll never ran (0 pickups in 120 s).
+  `tools/mac/record_animation_browser.mjs` drives two dev servers (the Step 3 commit and this one)
+  through the same steps with the same random seed, and `side_by_side.py` joins them.
+- **Sammy asked for testing in the background** (2026-11-17): test and build commands run as
+  background jobs, apps are launched with `open -g`, nothing is brought forward. Two things made
+  that possible. The harness poll ran on a plain `setInterval`, which WebKit suspends for a hidden
+  page (0 pickups in 300 s behind a full-screen app); it now runs on the scene's worker pacer and
+  answers while hidden. And the harness app's own `settings.json` now has `onDesktop: true`,
+  `alwaysOnTop: false`, `overFullscreen: false`: its window sits at desktop level instead of over
+  whatever Sammy is doing (the old values are in `~/.cache/webpets/checks/`). The check itself is
+  `~/.cache/webpets/checks/pkgcheck.sh`; commands can still lag by tens of seconds there, so it
+  traces the order of states rather than timing them.
