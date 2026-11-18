@@ -53,7 +53,11 @@ export type SimEvent =
   | { type: 'hungry'; at: number } // hunger crossed down through PANTRY_TRIGGER (30) with no pantry feed
   | { type: 'starving'; at: number } // hunger reached 0
   | { type: 'dying-soon'; at: number; diesAt: number } // 6 h before death
-  | { type: 'died'; at: number };
+  | { type: 'died'; at: number }
+  // The chicken's (src/sim/chicken.ts): the move from the brooder to the coop at seven days old, and
+  // an egg laid at the end of a day of its age; `eggs` is the count after it.
+  | { type: 'migrated'; at: number; to: Habitat }
+  | { type: 'egg'; at: number; eggs: number };
 
 export interface ReconcileResult {
   state: PetState;

@@ -1,6 +1,7 @@
 import type { PetState, ReconcileResult, SimConstants, SimEvent } from './types';
 import { DEFAULT_CONSTANTS, DYING_SOON_HOURS, HOUR_MS } from './constants';
 import { crossingFrom, deathFromZero, hungerFrom, zeroFrom } from './math';
+import { chickenRules } from './chicken';
 
 /**
  * Walk the pet forward from `state.lastReconciledAt` to `now`.
@@ -73,5 +74,6 @@ export function reconcile(state: PetState, now: number, c: SimConstants = DEFAUL
     next.alive = false;
     next.diedAt = diedAt;
   }
-  return { state: next, events };
+  // Species rules that are a matter of time: the chicken's move to the coop and its eggs.
+  return chickenRules(state, next, events, now, c);
 }

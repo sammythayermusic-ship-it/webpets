@@ -63,6 +63,10 @@ export function eventLine(event: SimEvent, name: string): string {
       return `${name} had 6 hours left`;
     case 'died':
       return `${name} died`;
+    case 'egg':
+      return `${name} laid an egg (${event.eggs} so far)`;
+    case 'migrated':
+      return `${name} grew up and moved to the coop`;
   }
 }
 

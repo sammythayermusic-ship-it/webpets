@@ -46,6 +46,12 @@ export function decide(
         break;
       case 'auto-fed':
         break;
+      case 'egg':
+        toasts.push({ title: name, body: `${name} laid an egg.` });
+        break;
+      case 'migrated':
+        toasts.push({ title: name, body: `${name} is a hen now, and has moved to the coop.` });
+        break;
     }
   }
 
