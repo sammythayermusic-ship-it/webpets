@@ -2118,6 +2118,11 @@ and slid the bird backwards on every peck. Every Step 5 state now has anchor zer
 the script itself shifted to centre a leaning or fallen pose in its frame, whose anchor is exactly
 that shift. Transitions (`die`) need no offsets for the same reason.
 
+The exception is the fallen pose where the rig's roll left the body in the air: the frog rolls
+about an origin that stands above the ground, and was rendered on its back 7.5 px up. That one is
+put down (its lowest point where the standing frog's was) and the fall walks down to it. The birds
+fall onto ground nearer the camera, which is lower on screen and right as rendered.
+
 **Shadows fade before the frame's edge.** At dawn and dusk the cast shadow is longer than the
 320x240 frame, which cut it in a straight line. `s5_finish.py` now eases the shadow's alpha to zero
 over the last 20 grid px, leaving the habitat itself as rendered. The Step 3 plates (bowl, cage,
@@ -2144,7 +2149,25 @@ now waits one turn of the event loop and a flush (`actions.flush`).
 `curious`) on any sprite set; one with no such drawing froze on its first idle frame for as long as
 the mood lasted. It now keeps playing idle. This changes the hamster too, for the better.
 
+**The chick's bedding is not the nest's straw.** A yellow chick on golden straw could not be seen.
+The brooder is bedded with tan wood shavings, the chick is a deeper yellow, and each Step 5 pet
+stands on a soft contact shadow drawn under its feet (`ambient.shadow`).
+
+**Notifications are sent from a thread of their own.** On macOS the send does not return until the
+system has taken the notification. The `notify` command was a plain one, so it ran on the main
+thread and held the whole app until then. Found during the walk, in the test app. Whether it was
+the cause of the test app's long silences is not proven (see the next entry); it was wrong either
+way, and would have frozen the pet for anyone whose Mac is slow to take a notification.
+
+**A hidden page goes to sleep, and the test app now refuses to.** The walk drives the test app
+while its window sits at desktop level, often on another Space than the one in use. macOS then
+suspends the page for minutes at a time: the app answered nothing for four minutes in one walk and
+came back the moment its window was visible. The test app is now built with Tauri's
+`backgroundThrottling: disabled` (`tools/mac/build_both.sh`). The app people use is NOT, and this
+is the open question in `NEEDS-SAMMY.md`: the same sleep means a pet hidden behind a full-screen
+app cannot post "hungry" until it is seen again, because the notification is decided in the page.
+
 **Not built, as planned or found:** the brooder-to-coop transition animation (it is a reload);
 collecting eggs; ripples on the pond; the frog's eyes narrowing at night beyond its sleep pose
 (asleep, they are shut); cattails drooping over a dead frog. The hen has no art for being inside the
-house.
+house. The menu-bar icon is still a small fish for every species.

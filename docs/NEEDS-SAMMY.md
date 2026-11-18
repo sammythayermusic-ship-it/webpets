@@ -116,6 +116,22 @@ you trust" if someone says they are hurt, never asks for personal details), sent
 the one thing the reply is about. A per-person "kid mode" (built-in lines only) would be easy to
 add once you decide.
 
+### A pet hidden behind a full-screen app cannot tell you it is hungry (2026-11-18, Step 5) — nothing blocked
+Found while testing, in the test app: when the pet's window is not on the screen you are looking at
+(you are in a full-screen app, or on another desktop), macOS puts its page to sleep, for minutes at
+a time. The pet's clock is safe, since hunger is worked out from timestamps. But the app decides
+when to post "Gill is hungry" inside that page, so the notification does not go out until the pet
+is on screen again. A day spent in a full-screen app is exactly when you would want it.
+
+I have not measured this on your own pet app, only on the test app, which is the same code. Two
+ways to fix it, your call:
+1. **Keep the page awake when hidden** (one setting, already used for the test app). Simple. It
+   costs battery: the pet keeps animating where nobody can see it, unless I also make it idle down.
+2. **Have the Mac schedule the notifications** ahead of time, at the moment each one will be due.
+   More work, no battery cost, and they would arrive even with the app asleep.
+
+I would do 2. Say which, or say leave it.
+
 ### Where the chicken's facts link to (2026-11-17, Step 5) — nothing blocked
 Each fact the pets tell has a link to the page it came from. The chicken's 184 facts are clean, but
 some of the pages they link to are not written for children:

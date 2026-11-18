@@ -54,7 +54,14 @@ function H(op, args = {}, timeoutS = 30) {
 const state = () => H('state', {}, 15);
 const running = () => spawnSync('pgrep', ['-f', `^${APP}/Contents/MacOS/`]).status === 0;
 async function launch() {
-  if (!running()) execFileSync('open', ['-g', APP]);
+  // `open` right after a quit can fail (-600) while the system is still putting the old one away.
+  for (let i = 0; i < 6 && !running(); i += 1) {
+    try {
+      execFileSync('open', ['-g', APP], { stdio: 'ignore' });
+    } catch {
+      await sleep(1500);
+    }
+  }
   for (let i = 0; i < 40; i += 1) {
     await sleep(1500);
     const s = state();
@@ -65,6 +72,7 @@ async function launch() {
 async function quit() {
   spawnSync('pkill', ['-f', `^${APP}/Contents/MacOS/`]);
   for (let i = 0; i < 20 && running(); i += 1) await sleep(300);
+  await sleep(1500);
 }
 /** Wait until the app (which reloads to change habitat) is up as this species in this home. */
 async function until(test, seconds = 40) {
