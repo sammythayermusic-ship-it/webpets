@@ -2031,3 +2031,47 @@ eating, bedtime), side by side. "Before" is recorded from the Step 3 build befor
   whatever Sammy is doing (the old values are in `~/.cache/webpets/checks/`). The check itself is
   `~/.cache/webpets/checks/pkgcheck.sh`; commands can still lag by tens of seconds there, so it
   traces the order of states rather than timing them.
+
+## 2026-11-17 — PHASE-NEXT Step 5 plan: the frog and the chicken
+
+Sammy passed checkpoint 4 ("Go to Step 5"). Two new species, each with behaviour, two habitats, art,
+ambient life and the whole brain, to the bar of Steps 2 to 4.
+
+**How they are drawn.** As the hamster is: Blender-rendered sprites over Blender plates, with the
+Step 3 light sets and ambient layer and the Step 4 player (blends, turn frames, transitions, the
+settle). The live Three.js layer stays the fish's. Each animal is primitives on one rig, built and
+rendered by a script in the loaded scene, never saved into the .blend (`s5_common.py`, `frog.py`,
+`chicken.py`).
+
+**The frog** (pond, then jar).
+- *Pond:* a low stone basin on the desk: water with lily pads, a rock, cattails at the back, a mossy
+  bank across the front. *Jar:* a big glass jar with the same things inside.
+- *Behaviour:* a sit-and-wait animal. Long stillness on its pad, a blink, now and then a hop to the
+  rock and back; a croak with its throat blown out when the pointer comes close.
+- *Feeding is a hunt.* A feed lets three crickets loose on the bank. The frog turns to the nearest,
+  waits until it is in reach, and snaps it with its tongue. A cricket not caught in 20 s gets away.
+  The Blueprint tied hunger to catches and refunded a miss to the pantry; with free food and a pure,
+  timestamp-driven sim, the meal is credited when you feed, as for the fish and the hamster, and the
+  hunt is the show. `speciesData.cricketsCaught` counts the catches.
+- *Night:* fireflies over the water; its eyes narrow to slits.
+
+**The chicken** (brooder, then coop).
+- A new chicken is a chick in a brooder box under a heat lamp. At seven days old it moves to the coop
+  as a hen (`migrated` event; the scene reloads into the coop). The Blueprint's lid-opening animation
+  is not built.
+- *Sprites by habitat:* the manifest may key a sprite set by `species/habitat`, so the brooder draws
+  the chick and the coop the hen.
+- *Behaviour:* peck, scratch, a dust bath, a nap in the warm spot; at night the hen roosts in the
+  coop's doorway, which glows.
+- *Eggs:* one per day of age from day seven, laid at the end of any day in which the hen was alive
+  and its hunger never reached zero (`egg` event, a notification, `speciesData.eggs`). Days are
+  counted from its birth, so no time zone is involved. Up to seven show in the nesting box. Pure sim,
+  tests first (`src/sim/chicken.ts`).
+- Collecting eggs was a rewards claim in the shelved chain phases; it is not built.
+
+**The brain.** Two full voices (lines, facts with checked sources, chat, teams and news,
+milestones), written by two writer agents in parallel in `src/species/{frog,chicken}/voice/`, held
+to the hamster's tests. The chicken's lines must be true of a chick and of a hen alike.
+
+Checkpoint 5: the acceptance walk for all four species in the installed app, checked in the
+background, with clips recorded headless.
