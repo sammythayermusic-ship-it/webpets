@@ -67,8 +67,9 @@ right, doing the same things in the same order.
   floats. The older recording scripts that click and type still need the Mac to themselves.
 - **Your pet Gill died on November 12,** a day after its last feed. The new build shows it lying
   there, and the "While you were gone" card is yours to dismiss.
-- **Your Desktop copy of `main`** still lags GitHub: iCloud evicted its git files (see
-  `NEEDS-SAMMY.md`).
+- **Your Desktop copy of `main` is current again.** The fast-forward that stalled at checkpoint 3
+  went through after the Mac restarted. The work still happens in the copy outside iCloud
+  (`~/.cache/webpets/work`); see `NEEDS-SAMMY.md`.
 
 ## What's next
 Step 5: the frog (pond, then jar) and the chicken (brooder, then coop), each with the full brain,
