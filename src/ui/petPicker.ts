@@ -7,16 +7,22 @@
 //
 // Choosing a different species makes main.ts reload the app to mount the other habitat.
 
-import type { Species } from '../sim/types';
+import type { Rect, Species } from '../sim/types';
 import { implementedSpecies } from '../species';
 import type { UiDeps } from './types';
-import { button, centerIn, el, stopDrag } from './dom';
+import { button, centerIn, el, relRect, stopDrag } from './dom';
 import { CARD_MAX_WIDTH, CARD_MIN_WIDTH } from './feederDialog';
 
 export interface PetPickerHandle {
   open(): void;
   close(): void;
   isOpen(): boolean;
+  /**
+   * The card's rect while it is open (window-local CSS px), for the click-through window's hit
+   * regions. Unlike the feeder dialog it can be taller than a small habitat, and its Cancel is at
+   * the bottom.
+   */
+  getRects(): Rect[];
   destroy(): void;
 }
 
@@ -43,7 +49,9 @@ export function mountPetPicker(root: HTMLElement, deps: UiDeps): PetPickerHandle
   stopDrag(card);
 
   const title = el('h2', '', PICKER_TITLE);
-  const hint = el('div', 'line muted');
+  // Under the buttons, with room for two lines kept whatever it says: it changes as you point at a
+  // choice, and a line that grew above the buttons moved them out from under the pointer.
+  const hint = el('div', 'line muted hint');
   const choices = el('div', 'row');
   let open = false;
 
@@ -71,7 +79,7 @@ export function mountPetPicker(root: HTMLElement, deps: UiDeps): PetPickerHandle
 
   const actionsRow = el('div', 'row');
   actionsRow.append(button('CANCEL', () => close(), 'close'));
-  card.append(title, hint, choices, actionsRow);
+  card.append(title, choices, hint, actionsRow);
   root.append(card);
 
   function layout(): void {
@@ -86,18 +94,21 @@ export function mountPetPicker(root: HTMLElement, deps: UiDeps): PetPickerHandle
     restHint();
     card.hidden = false;
     layout();
+    deps.requestHitRegions();
   }
 
   function close(): void {
     if (!open) return;
     open = false;
     card.hidden = true;
+    deps.requestHitRegions();
   }
 
   return {
     open: openDialog,
     close,
     isOpen: () => open,
+    getRects: () => (open ? [relRect(card, root)] : []),
     destroy() {
       card.remove();
     },

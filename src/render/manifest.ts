@@ -228,6 +228,11 @@ function ambientSpec(v: unknown, path: string): AmbientSpec {
     if (!Array.isArray(nest) || nest.length === 0) throw new ManifestError(`${path}.nest`, 'expected a list of points');
     out.nest = nest.map((p, i) => numPair(p, `${path}.nest[${i}]`));
   }
+  const shadow = v['shadow'];
+  if (shadow !== undefined) {
+    if (!isRecord(shadow)) throw new ManifestError(`${path}.shadow`, 'expected an object');
+    out.shadow = { w: positive(shadow['w'], `${path}.shadow.w`), h: positive(shadow['h'], `${path}.shadow.h`), below: num(shadow['below'], `${path}.shadow.below`) };
+  }
   const tongue = v['tongue'];
   if (tongue !== undefined) {
     if (!isRecord(tongue)) throw new ManifestError(`${path}.tongue`, 'expected an object');

@@ -116,6 +116,19 @@ you trust" if someone says they are hurt, never asks for personal details), sent
 the one thing the reply is about. A per-person "kid mode" (built-in lines only) would be easy to
 add once you decide.
 
+### Where the chicken's facts link to (2026-11-17, Step 5) — nothing blocked
+Each fact the pets tell has a link to the page it came from. The chicken's 184 facts are clean, but
+some of the pages they link to are not written for children:
+- Wikipedia's Chicken page (36 facts) and two RSPCA farming pages (27 facts) discuss slaughter.
+- A Scientific American article (9 facts) discusses factory farming and has a swear word in it.
+- Three more pages mention meat (the Brahma and Ayam Cemani breed pages, a university skeleton page).
+
+The facts are grouped by page in `src/species/chicken/voice/facts.ts`, so any page can be dropped
+in one cut. Dropping all of the above leaves 112, under the 120 the voice tests ask for, so they
+would need replacing rather than only removing. Your call: keep the links, drop those pages and
+have me find gentler sources, or show chicken facts without a link. It ties into the "Kids using
+it" question above.
+
 ## Open questions from the brief (not blocking; code keeps both options open)
 - How the app makes money.
 - ~~Whether food costs anything.~~ Answered 2026-10-31: food is free, no $FEED.

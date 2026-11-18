@@ -235,7 +235,17 @@ describe('the checked-in manifest (Step 3)', () => {
         expect(a?.bottle).toBeDefined();
         expect(a?.hood).toBeDefined();
         expect(a?.critter?.kind).toBe('moth');
-      } else if (key.startsWith('frog/')) {
+      } else if (key.startsWith('frog/') || key.startsWith('chicken/')) {
+        // Step 5: a sprite pet stands on a contact shadow, under its feet and no wider than it is
+        const body = (m.sprites[key] ?? m.sprites[key.split('/')[0] as string])?.body;
+        expect(a?.shadow, key).toBeDefined();
+        expect(a?.shadow?.w).toBeGreaterThan(10);
+        expect(a?.shadow?.w).toBeLessThanOrEqual(body?.w ?? 0);
+        expect(a?.shadow?.below).toBeGreaterThan(4);
+        expect(a?.shadow?.below).toBeLessThan(body?.h ?? 0);
+      }
+      if (key.startsWith('hamster/')) continue;
+      if (key.startsWith('frog/')) {
         // Step 5: fireflies over the water, and a tongue to draw
         expect(a?.fireflies?.count).toBeGreaterThanOrEqual(5);
         expect(a?.air).toBeDefined();

@@ -164,6 +164,11 @@ test('Phase 0 acceptance walk-through', async ({ page }) => {
 
   await test.step('New pet from the memorial card', async () => {
     await page.locator('.memorial-card').getByRole('button', { name: 'NEW PET', exact: true }).click();
+    // Step 5: a new pet asks which. Another fish stays in the bowl, so nothing reloads.
+    const picker = page.locator('.pet-picker');
+    await expect(picker).toBeVisible();
+    await picker.getByRole('button', { name: 'FISH', exact: true }).click();
+    await expect(picker).toBeHidden();
     await expect(page.locator('.memorial-card')).toBeHidden();
     await hoverBowl();
     await expect(pct).toHaveText('100%');

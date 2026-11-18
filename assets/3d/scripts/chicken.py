@@ -46,6 +46,12 @@ def materials():
         wb.toy_material("S5_straw", (0.36, 0.26, 0.08), roughness=0.8, sheen=0.1),
         ramp_stops=[(0.15, (0.200, 0.130, 0.035)), (0.5, (0.360, 0.255, 0.075)), (0.85, (0.520, 0.400, 0.150))],
         scale=120.0, bump_strength=0.6, bump_distance=0.003, roughness=0.8)
+    # The brooder's bedding: wood shavings, a muted tan well below the chick's yellow. Laid in the
+    # nest's golden straw the chick disappeared into it.
+    m['bedding'] = wb.voronoi_scatter(
+        wb.toy_material("S5_bedding", (0.150, 0.095, 0.040), roughness=0.85, sheen=0.05),
+        ramp_stops=[(0.15, (0.080, 0.048, 0.020)), (0.5, (0.150, 0.095, 0.040)), (0.85, (0.230, 0.155, 0.070))],
+        scale=120.0, bump_strength=0.6, bump_distance=0.003, roughness=0.85)
     m['dirt'] = wb.voronoi_scatter(
         wb.toy_material("S5_dirt", (0.09, 0.055, 0.03), roughness=0.92),
         ramp_stops=[(0.2, (0.050, 0.030, 0.016)), (0.6, (0.090, 0.056, 0.030)), (0.9, (0.130, 0.085, 0.048))],
@@ -137,8 +143,8 @@ def build_brooder(m):
         # the side walls step down to the low front
     box("S5_br_front", BR_W, t, BR_FRONT + 0.014, front, m['wood'], (0, -(hd - t / 2), GROUND + (BR_FRONT + 0.014) / 2))
     # bedding: a slab and a scatter of shavings
-    box("S5_br_bed", BR_W - 2 * t, BR_D - 2 * t, 0.014, col, m['straw'], (0, 0, BR_FLOOR - 0.007), r=0.002)
-    scatter(col, m['straw'], "S5_br_chip", 380, -hw + 0.016, hw - 0.016, -hd + 0.016, hd - 0.016, BR_FLOOR)
+    box("S5_br_bed", BR_W - 2 * t, BR_D - 2 * t, 0.014, col, m['bedding'], (0, 0, BR_FLOOR - 0.007), r=0.002)
+    scatter(col, m['bedding'], "S5_br_chip", 380, -hw + 0.016, hw - 0.016, -hd + 0.016, hd - 0.016, BR_FLOOR)
     # the heat lamp: a clamp on the back wall, an arm, a dome, a red bulb that is a real light
     lx, ly = BR_LAMP
     top = GROUND + BR_WALL

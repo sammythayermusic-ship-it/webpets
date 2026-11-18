@@ -321,6 +321,8 @@ interface Bit {
 }
 
 const MOTES = 26;
+/** How dark the contact shadow under a sprite pet is at its middle, by day. */
+const PET_SHADOW = 0.34;
 const DRINK_BUBBLE_EVERY_S = 1.3;
 
 export function createAmbient(spec: AmbientSpec, textures: ReadonlyMap<string, Texture>, rng: () => number): Ambient {
@@ -419,6 +421,16 @@ export function createAmbient(spec: AmbientSpec, textures: ReadonlyMap<string, T
     sprite.alpha = 0;
     back.addChild(sprite);
     door = { sprite, t: 0 };
+  }
+
+  // -- Step 5: the pet's contact shadow
+  let petShadow: Sprite | null = null;
+  if (spec.shadow) {
+    petShadow = new Sprite({ texture: shadeTex, label: 'ambient:pet-shadow' });
+    petShadow.anchor.set(0.5);
+    petShadow.scale.set(spec.shadow.w / (8 * FX_SS), spec.shadow.h / (8 * FX_SS));
+    petShadow.alpha = 0;
+    back.addChild(petShadow);
   }
 
   // -- Step 5: the heat lamp's glow, over everything under it
@@ -593,6 +605,13 @@ export function createAmbient(spec: AmbientSpec, textures: ReadonlyMap<string, T
         const want = spec.doorGlow ? doorGlow(input.light, home) : home ? 0.42 : 0.06;
         door.t += (want - door.t) * (1 - Math.exp(-dt / 1.5));
         door.sprite.alpha = door.t;
+      }
+
+      // the pet's shadow: under its feet, fainter while it is off the ground and in the dark
+      if (petShadow && spec.shadow) {
+        const want = input.alive ? PET_SHADOW * (input.pet.act === 'hop' ? 0.35 : 1) * (1 - 0.45 * input.light.night) : 0;
+        petShadow.alpha += (want - petShadow.alpha) * (1 - Math.exp(-dt / 0.12));
+        petShadow.position.set(input.pet.x, input.pet.y + spec.shadow.below);
       }
 
       // the heat lamp

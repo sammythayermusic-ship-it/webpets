@@ -545,6 +545,18 @@ body {
   margin-bottom: 6px;
 }
 
+/* The new-pet picker opens over the memorial card, and its one changing line keeps two lines' room. */
+.pet-picker {
+  z-index: 12;
+}
+.pet-picker .row:first-of-type {
+  margin-top: 0;
+}
+.pet-picker .hint {
+  min-height: 2.8em;
+  margin: 8px 0 0 0;
+}
+
 .memorial-card .rip {
   color: #c0392b;
 }

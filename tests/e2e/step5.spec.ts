@@ -11,14 +11,20 @@ interface PetDoc {
 const petOf = (page: Page): Promise<NonNullable<PetDoc['pet']>> =>
   page.evaluate(() => (JSON.parse(localStorage.getItem('webpets:pet.json') ?? '{}') as PetDoc).pet ?? {});
 
-/** Open the tray's New pet and pick one. Choosing another species reloads the app. */
+/**
+ * Open the tray's New pet and pick one. Choosing another species saves it and then reloads the app
+ * into the other habitat, so this waits for that load before it looks at anything.
+ */
 async function pick(page: Page, species: string): Promise<void> {
   await page.evaluate(() => window.__webpetsMock?.emitTray('new-pet'));
   const picker = page.locator('.pet-picker');
   await expect(picker).toBeVisible();
+  const reloaded = page.waitForEvent('load');
   await picker.locator(`.pick-${species}`).click();
-  await expect.poll(async () => (await petOf(page)).species).toBe(species);
+  await reloaded;
   await waitForBoot(page);
+  // What came back is what was chosen: the save landed before the reload.
+  expect((await petOf(page)).species).toBe(species);
 }
 
 test('New pet asks which, and offers all four', async ({ page }) => {
@@ -74,7 +80,7 @@ test('a chicken starts as a chick in the brooder, and is a hen in the coop after
   });
   await page.reload();
   await waitForBoot(page);
-  await expect.poll(async () => (await petOf(page)).habitat).toBe('coop');
+  await expect.poll(async () => (await petOf(page).catch(() => ({} as { habitat?: string }))).habitat).toBe('coop');
   expect((await petOf(page)).species).toBe('chicken');
   await expect(page.locator('#app canvas')).toHaveCount(1);
   await page.waitForTimeout(1500);

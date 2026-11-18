@@ -138,6 +138,11 @@ export interface AmbientSpec {
   doorGlow?: boolean;
   /** Where eggs sit in the nesting box, in the order they fill; at most this many are shown. */
   nest?: Array<[number, number]>;
+  /**
+   * A soft contact shadow under a sprite pet, so it stands ON the ground instead of in front of a
+   * picture of it: its size, and how far below the pet's centre its feet are, grid px.
+   */
+  shadow?: { w: number; h: number; below: number };
   /** The frog's tongue: where its mouth is from the sprite's centre, facing right, grid px. */
   tongue?: { mouth: [number, number] };
   /** The one small creature that is not a pet: a snail on the bowl's glass, a moth at the light. */

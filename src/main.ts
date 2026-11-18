@@ -265,6 +265,7 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   const feederDialog = mountFeederDialog(ui, deps);
   const montage = mountMontage(ui, deps);
   const petPicker = mountPetPicker(ui, deps);
+  extraRects.push(petPicker);
   mountMemorial(ui, deps, petPicker);
   grip.relayout();
   // Show it off (Step F2): the last few seconds as a clip, and the pet card, saved to Downloads.

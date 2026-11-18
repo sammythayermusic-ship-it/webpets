@@ -120,6 +120,10 @@ def habitat(man, species, hab, src, layers, ambient, extra_geom):
     walk = g["walk"]
     amb = {"tints": tints}
     amb.update(ambient)
+    # The pet's contact shadow: as wide as its body, flat, under its soles (the rig's origin stands
+    # `feet` grid px above them).
+    body, feet = g["body"], g.pop("feet")
+    amb["shadow"] = {"w": round(body["w"] * 0.92, 1), "h": round(min(10.0, max(6.0, body["w"] * 0.3)), 1), "below": round(feet - 0.5, 1)}
     man["habitats"][f"{species}/{hab}"] = {
         "grid": [320, 240],
         "layers": order,
@@ -225,7 +229,7 @@ def main():
             bank = {"x0": round(p["bankLeft"][0], 1), "x1": round(p["bankRight"][0], 1), "y": round(p["bankMid"][1], 1)}
             w = p["water"]
             extra = {"standY": round(sites["pad"][1]), "walk": [round(min(sites["pad"][0], sites["rock"][0]) - 4), round(max(sites["pad"][0], sites["rock"][0]) + 4)],
-                     "anchor": [round(sites["pad"][0]), round(sites["pad"][1])], "sites": sites, "bank": bank, "body": body}
+                     "anchor": [round(sites["pad"][0]), round(sites["pad"][1])], "sites": sites, "bank": bank, "body": body, "feet": up}
             amb = dict(FIRE)
             amb["air"] = {"x": round(w["x"] - 6, 1), "y": round(w["y"] - 46, 1), "w": round(w["w"] + 12, 1), "h": round(w["h"] + 40, 1)}
             habitat(man, "frog", hab, os.path.join(src, hab), layers, amb, extra)
@@ -246,7 +250,7 @@ def main():
         stand = round(b["floorLeft"][1] - up, 1)
         extra = {"standY": round(stand), "walk": [round(b["floorLeft"][0]), round(b["floorRight"][0])], "anchor": [160, round(stand)],
                  "sites": {"lamp": [round(b["lamp"][0], 1), stand], "feeder": [round(b["feeder"][0], 1), stand], "water": [round(b["water"][0], 1), stand]},
-                 "foodRow": round(b["foodRow"][1], 1), "body": chick}
+                 "foodRow": round(b["foodRow"][1], 1), "body": chick, "feet": up}
         amb = {"lamp": {"at": [round(b["bulb"][0], 1), round(b["bulb"][1], 1)], "radius": 34},
                "air": {"x": 60, "y": 60, "w": 200, "h": 80},
                "critter": {"kind": "moth", "frames": [f"critters/moth/f_{i:02d}.png" for i in range(4)], "size": [17, 14.4], "fps": 22},
@@ -257,7 +261,7 @@ def main():
         stand = round(c["floorLeft"][1] - up, 1)
         extra = {"standY": round(stand), "walk": [round(c["floorLeft"][0]), round(c["floorRight"][0])], "anchor": [170, round(stand)],
                  "sites": {"door": [round(c["door"][0], 1), stand], "feeder": [round(c["feeder"][0], 1), stand], "dust": [round(c["dust"][0], 1), stand]},
-                 "foodRow": round(c["foodRow"][1], 1), "body": hen}
+                 "foodRow": round(c["foodRow"][1], 1), "body": hen, "feet": up}
         d = c["doorRect"]
         amb = {"door": {"x": d["x"], "y": d["y"], "w": d["w"], "h": d["h"]},
                "doorGlow": True,
