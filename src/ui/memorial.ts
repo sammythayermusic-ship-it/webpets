@@ -14,7 +14,7 @@ export interface MemorialHandle {
   destroy(): void;
 }
 
-export function mountMemorial(root: HTMLElement, deps: UiDeps): MemorialHandle {
+export function mountMemorial(root: HTMLElement, deps: UiDeps, petPicker?: { open(): void }): MemorialHandle {
   const { store, scene } = deps;
 
   const card = el('div', 'modal memorial-card');
@@ -32,7 +32,9 @@ export function mountMemorial(root: HTMLElement, deps: UiDeps): MemorialHandle {
   const newPetBtn = button(
     'NEW PET',
     () => {
-      store.getState().actions.newPet();
+      // Which species: the picker's question. Without one wired (the older tests), another of the same.
+      if (petPicker) petPicker.open();
+      else store.getState().actions.newPet();
     },
     'new-pet',
   );

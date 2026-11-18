@@ -21,6 +21,7 @@ import { requireSpecies } from '../species';
 import { configureAssetPipeline, loadTextures } from './assets';
 import { createBubbles, createSheen, parallaxOffset, type Bubbles, type Sheen } from './fx';
 import { createFlakes, type Flakes } from './food';
+import { createCrickets } from './crickets';
 import { buildLayers, type LayerStack } from './layers';
 import { createSpritePlayer, type SpritePlayer } from './spritePlayer';
 import { stateFiles } from './manifest';
@@ -150,7 +151,9 @@ export function createScene(
   const species = requireSpecies(subject.species);
   const habitatKey = `${subject.species}/${subject.habitat}`;
   const habitat: ManifestHabitat | undefined = manifest.habitats[habitatKey];
-  const spriteDef: ManifestSprite | undefined = manifest.sprites[subject.species];
+  // A species drawn differently in one habitat has a sprite set under that pairing's key: the chicken
+  // is a chick in the brooder and a hen in the coop.
+  const spriteDef: ManifestSprite | undefined = manifest.sprites[habitatKey] ?? manifest.sprites[subject.species];
   if (!habitat) throw new Error(`manifest has no habitat "${habitatKey}"`);
   if (!spriteDef) throw new Error(`manifest has no sprite "${subject.species}"`);
   /** The water the feed lands on, for a water habitat; null on a floor. */
@@ -229,6 +232,9 @@ export function createScene(
   };
   /** How hard the hamster is driving the wheel this tick (0 when it is not on it). */
   let wheelDrive = 0;
+  /** Step 5: where the frog's tongue is reaching, and the bug the hen is after, as last decided. */
+  let lastReach: { x: number; y: number; caught?: boolean } | null = null;
+  let lastBug: { x: number; y: number } | null = null;
   /** Unbanked `speciesData` increments since the last drain. See `drainSpeciesDelta`. */
   let speciesAccum: Record<string, number> = {};
 
@@ -380,6 +386,9 @@ export function createScene(
     });
     pendingTap = null;
     lastAct = out.act;
+    lastReach = out.reach ?? null;
+    lastBug = out.bug ?? null;
+    if (out.scareFlakeIndex !== undefined) m.flakes.scare?.(out.scareFlakeIndex);
     spirits = spiritsFor(mood.label, out.anim, view.label, alive);
     // Your team lost: fins folded, whatever else is going on.
     if (out.act === 'sulk') spirits = Math.min(spirits, SULK_SPIRITS);
@@ -399,7 +408,10 @@ export function createScene(
     // sleep and death are facts and outrank it. While one of those is playing the gate HOLDS rather
     // than being told the mood wants nothing, so the pet picks its face straight back up afterwards.
     const simDriving = out.anim !== 'idle';
-    const expressed = simDriving ? expression.hold() : expression.update(moodAnim(mood));
+    const felt = simDriving ? expression.hold() : expression.update(moodAnim(mood));
+    // A feeling shows only where the art can show it. A sprite set with no drawing for it keeps its
+    // living idle (the blink, the breath) rather than freezing on one frame for as long as it is happy.
+    const expressed = felt !== null && spriteDef.states[felt] === undefined && m.live === null ? null : felt;
     // A state named after what the pet is doing (dig, drink, run, startle) is drawn while it lasts;
     // a species without that art simply carries on with its anim.
     const actState = out.act !== undefined && spriteDef.states[out.act] !== undefined ? out.act : null;
@@ -588,7 +600,7 @@ export function createScene(
       layers.slots.pet.addChild(player.view);
       // The DOMAIN, not the manifest's waterShape. Those two only coincide for the fish: the cage
       // carries a flattened ellipse purely to satisfy the schema, and feeding read it literally.
-      const flakes = createFlakes(domain, bounds);
+      const flakes = layout.food?.kind === 'crickets' ? createCrickets(layout.food) : createFlakes(domain, bounds);
       layers.slots.food.addChild(flakes.container);
       const bubbles = createBubbles(habitat.waterShape, bounds);
       if (aquatic) layers.slots.fx.addChild(bubbles.container);
@@ -700,6 +712,9 @@ export function createScene(
           alive: view?.phase === 'alive',
           pet: { x: drawnX, y: drawnY, anim: m.player.state(), act: lastAct, facing: lastFacing },
           wheelDrive,
+          reach: lastReach,
+          bug: lastBug,
+          counters: view?.counters,
         });
         const t0 = performance.now();
         m.draw(dtMs);

@@ -12,6 +12,8 @@ import { toChipView, toHudModel, tooltipText } from './model';
 export interface TrayDeps extends UiDeps {
   devPanel: Pick<DevPanelHandle, 'toggle'>;
   feederDialog: { open(): void };
+  /** "New pet" asks which species (Step 5). */
+  petPicker: { open(): void };
   /** Show it off (Step F2): save the last few seconds, or the pet card. */
   share: { clip(): void; card(): void };
 }
@@ -104,7 +106,8 @@ export function wireTray(deps: TrayDeps): () => void {
         deps.devPanel.toggle();
         return;
       case 'new-pet':
-        a.newPet();
+        ensureShown();
+        deps.petPicker.open();
         return;
       case 'toggle-visibility':
         toggleVisibility();

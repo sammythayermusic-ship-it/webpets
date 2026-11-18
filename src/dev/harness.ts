@@ -379,9 +379,12 @@ async function dispatch(cmd: HarnessCommand, ctx: HarnessContext, io: HarnessIo)
       actions.dev.resetClock();
       return { devClockOffsetMs: ctx.store.getState().settings.devClockOffsetMs };
     case 'newPet': {
-      // Adopt a fresh pet (a fish in the bowl), burying the current one if it died: a script that
-      // records behaviour needs a living pet, and `force` cannot bring a dead one back.
-      actions.newPet();
+      // Adopt a fresh pet, burying the current one if it died: a script that records behaviour needs
+      // a living pet, and `force` cannot bring a dead one back. `species` picks which (Step 5); without
+      // it, another of what it was. A different species reloads the app, like the `species` op.
+      const species = cmd['species'];
+      if (species !== undefined && (typeof species !== 'string' || !SPECIES.has(species))) throw new Error(`newPet: unknown species "${String(species)}"`);
+      actions.newPet(species as Species | undefined);
       const pet = ctx.store.getState().pet;
       return { id: pet.id, name: pet.name, species: pet.species, habitat: pet.habitat, personality: pet.personality };
     }

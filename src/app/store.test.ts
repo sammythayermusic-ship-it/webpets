@@ -162,6 +162,42 @@ describe('app store', () => {
     expect(s.hunger).toBeCloseTo(50, 6);
   });
 
+  it('newPet can be any species that is built, in the home its module gives a new one', async () => {
+    const { store } = await bootStore();
+    const a = store.getState().actions;
+    expect(store.getState().pet.species).toBe('fish');
+    a.newPet('frog');
+    expect(store.getState().pet).toMatchObject({ species: 'frog', habitat: 'pond', alive: true, pantry: 0 });
+    // A chicken always starts as a chick: the sim's rules count its days from the brooder.
+    a.newPet('chicken');
+    expect(store.getState().pet).toMatchObject({ species: 'chicken', habitat: 'brooder' });
+    // The hamster's home is the terrarium (its module's choice), not the sim's older default.
+    a.newPet('hamster');
+    expect(store.getState().pet).toMatchObject({ species: 'hamster', habitat: 'terrarium' });
+    // Without a species: another of what you had.
+    const before = store.getState().pet.id;
+    a.newPet();
+    expect(store.getState().pet.species).toBe('hamster');
+    expect(store.getState().pet.id === before && store.getState().pet.name === undefined).toBe(false);
+  });
+
+  it('a chick the sim moves to the coop is saved there, with its eggs counted from then on', async () => {
+    const { store, platform } = await bootStore();
+    const a = store.getState().actions;
+    a.newPet('chicken');
+    for (let day = 0; day < 10; day += 1) {
+      a.fillPantry();
+      a.dev.skip(24 * H);
+    }
+    const pet = store.getState().pet;
+    expect(pet.alive).toBe(true);
+    expect(pet.habitat).toBe('coop');
+    // ten days old: the days numbered 7, 8 and 9 have ended, an egg for each
+    expect(pet.speciesData['eggs']).toBe(3);
+    await a.flush();
+    expect((platform.files.get(PET_FILE) as PetDoc).pet.habitat).toBe('coop');
+  });
+
   it('newPet buries the dead pet, starts an empty feeder and clears latches', async () => {
     const { store, platform } = await bootStore();
     const a = store.getState().actions;
@@ -329,7 +365,7 @@ describe('app store', () => {
     expect((settings as unknown as { scaleSteps: number }).scaleSteps).toBe(SCALE_S);
   });
 
-  it('switches to an implemented species and refuses one that is only declared', async () => {
+  it('switches to an implemented species and refuses a pairing that is not built', async () => {
     const { store, platform } = await bootStore();
     const a = store.getState().actions;
     expect(store.getState().pet.species).toBe('fish');
@@ -341,10 +377,10 @@ describe('app store', () => {
     // the 500 ms save window would resurrect the fish.
     expect((platform.files.get(PET_FILE) as PetDoc).pet.species).toBe('hamster');
 
-    // Declared in the Species union since the first commit, never implemented. The guard used to be a
-    // hardcoded `!== 'fish'`; it asks the registry now, so this stays refused without anyone
-    // maintaining a second list.
-    await a.dev.setSpecies('frog', 'pond');
+    // The frog was the example of "declared but never built" here until Step 5 built it. The guard
+    // asks the registry, so it became switchable the day its module landed; a pairing nobody built
+    // (a frog in a cage) is still refused.
+    await a.dev.setSpecies('frog', 'cage');
     expect(store.getState().pet.species).toBe('hamster');
 
     // Right species, wrong habitat. The terrarium used to be the example here -- it was the hamster's

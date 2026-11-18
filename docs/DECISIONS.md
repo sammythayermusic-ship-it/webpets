@@ -2075,3 +2075,76 @@ to the hamster's tests. The chicken's lines must be true of a chick and of a hen
 
 Checkpoint 5: the acceptance walk for all four species in the installed app, checked in the
 background, with clips recorded headless.
+
+## 2026-11-17 — Step 5 built: what changed on the way
+
+Built as planned, with these differences and discoveries.
+
+**The frog does not walk.** Its world is two perches (the lily pad, the rock) and the bank where
+crickets are let loose, so its behaviour has no speed, wander target or clamp: the only motion is the
+hop between perches, an arc of five ticks. `SpeciesLayout.sites` holds the perches as points.
+
+**Crickets are food that moves.** `render/crickets.ts` implements the same `Flakes` contract as
+falling food (so the scene, the behaviour's `flakes` input and the bite index are unchanged) with a
+pure step function. Three per feed, hopping in from one end of the bank; one not caught in 20 s, or
+one the tongue missed (`PetOutput.scareFlakeIndex`, `Flakes.scare`), leaves by the nearer end.
+`SpeciesLayout.food` says a habitat feeds this way.
+
+**The frog strikes at what sits still.** The first version counted any ticks in reach before
+striking and missed every cricket in one headless take: it aimed at crickets in mid-hop. It now
+waits for the cricket to have sat for 3 to 8 ticks, and starts the wait again when it hops. The
+tongue lands a tick after it leaves, so a cricket that hops in that tick is still missed, and is
+frightened off. Over 20 seeded feeds of live crickets the frog catches most and some escape
+(`behavior.test.ts`).
+
+**The tongue is drawn by the habitat, not the sprite.** The behaviour says where it reaches
+(`PetOutput.reach`), and `ambient.ts` draws a bar from the mouth (measured off the snap frames, in
+the manifest as `ambient.tongue.mouth`) to that point, out and back in 70 ms each, with the cricket
+on its tip on the way back.
+
+**"Chase a bug" replaced the sparrow.** The plan's ambient sparrow on the coop roof needed its own
+render and did nothing with the hen. The Blueprint's "chase a bug" does: the behaviour owns a bug
+(`PetOutput.bug`) that scuttles ahead of the hen while she runs it down, and the habitat draws it.
+She mostly catches it; after ten seconds it is under the fence.
+
+**One chicken behaviour, two birds.** `createChickenBehavior(stage, sites)`: the chick naps under the
+lamp, drinks and pecks; the hen scratches, dust-bathes, chases bugs and roosts in the doorway. She
+sits IN the doorway rather than going inside, so there is still a pet to look at by night.
+
+**Sprites are registered as rendered.** `s5_finish.py` first registered each state by its alpha
+centroid against idle's, as the hamster's older states are. That is wrong for art shot by one fixed
+camera with the rig standing in one place: it would have lifted the sleeping hen 8 px off the ground
+and slid the bird backwards on every peck. Every Step 5 state now has anchor zero, except a state
+the script itself shifted to centre a leaning or fallen pose in its frame, whose anchor is exactly
+that shift. Transitions (`die`) need no offsets for the same reason.
+
+**Shadows fade before the frame's edge.** At dawn and dusk the cast shadow is longer than the
+320x240 frame, which cut it in a straight line. `s5_finish.py` now eases the shadow's alpha to zero
+over the last 20 grid px, leaving the habitat itself as rendered. The Step 3 plates (bowl, cage,
+terrarium) still have the hard cut; they could get the same treatment.
+
+**See-through layers crossfade by plain weight.** The jar at dusk and night had a large pale smear
+across the frog. It was not in any plate: the layer stack draws the day sprite at full strength and
+the other light sets over it, which is the exact blend for solid art, and for glass leaves the day's
+bright reflections under the night's. A layer marked `translucent` in the manifest (the jar's glass)
+now fades its day sprite out as another light fades in. The terrarium's glass is not marked; it was
+passed as it is at checkpoint 3 and could take the same flag.
+
+**A new pet asks which.** `actions.newPet(species?)`, and `ui/petPicker.ts`, opened by the tray's
+New pet and the memorial's NEW PET. Before this a new pet was always a fish and the tray replaced a
+living pet without a word; now it says whose place the new one takes, and has a Cancel.
+
+**A change of habitat reloads after the save, not before it.** main.ts reloaded from inside the
+store's subscription, before the store had queued the save that caused it. That only ever worked for
+the dev panel's switch, which flushes by hand. A chick moved to the coop by the sim would have been
+moved again at every launch, and a newly chosen frog would have come back as the old pet. The reload
+now waits one turn of the event loop and a flush (`actions.flush`).
+
+**A mood without art keeps the living idle.** The scene played the mood's state (`happy`, `excited`,
+`curious`) on any sprite set; one with no such drawing froze on its first idle frame for as long as
+the mood lasted. It now keeps playing idle. This changes the hamster too, for the better.
+
+**Not built, as planned or found:** the brooder-to-coop transition animation (it is a reload);
+collecting eggs; ripples on the pond; the frog's eyes narrowing at night beyond its sleep pose
+(asleep, they are shut); cattails drooping over a dead frog. The hen has no art for being inside the
+house.

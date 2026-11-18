@@ -121,8 +121,13 @@ export interface AppActions {
   feed(): FeedResult;
   /** Fills the holiday feeder to PANTRY_CAPACITY, for free; a hungry pet eats from it at once. No-op for a dead pet. */
   fillPantry(): void;
-  /** Reconciles, buries the pet if it is dead, mints a fresh one (its feeder starts empty). */
-  newPet(): void;
+  /**
+   * Reconciles, buries the pet if it is dead, mints a fresh one (its feeder starts empty). `species`
+   * picks what it is, among the species that are built; without it, another of what you had.
+   */
+  newPet(species?: Species): void;
+  /** Write everything pending to disk now. main.ts awaits it before it reloads to mount another habitat. */
+  flush(): Promise<void>;
   /** Marks the current dead pet's card as seen so the scene switches to the memorial. */
   acknowledgeDeath(): void;
   /**

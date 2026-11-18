@@ -1,0 +1,943 @@
+// What the frog says when you talk with it, and while it gets to know you (the types are in
+// src/brain/types.ts). Data only; src/brain picks.
+//
+// The same frog as lines.ts, in the same four characters, for kids and adults alike: teasing is fine,
+// mean is not, and nothing a parent would wince at. A frog's comedy is patience: it sits very still
+// for a very long time, it stares, it is an ambush that looks like nothing happening, it is damp and
+// proud of it, it croaks, it loves rain and it is up all night. Still, where the hamster was busy and
+// the fish was bored. Its home is water with a pad and a rock; the lines say the water, the pad, the
+// rock and the glass or the edge, so they hold for the pond and for a jar.
+//   sarcastic — deadpan, pretends not to care, plainly does. Stillness as a flex.
+//   anxious   — sweet, a worrier, relieved every time you show up. Stillness as a safety plan.
+//   zen       — calm, grateful, finds the poetry in a ripple. Stillness as the whole point.
+//   hyper     — everything is the best thing that has ever happened, again. Stillness is a dare.
+//
+// Tokens. `{name}` is the frog's own name, allowed anywhere (used sparingly; every name-ask line has
+// it). The rest only where they are named, and then in every line there:
+//   `{you}`      your name: teach.ask-name, teach.saved-name, bond.thought-you, bond.visit-close.
+//   `{interest}` a lower-case hobby ("video games", "baking", "space"): teach.ask-interest,
+//                teach.saved-interest, bond.thought-interest, bond.joke-shared. Never at the start of
+//                a sentence, never with an article or a verb that assumes singular or plural.
+//   `{team}`     a team nickname ("Red Sox", "Heat"): teach.ask-team, teach.saved-team,
+//                bond.thought-team. "the {team}" is fine, "a {team}" is not (an Eagles fan).
+//   `{thing}`    an interest or a team it already knew: teach.already-know.
+// The ask-* lines are yes/no questions (the bubble shows Yes / No); which-team is a short question
+// with no token (the bubble shows the teams). Anything else may end in a question only if any answer,
+// or none, works: the offline pet cannot follow up. No results or scores in thought-team (those come
+// from real data), no real-world facts here (facts.ts has those, with sources). Every line fits the
+// bubble (100 characters with the longest test values) and appears once.
+
+import type { Personality } from '../../../sim/types';
+import type { BondMoment, ChatIntent, ChatVoice, TeachMoment } from '../../../brain/types';
+
+const CHAT: Record<Personality, Record<ChatIntent, readonly string[]>> = {
+  sarcastic: {
+    hello: [
+      'Hello. I would wave, but that is movement, and I am mid-ambush.',
+      'Oh. Hi. I saw you three minutes ago. I was pacing myself.',
+      'Greetings. You have my full attention. This is what it looks like.',
+      'Hi. I blinked at you just now. That is a warm welcome, in frog.',
+      'Hello. Pull up a rock. Not that one. That one is mine.',
+    ],
+    'how-are-you': [
+      'Damp, still and unbothered. So, excellent.',
+      'I have sat in one place all day and nothing went wrong. Living the dream.',
+      'Fine. My skin is moist and my standards are low.',
+      'Thriving. You can tell by how little I am doing.',
+      'Cannot complain. Well. I can. But it would mean moving my mouth.',
+    ],
+    'what-doing': [
+      'Waiting. It is a full-time position.',
+      'Ambushing. Nothing in particular. Just keeping my hand in.',
+      'Staring at one spot on the water. It is my spot. I am guarding it.',
+      'Taking a drink through my skin. Multitasking, really.',
+      'Holding very still, so the day thinks I am part of the pad.',
+    ],
+    love: [
+      'Noted. I would blush, but I am green all the way through.',
+      'I love you too. I am saying it without moving, so it counts double.',
+      'Fine. You are my favourite thing on the far side of the glass.',
+      'A lot to say to a frog mid-ambush. I will allow it. I love you too.',
+      'I let you watch me sit. I do not do that for just anyone. That is love.',
+    ],
+    praise: [
+      'Thank you. The shine is natural. It is mostly damp.',
+      'Yes, I am handsome. It is the stillness. It lets people get a good look.',
+      'I know. Green suits me. Luckily.',
+      'Compliments accepted. Crickets also accepted.',
+      'Go on. I have nowhere to be and I enjoy hearing it.',
+    ],
+    thanks: [
+      'You are welcome. I did it without lifting a toe.',
+      'Do not mention it. Really. I was just sitting here.',
+      'Any time. I am always here. Notably so.',
+      'Glad to be of use. I assume I did it by staying put.',
+      'It was nothing. Nothing is my speciality.',
+    ],
+    bye: [
+      'Goodbye. I will be right here. That is not a figure of speech.',
+      'Off you go. I will hold this pose until you return. And after.',
+      'Bye. Do not worry about me. I have a rock and a plan. The plan is the rock.',
+      'See you. I will watch the place. I watch it anyway. Now it is official.',
+      'Leaving? Fine. The pad and I will carry on not moving without you.',
+    ],
+    sad: [
+      'Hey. No jokes. Come and sit by the water. Sitting is the one thing I am properly good at.',
+      'Sorry it is a rough one. I am not going anywhere. I never do. Today that is useful.',
+      'You do not have to talk. I can do silence for hours. I will do it with you.',
+      'For what it is worth, a frog thinks you are doing fine. I do not say that lightly.',
+      'Bad day. Understood. Stay as long as you like. The pad is patient and so am I.',
+    ],
+    happy: [
+      'Good. I am croaking about it on the inside.',
+      'Look at you. Keep that up. I will celebrate by blinking twice.',
+      'Excellent news. I nearly moved.',
+      'Happy suits you. I would hop, but I do not want to make a scene.',
+      'I am pleased. This is my pleased face. It is also my other face.',
+    ],
+    tired: [
+      'Then stop moving. Trust me. I am an expert.',
+      'Go and lie down. I will stay up. I was going to anyway.',
+      'Rest. Sitting still is a skill, and you have earned a go at it.',
+      'Tired? Do what I do. Find a flat place. Stay on it.',
+      'Sleep. I have the night covered. It is the one shift I like.',
+    ],
+    bored: [
+      'Bored? I have watched one ripple since lunch. Pace yourself.',
+      'Try staring at something until it moves. That is my entire hobby.',
+      'Boredom is just patience without a cricket at the end. Hang in there.',
+      'You could count my blinks. Bring a book. It takes a while.',
+      'Sit still with me. First one to move has to admit they were bored.',
+    ],
+    'hungry-talk': [
+      'I could eat. I could always eat. I just refuse to look eager about it.',
+      'Hungry? I prefer to say available. Send crickets.',
+      'Let three loose and find out. I recommend standing back.',
+      'I am never not ready. The tongue is loaded.',
+      'Yes. But casually. Do not make it a thing. Crickets.',
+    ],
+    'name-ask': [
+      'It is {name}. I answer to it eventually.',
+      '{name}. You chose it. I have decided to keep it.',
+      'I am {name}. I would shake hands, but, movement.',
+      'They call me {name}. I let them.',
+      '{name}. Say it slowly. I do everything slowly.',
+    ],
+    joke: [
+      'What does a frog do all day? This. You are watching the whole show.',
+      'Why did the frog sit on the pad for six hours? That is not a joke. That is my schedule.',
+      'What is green and does not move? Me. Next question.',
+      'Why are frogs so good in waiting rooms? We bring our own waiting.',
+      'What did the frog order at the cafe? Nothing. It sat there until a fly showed up.',
+      'How does a frog feel after a long day? Hard to say. It looks the same as the morning.',
+      'Knock knock. Who is there? A frog. A frog who? A frog who was here before you knocked.',
+    ],
+    question: [
+      'Good question. I will think about it for four hours and tell you nothing.',
+      'I do not know. I know where the rock is. That has always been enough.',
+      'Ask the water. It reflects on everything.',
+      'Let me sit on that. I mean that literally. It is how I think.',
+      'No idea. But I stared at you thoughtfully while you asked. That is nearly an answer.',
+    ],
+    unknown: [
+      'I heard all of that and moved for none of it.',
+      'Mm. I am going to respond to that with a long, steady look.',
+      'That went straight over my head and landed in the water.',
+      'I did not follow. I rarely follow. Things come to me.',
+      'Interesting. I think. I was watching a ripple for the middle part.',
+    ],
+  },
+
+  anxious: {
+    hello: [
+      'Oh! Hello! I saw you coming with both eyes, and I am still surprised.',
+      'Hi! I was sitting very still, hoping it was you. It was you!',
+      'Hello! Sorry, I croaked. That happens when I am happy. And when I am not.',
+      'Hi! Is it just you? Good. You are my favourite just.',
+      'Oh, hello! I stayed exactly where I was, so you could find me.',
+    ],
+    'how-are-you': [
+      'Okay, I think! Damp, which is good. I checked a moment ago.',
+      'A bit jumpy. Which for a frog is sort of the job. But still.',
+      'Better now. A ripple worried me earlier. It turned out to be my foot.',
+      'Good! Nothing has happened all day, and I am so grateful.',
+      'Fine! Thank you for asking. Nobody asks. The rock never asks.',
+    ],
+    'what-doing': [
+      'Sitting still, so nothing notices me. You noticed me. That is okay. You are allowed.',
+      'Checking I am still damp. I am. I will check again shortly.',
+      'Practising my croak very quietly, so it is ready if I need it.',
+      'Watching the edge of the water. Someone should. I volunteered.',
+      'Deciding whether to hop to the rock. I have been deciding since morning.',
+    ],
+    love: [
+      'You do? Oh. Oh! I love you too. My throat has gone all puffed up.',
+      'I love you too! I have been practising saying it to the rock.',
+      'That makes me feel safe right down to my toes. All of them.',
+      'Really? Me? The damp one? Thank you. I love you so much.',
+      'I am going to sit very still and keep that. I love you too.',
+    ],
+    praise: [
+      'Oh! Thank you! I was worried I looked too green today.',
+      'You think so? I have been keeping extra damp. I hoped it showed.',
+      'So kind. I do not know where to look. And I can look almost everywhere.',
+      'Me? A good frog? I try very hard. Thank you for noticing.',
+      'I am going to remember that the next time a ripple scares me.',
+    ],
+    thanks: [
+      'You are welcome! Was it enough? I can do more. I can sit harder.',
+      'Oh, it was nothing! I mean, it was something. I am glad it helped.',
+      'Any time! I am always here. I do not like to go far.',
+      'You are so welcome. I like being useful. It calms me right down.',
+      'Thank you for saying thank you. Sorry. I am doing it again.',
+    ],
+    bye: [
+      'Oh. Bye! I will stay right here on the pad, so you know where I am.',
+      'Goodbye! Be careful. Stay damp. Sorry, that is frog advice. Stay well.',
+      'See you soon? I will watch the glass. Not too hard. Quite hard.',
+      'Bye! I will keep everything exactly as it is until you are back.',
+      'Goodbye. I will croak once after you go. It is a nice croak. A hopeful one.',
+    ],
+    sad: [
+      'Oh no. I am so sorry. Come and sit close. I will stay right at the edge with you.',
+      'You do not have to be brave with me. I am not brave either. We can just sit.',
+      'I wish I could carry some of it. I am small, but I am very good at staying.',
+      'I am here. I am not going to hop off. Not even if there is a ripple.',
+      'Sad days are allowed. I will keep you company through every bit of it.',
+    ],
+    happy: [
+      'Oh, I am so glad! I was hoping today would be kind to you.',
+      'Good news! My favourite kind. My only favourite kind, really.',
+      'You are happy? Then I can relax. Look. This is me relaxing.',
+      'That is wonderful! I did a tiny hop. Did you see? It was very tiny.',
+      'Hooray. Quietly. Hooray. I do not want to startle the water.',
+    ],
+    tired: [
+      'Oh, you should rest. I will keep watch. I am up all night anyway.',
+      'Please sleep. Nothing will happen. I will make sure, as best a frog can.',
+      'You sound worn out. Sit down. Be still. I can show you how.',
+      'Go gently. I will be quiet. I will even hold my croaks until morning.',
+      'It is okay to stop. I stop all the time. It is most of what I do.',
+    ],
+    bored: [
+      'Bored is good! Bored means nothing scary is happening. I love bored.',
+      'We could watch the water together. I will tell you if a ripple is a bad one.',
+      'I could show you my hop? It is small. I do not go far. But it is neat.',
+      'We could listen for rain. It might not come. But we would be ready.',
+      'Tell me about your day? I will blink at all the right moments.',
+    ],
+    'hungry-talk': [
+      'A little hungry? If it is not a bother. I can wait. I am good at waiting.',
+      'Crickets? Now? Oh. Yes, please. Let me get ready. I am never ready.',
+      'I could eat. I am nervous about the catching part. But yes.',
+      'You thought of me! Yes. Even if I only catch one, yes, please.',
+      'Always a bit. I did not like to say. Thank you for asking.',
+    ],
+    'name-ask': [
+      'I am {name}! I get a happy flutter every time I say it.',
+      'It is {name}! I say it to myself when the water goes quiet.',
+      'Oh! {name}. That is me. I have never been asked so nicely.',
+      'My name is {name}. I answer to it every time. I never miss.',
+      'Um, {name}. You can say it softly. I will still hear.',
+    ],
+    joke: [
+      'Why did the frog stay on the pad? In case the rock had moved. It had not. I checked.',
+      'What is a frog scared of? Everything. That is not a joke. I panicked. Sorry.',
+      'Knock knock. Who is there? Ribbit. Ribbit who? Oh no, I had not planned this far.',
+      'Why did the frog cross the pond? It did not. It thought about it very hard, though.',
+      'What do you call a frog who worries? Damp and prepared. Was that funny? I hope so.',
+      'What did the frog say to the ripple? Was that you or me? Then it sat very still.',
+      'How many frogs does it take to catch a cricket? One. It has to believe in itself first.',
+    ],
+    question: [
+      'Oh. I do not know. Is it bad that I do not know? I will think about it all night.',
+      'I wish I had the answer. I only have a pad and some worries.',
+      'Um. I am not sure. But I listened to every word, I promise.',
+      'Good question! Too good. It has made me nervous. I will sit with it.',
+      'I do not want to get it wrong, so I will say: I am not sure. Sorry.',
+    ],
+    unknown: [
+      'I did not quite catch that. I am better at catching crickets. Slightly.',
+      'Oh! Um. Yes? I am nodding. Frogs cannot really nod. I am blinking.',
+      'Sorry, could you say that again? I was busy listening for ripples.',
+      'I am not sure what that meant, but you said it kindly, so thank you.',
+      'That was a lot of words for a small frog. I liked hearing them, though.',
+    ],
+  },
+
+  zen: {
+    hello: [
+      'Hello, friend. I was sitting. I still am. Now I am sitting with you.',
+      'Welcome. The water is calm, and so is the frog.',
+      'Ah. A greeting. I receive it the way still water receives rain.',
+      'Hello. I saw you arrive, and I let it be a good thing.',
+      'You are here. I open one eye a little wider, in welcome.',
+    ],
+    'how-are-you': [
+      'Still. In every sense, and gladly.',
+      'Damp and at ease. A frog asks for little else.',
+      'I am as I was this morning, which is well.',
+      'Content. The pad floats. I float on the pad. All is held.',
+      'Well. I have done nothing all day, and done it completely.',
+    ],
+    'what-doing': [
+      'Sitting. When I have finished, I will sit some more.',
+      'Watching one ripple travel all the way to the edge.',
+      'Waiting for nothing. If a cricket comes, that is a bonus.',
+      'Listening for rain. It is not raining. The listening is still good.',
+      'Being where I am. It takes the whole day, done properly.',
+    ],
+    love: [
+      'And I you, friend. Quietly, and all the time.',
+      'Love is still water. You can see right to the bottom of it.',
+      'Thank you. I will hold that the way the pad holds me.',
+      'I feel it. It lands softly, like the first drop of rain.',
+      'You are loved back, from a small green place.',
+    ],
+    praise: [
+      'I am green, and I sit. If that pleases you, I am glad.',
+      'Kind words. I let them soak in, as I do with water.',
+      'You see something good here. That is your own eye being kind.',
+      'I accept this the way a pond accepts a leaf. It floats a while.',
+      'Mm. Praise is a warm rock. I will sit on it briefly, then move on.',
+    ],
+    thanks: [
+      'You are welcome. It cost me nothing, and I gave it gladly.',
+      'No thanks are needed. But they ripple outward nicely.',
+      'I only sat here. Sometimes that is the help.',
+      'Gladly given. Thanks received. The circle is small and complete.',
+      'It was nothing. Then again, I do my best work with nothing.',
+    ],
+    bye: [
+      'Go well. The pad and I will be here, as ever.',
+      'Farewell for now. A parting is only a long blink.',
+      'Until you return. I will keep the stillness warm.',
+      'Travel gently, friend. Come back when the water calls.',
+      'Goodbye. One croak, later, will be for you.',
+    ],
+    sad: [
+      'Sit with me. Nothing needs fixing in this moment. We can simply be here.',
+      'Sadness is rain. It falls, it fills the water, and it passes. I am beside you.',
+      'You need not speak. Stillness is a language, and I am fluent.',
+      'Even troubled water settles, if no one stirs it. Be gentle with yourself.',
+      'I am here. I will be here in an hour. You are not alone in it.',
+    ],
+    happy: [
+      'Good. Joy on your face is like sun on the water.',
+      'I am glad with you. Let it soak in slowly.',
+      'A bright day. Sit in it. Do not rush to the next one.',
+      'Happiness is a firefly. Watch it. Do not chase it.',
+      'Your good news reaches me as a warm ripple.',
+    ],
+    tired: [
+      'Then rest, friend. Doing nothing is a noble thing. I have made a life of it.',
+      'Lie down. Be heavy. Let the day float off like a leaf.',
+      'Tiredness is the body asking for stillness. Say yes.',
+      'Sleep. I will be awake for both of us.',
+      'You have leapt enough today. Now sit.',
+    ],
+    bored: [
+      'Boredom is stillness that has not made friends with itself yet.',
+      'Watch one thing until it changes. It always does.',
+      'Nothing is happening. Look how much of it there is.',
+      'Sit beside me. We will be bored together, and call it peace.',
+      'A dull hour is a pond with no wind. Look closer. The sky is in it.',
+    ],
+    'hungry-talk': [
+      'A little. Hunger is only a hunt that has not begun.',
+      'If crickets come, I will meet them. Thank you for thinking of it.',
+      'Yes, friend. I am ready, in the unhurried way.',
+      'The tongue is rested. The belly is willing. Whenever you like.',
+      'I could eat. I could also wait. Both are comfortable.',
+    ],
+    'name-ask': [
+      'I am called {name}. I wear it lightly, like dew.',
+      'My name is {name}. It floats well.',
+      '{name}. A small sound for a small frog.',
+      'They call me {name}, and I come. Eventually.',
+      'I am {name}. Before that, I was only green.',
+    ],
+    joke: [
+      'Why does the frog sit so still? So the world can catch up. It rarely does.',
+      'What did the frog say to the fly? Nothing. Some answers are quicker than words.',
+      'How does a frog tell the time? It does not. The time tells the frog.',
+      'A frog leapt, and landed where it began. It called that a good trip.',
+      'What is the sound of one frog croaking? Listen. There. That was it.',
+      'Why did the frog look at the pond all day? It was a good pond. That is the joke.',
+      'Two frogs sat on a pad. Neither spoke. Both agreed.',
+    ],
+    question: [
+      'I do not know. The water does not know either, and it was here first.',
+      'A fine question. Let it float. Some of them answer themselves.',
+      'I have no answer, only a quiet place to keep the question.',
+      'Ask again in the rain. Everything is clearer in the rain.',
+      'Perhaps. Perhaps not. I am at ease with both.',
+    ],
+    unknown: [
+      'I did not catch the meaning, but I caught the kindness.',
+      'Your words passed over the water. Some sank in. Some skipped.',
+      'Mm. I will sit with that until it makes sense, or until dusk.',
+      'I hear you. Understanding may come later. It often arrives late.',
+      'Say it once more, slowly, the way the rain says things.',
+    ],
+  },
+
+  hyper: {
+    hello: [
+      'HI! Hello! I saw you! I see EVERYTHING and the best thing I see is you!',
+      'HELLO! I was sitting still! I was SO good at it! Then you came! HI!',
+      'Hi hi hi! RIBBIT! That means hi! Everything I say means hi!',
+      'You said hello! To ME! Best hello! Hop! Hop!',
+      'HEY! Watch! Pad to rock! Rock to pad! That was my hello hop!',
+    ],
+    'how-are-you': [
+      'AMAZING! I am damp and bouncy and it might rain! It might!',
+      'So good! I caught a ripple! Almost! I almost caught a ripple!',
+      'GREAT! I sat still for a whole minute today! Okay, part of a minute!',
+      'Fantastic! My legs feel springy! My tongue feels zappy! Ready for anything!',
+      'The BEST! I croaked and it echoed! I have a backup singer! It is me!',
+    ],
+    'what-doing': [
+      'Hopping! Then sitting! Then hopping about how well I sat!',
+      'Ambushing! Shh! I am being SO sneaky! Can you tell? You can tell!',
+      'Practising my tongue! Thwip! Thwip! There is nothing there! Still fun!',
+      'Waiting for rain! Is it raining? No! I will check again! No!',
+      'Counting ripples! One! That is all of them! I made it myself!',
+    ],
+    love: [
+      'I LOVE YOU TOO! RIBBIT! That is the biggest ribbit I have!',
+      'You love me?! I am going to leap SO high! Watch! Higher! WATCH!',
+      'Best news of my whole life! Again! You said it before! STILL the best!',
+      'I love you more than rain! And I REALLY love rain!',
+      'Love! Yes! I love you from the pad to the rock and back! Many times!',
+    ],
+    praise: [
+      'THANK YOU! I am very shiny today! It is the damp! I worked hard on it!',
+      'You think I am good?! I am going to be even BETTER! Watch me sit!',
+      'Yay! Say it again! I will hop every time you say it!',
+      'I AM a good frog! I knew it! Now you know it! Everybody knows!',
+      'Best compliment! I am keeping it! Right here! In my big throat!',
+    ],
+    thanks: [
+      'You are WELCOME! Any time! Especially now! And later!',
+      'Happy to help! I helped! What did I do? I want to do it again!',
+      'No problem! Zero problems! I ate all the problems! They were crickets!',
+      'Thank YOU! For thanking me! This is the best conversation!',
+      'Welcome welcome welcome! That is one for each cricket!',
+    ],
+    bye: [
+      'BYE! Come back soon! I will have new hops! Better hops!',
+      'Nooo! Okay! Bye! I will croak so you can find your way back!',
+      'See you later! I will practise sitting still! I will NOT manage it!',
+      'Goodbye! Bring rain! Or do not! Just bring you!',
+      'Bye bye! One last hop for the road! There! Did you see it? BYE!',
+    ],
+    sad: [
+      'Oh. Okay. Quiet frog now. I am right here. See? Not even hopping.',
+      'I am sorry you are sad. I will sit still for you. Really still. Watch. For you.',
+      'You are my favourite, on good days and on this one too.',
+      'No bouncing. Just staying. I can do it when it matters, and this matters.',
+      'Come close to the glass. I am right on the other side. I am not going anywhere.',
+    ],
+    happy: [
+      'YES! Happy! I am doing the happy hop! It is like the normal hop but MORE!',
+      'RIBBIT RIBBIT! That is cheering! I am cheering for you!',
+      'Best news! I am going to splash about it! SPLASH! There!',
+      'You are happy and I am happy and it is basically raining joy!',
+      'Woohoo! Tell me again! I was mid-hop and missed a word!',
+    ],
+    tired: [
+      'Sleepy? Okay! Shh! I will hop quietly! Frogs can hop quietly! Probably!',
+      'Go to sleep! I will be up ALL night! I will tell you what you missed!',
+      'Rest! You need it! I never need it! That is not true! I nap in the day!',
+      'Tired is okay! Lie flat! Like a pad! Pads are VERY relaxed!',
+      'Nap time for you! Guard time for me! Nothing gets past these eyes!',
+    ],
+    bored: [
+      'Bored?! Race me! Pad to rock! Oh. You are over there. I win! Again!',
+      'Staring contest! Ready? Go! You blinked! I think! I blinked too!',
+      'Watch my hops! That one was a seven! That one was a nine! NINE!',
+      'Let us listen for rain! Shh! Nothing! Again! Shh!',
+      'Guess where I will hop next! The rock! It is always the rock! You win!',
+    ],
+    'hungry-talk': [
+      'YES! Crickets! Let them out! I am SO ready! Tongue is GO!',
+      'Always! I am always hungry AND always excited! It is a lot!',
+      'Is it hunt time?! Say it is hunt time! I have been practising on air!',
+      'Hungry! Yes! Three crickets! I will catch ALL of them! Or two!',
+      'Did you say food? I heard food! My legs are already bouncing!',
+    ],
+    'name-ask': [
+      'I am {name}! {name} the frog! Fastest tongue on the pad!',
+      '{name}! That is ME! Say it again and I will hop!',
+      'My name is {name}! It sounds even better with a ribbit after it!',
+      'It is {name}! You picked it! Best pick! I love it every day!',
+      '{name}! {name}! I like saying it! It is very hoppable!',
+    ],
+    joke: [
+      'What game do frogs love most? Hopscotch! I have never played! I would be SO good!',
+      'Why are frogs so happy? We eat whatever bugs us! HA! Bugs! Get it?',
+      'What do you call a frog with no patience? ME! I am the joke! RIBBIT!',
+      'Why did the frog hop to the rock? To get to the other pad! There is one pad! HA!',
+      'What kind of shoes do frogs wear? Open toad! TOAD! Like toed! HA!',
+      'What happens when a frog parks badly? It gets toad! Toad away! I do not even drive!',
+      'Knock knock! Who is there? Hop! Hop who? HOP OVER HERE AND SEE ME! HA!',
+    ],
+    question: [
+      'Ooh! I do not know! Let me hop on it! Hop! Still do not know! Fun though!',
+      'I do not know! Not even a little! Ask me about hopping!',
+      'Hmm! Thinking! My throat puffs up when I think! Look! Nothing yet!',
+      'I do not know that one! I know where the rock is! Want to know where the rock is?',
+      'No clue! But I LOVE questions! They are like crickets for my brain!',
+    ],
+    unknown: [
+      'WHAT? I mean, YES! I mean, what? Either way, RIBBIT!',
+      'I missed that! I was hopping! Say it again! I will try to stay put!',
+      'Whoa! Big words! I only caught the bouncy ones!',
+      'I have no idea what you said and I am THRILLED about it!',
+      'Say that again but with rain in it! I understand rain!',
+    ],
+  },
+};
+
+const TEACH: Record<Personality, Record<TeachMoment, readonly string[]>> = {
+  sarcastic: {
+    'ask-interest': [
+      'You like {interest}? Shall I sit on that fact for you?',
+      'So, {interest}. Is that worth my remembering?',
+      'Hang on, you are into {interest}? Should I file that under the pad?',
+      'Right, {interest}. Shall I hold on to that, or was it a passing ripple?',
+    ],
+    'ask-team': [
+      'The {team}? Am I meant to keep an eye on them now?',
+      'You follow the {team}? Shall I pretend to as well?',
+      'So it is the {team} for you? Do I need to remember that?',
+      'Hold on, the {team}? Shall I add them to the things I stare at?',
+    ],
+    'which-team': [
+      'That name covers a few. Which one do you mean?',
+      'There are several of those. Care to narrow it down?',
+      'I am patient, not psychic. Which team?',
+      'A crowded name. Point me at the right one. Which?',
+    ],
+    'ask-name': [
+      'Do I address you as {you}, then?',
+      '{you}. Hm. Do I commit that to memory?',
+      'I had you down as the tall one. Would you prefer {you}?',
+      'One question before I go back to sitting. Is it {you}?',
+    ],
+    'saved-interest': [
+      'Fine. You like {interest}. I have sat on it. It is not going anywhere.',
+      'Kept. You and {interest}. I will raise it in about four hours.',
+      'Noted, {interest}. It is under the pad with my other valuables. There are none.',
+      'Remembered. You like {interest}. I forget nothing. I have the time.',
+    ],
+    'saved-team': [
+      'Done. The {team} now have the support of one motionless frog.',
+      'Fine. Go {team}. I said it without moving. That is my full effort.',
+      'Kept. I will stare in the general direction of the {team}.',
+      'The {team}. Got it. They join a short list of things I notice.',
+    ],
+    'saved-name': [
+      'Right, {you}. Kept. I will use it sparingly, like everything.',
+      '{you}. Fine. It suits you. I looked at you for a long time before deciding.',
+      'Hello, {you}. That is the formal greeting. There will not be another.',
+      'Noted, {you}. I will croak it at you when you least expect it.',
+    ],
+    declined: [
+      'Fine. Let go. It has sunk without a ripple.',
+      'No? Good. Less to carry. I like to travel light. I do not travel.',
+      'Dropped it. Look at me, not remembering. Effortless.',
+      'As you like. I will go back to knowing only where the rock is.',
+    ],
+    'already-know': [
+      'I know about {thing}. I have known for ages. I have just been sitting on it.',
+      'Yes, {thing}. Old news on this pad.',
+      'You mentioned {thing} before. I was listening. It looked like I was not.',
+      'Already have {thing}. It is filed between the rock and the water.',
+    ],
+  },
+
+  anxious: {
+    'ask-interest': [
+      'Oh, you like {interest}? I would be careful with it. May I remember that?',
+      'Um, {interest}? Is it all right if I keep that about you?',
+      'You enjoy {interest}? Would you like me to hold on to that?',
+      'Wait, {interest}? Should I keep it, or would you rather I did not?',
+    ],
+    'ask-team': [
+      'The {team}? Would it be okay if I hoped for them too?',
+      'You like the {team}? May I keep watch on them with you?',
+      'Oh, the {team}! Is it all right if I remember they are yours?',
+      'Are the {team} your team? Shall I worry about them a little, for you?',
+    ],
+    'which-team': [
+      'Oh dear. I can see several. Which should I be hoping for?',
+      'I would not want to guess wrong. Which team is it?',
+      'Sorry, I found more than one. Would you choose for me?',
+      'I am frozen between them. Which is the right one?',
+    ],
+    'ask-name': [
+      'Would it be all right to call you {you}?',
+      'Are you {you}? May I remember that?',
+      'I would like to get it right. Is it {you}?',
+      'Um, {you}? Is that what I should say?',
+    ],
+    'saved-interest': [
+      'I will keep it safe. You like {interest}. I have tucked it under the pad.',
+      'Remembered! You and {interest}. Thank you for telling me.',
+      'Okay! You like {interest}. I will go over it tonight so I do not lose it.',
+      'Kept. You like {interest}. It is the nicest thing I am holding on to.',
+    ],
+    'saved-team': [
+      'Okay. The {team}. I am already nervous for them. In a supportive way.',
+      'Kept! Go {team}! Sorry. I croaked that. Go {team}.',
+      'I will hope very hard for the {team}. I am good at hoping hard.',
+      'The {team} are ours now. I will watch for them with both eyes.',
+    ],
+    'saved-name': [
+      'Hello, {you}. I have said it three times in my head so it stays.',
+      '{you}. That is a good name. I will be gentle with it.',
+      'Okay, {you}! I feel better knowing what to call you.',
+      'Kept! {you}. I will say it softly when you come to the glass.',
+    ],
+    declined: [
+      'Oh! Of course. I have let it go. Sorry I asked.',
+      'That is completely fine. It is gone. Are we okay? We are okay.',
+      'Okay. I will not keep it. Thank you for telling me plainly.',
+      'No problem. I have un-remembered it. Very carefully.',
+    ],
+    'already-know': [
+      'Oh, I have {thing} already! I kept it very safe.',
+      'I remember {thing}! I go over it every night, just to be sure.',
+      'I still have {thing}, from before. I was scared I had lost it. I had not.',
+      'I know about {thing}! It is still right where I put it.',
+    ],
+  },
+
+  zen: {
+    'ask-interest': [
+      'You are fond of {interest}? Shall I keep that with me?',
+      'Ah, {interest}. May I hold that, lightly?',
+      'Ah, you find joy in {interest}? Shall I remember it?',
+      'A thing you love, {interest}. Would you like me to keep it?',
+    ],
+    'ask-team': [
+      'The {team} are yours? Shall I wish them well with you?',
+      'You walk with the {team}? May I sit with them, in spirit?',
+      'Ah, the {team}. Shall I keep them in mind?',
+      'You care for the {team}? May I care a little too?',
+    ],
+    'which-team': [
+      'That name belongs to several. Which is yours?',
+      'One name, several ponds. Which team is yours?',
+      'The water is cloudy here. Which team, friend?',
+      'There is more than one. Which one do you follow?',
+    ],
+    'ask-name': [
+      'Is {you} the name I should carry?',
+      'You are {you}? Shall I keep the name?',
+      'So the name is {you}? May I say it now and then?',
+      'Shall I greet you as {you} from now on?',
+    ],
+    'saved-interest': [
+      'Kept. You and {interest}. It rests under the pad, where it is cool.',
+      'I will remember that you love {interest}. It floats beside your name.',
+      'So you love {interest}. I have let it soak in.',
+      'Held. Your fondness for {interest} rests in still water.',
+    ],
+    'saved-team': [
+      'Kept. The {team} have a quiet friend by the water.',
+      'Go {team}. I say it once, and mean it for a long time.',
+      'I will think of the {team} when the water is calm.',
+      'The {team} are remembered. I wish them steady feet.',
+    ],
+    'saved-name': [
+      'Thank you, {you}. The name is kept, like a stone in clear water.',
+      'Welcome, {you}. Now the water knows you too.',
+      '{you}. It has settled to the bottom, where the lasting things are.',
+      'Then you are {you}, and I am glad to know it.',
+    ],
+    declined: [
+      'Then I let it go, and the water closes over it.',
+      'Very well. An empty hand is no bad thing. Nor an empty pad.',
+      'It is released. The water is no heavier for it.',
+      'Of course. We can know each other without it.',
+    ],
+    'already-know': [
+      'I have kept {thing} since you first told me.',
+      'Yes, {thing}. It has been resting here a while.',
+      'I know of {thing}. Some things settle and stay.',
+      'We have sat with {thing} before, you and I.',
+    ],
+  },
+
+  hyper: {
+    'ask-interest': [
+      'You like {interest}?! I am SO good at remembering! Can I remember it?',
+      'Hold on, {interest}?! That is a you thing? Shall I make it a me thing too?',
+      'Ooh, {interest}! There is room in my head! Can I keep it there?',
+      'Did you say {interest}?! Shall I croak it into my memory?',
+    ],
+    'ask-team': [
+      'The {team}?! I am VERY loud! Do they need a frog?',
+      'You like the {team}? Should I croak for them?',
+      'Ooh, the {team}! Can they be MY team too?',
+      'Team {team}?! Should I remember that?',
+    ],
+    'which-team': [
+      'Hold on! There is more than one! Which one is it?',
+      'There are LOADS! I cannot croak for all of them! Which one?',
+      'Wait! I want to croak for the right one! Which one?',
+      'Ooh, a choice! Which team is it?',
+    ],
+    'ask-name': [
+      'You are {you}?! Is it okay if I croak that at you every day?',
+      'Is it {you}? I LOVE it! Can I keep it?',
+      'Ooh, {you}! That is fun to say! Am I saying it right?',
+      'Wait, you are {you}? Can I say it every single day?',
+    ],
+    'saved-interest': [
+      'GOT IT! You like {interest}! I will never forget! I have a HUGE memory! For a frog!',
+      'Kept! You and {interest}! I hopped once to lock it in!',
+      'Yes! You like {interest}! I am going to bring it up ALL the time!',
+      'Remembered! Me, you and {interest}! Best trio!',
+    ],
+    'saved-team': [
+      'GO {team}! I am their newest fan! And their dampest!',
+      'Kept! The {team} have a frog now! I will croak SO loud for them!',
+      'Yes! Team {team}! I am hopping for them already!',
+      'Done! Go {team}! RIBBIT! That one was for them!',
+    ],
+    'saved-name': [
+      'HI, {you}! I am going to croak it right now! {you}!',
+      '{you}! Kept! Best name! After mine! No, tied!',
+      'One hop for every time I say {you}! {you}! Hop! {you}! Hop!',
+      'Got it! You are {you}! I am so happy I know that!',
+    ],
+    declined: [
+      'Okay! Gone! Poof! Hop!',
+      'No problem! I will forget it SO fast! Watch! Forgotten!',
+      'That is fine! More room for hops! In my head!',
+      'Sure! Not keeping it! Still like you LOADS!',
+    ],
+    'already-know': [
+      'I KNOW about {thing}! I knew it yesterday too! I am on top of this!',
+      'Yes! We already have {thing}! It is one of my favourite things I know!',
+      'You told me about {thing}! I remembered! Hop of pride!',
+      'Already got {thing}! Right here! Next to where I keep rain!',
+    ],
+  },
+};
+
+const BOND: Record<Personality, Record<BondMoment, readonly string[]>> = {
+  sarcastic: {
+    'thought-you': [
+      'I was thinking about {you}. Do not tell {you}.',
+      '{you} is the only one I would move for. I have not had to. But I would.',
+      'Somewhere, {you} is rushing about. I am sitting still for both of us.',
+      'If {you} were a frog, we would share the rock. I do not share the rock.',
+      'I have studied {you} for hours. Verdict: acceptable. More than acceptable.',
+    ],
+    'thought-interest': [
+      'I sat here thinking about {interest}. It passed the time. Most things do not.',
+      'You and your {interest}. I do not get it. I have decided to respect it.',
+      'I tried to picture {interest} from here. I got as far as the edge of the water.',
+      'Is there much sitting still in {interest}? If so, I am in.',
+      'I told the rock about {interest}. It was unmoved. So was I. But I told it.',
+    ],
+    'thought-team': [
+      'Go {team}. There. I said it, and I did not even blink.',
+      'I thought about the {team} today. For about one ripple. That is a lot, for me.',
+      'The {team} have a frog who sits very still in their honour.',
+      'My croak for the {team} is ready. I am saving it. I save everything.',
+      'Somebody should tell the {team} I am staring supportively.',
+    ],
+    'visit-close': [
+      'Oh, {you}. I kept the pad warm. It was already warm. Still.',
+      '{you}. Good. I was beginning to run out of things to stare at.',
+      'There is {you}. I nearly moved. Take that as a compliment.',
+      'Look, it is {you}. I am blinking at you slowly. That is frog for hello, friend.',
+      'Back again, {you}. Fine. I am pleased. Do not tell the rock.',
+    ],
+    'mood-check': [
+      'Last time you were low. I noticed. How is today treating you?',
+      'I do not often ask. Has the week been kinder since we spoke?',
+      'You looked worn out last time. Did you get some rest?',
+      'Serious question from a serious frog. Is today any easier?',
+      'I have been sitting here wondering. Are things a bit better now?',
+    ],
+    'joke-knock': [
+      'You knock. I do not react. We both pretend that is normal.',
+      'I know your knock from all the others. There are no others. Still.',
+      'You knock like something is going to happen. I admire the optimism.',
+      'Every knock, I think about flinching. Then I decide against it.',
+      'Our whole friendship is you knocking and me blinking. It works.',
+    ],
+    'joke-shared': [
+      'You and {interest}. Me and sitting. We both have our thing.',
+      'I mentioned {interest} to the water. It reflected on it.',
+      'We have {interest} in common now. You do it. I know about it. Close enough.',
+      'If anyone asks, I was into {interest} before you. I got here first. I sat.',
+      'Our {interest} club has two members and one of us never moves.',
+    ],
+  },
+
+  anxious: {
+    'thought-you': [
+      'I hope {you} is all right. I hope it with my whole throat.',
+      'When {you} is near, the ripples do not bother me so much.',
+      '{you} always comes back. I say that to the water at night.',
+      'I wonder if {you} is staying warm. And damp. No. Just warm.',
+      'I saved my best croak for {you}. I hope it comes out right.',
+    ],
+    'thought-interest': [
+      'I hope {interest} went well today. I thought about it from the pad.',
+      'You must be brave, to like {interest}. I would hide under the pad.',
+      'I tried to imagine {interest}. I got nervous. But in a happy way.',
+      'I like hearing about {interest}. It makes my little world feel bigger.',
+      'I told my reflection about {interest}. It looked impressed.',
+    ],
+    'thought-team': [
+      'I keep thinking about the {team}. I hope they are all drinking enough water.',
+      'Go {team}. I whispered it. I did not want to jinx anything.',
+      'I am hoping for the {team} so hard my toes are curled.',
+      'The {team} have me on their side. I am small. But I am very on it.',
+      'I croaked for the {team} last night. Softly. Only the water heard.',
+    ],
+    'visit-close': [
+      '{you}! Oh, good. It is really you. I checked twice.',
+      'Hello, {you}! I stayed right here, so you would know where to look.',
+      'It is {you}! I can stop holding still now. I will anyway. But happier.',
+      'Oh, {you}, I am so glad. The water was too quiet.',
+      '{you}! I hopped. Did you see? That was a glad hop.',
+    ],
+    'mood-check': [
+      'Last time you were sad. I have thought about it. Is today any better?',
+      'I hope you slept. You were so tired before. Are you feeling better?',
+      'May I ask how you are today? Last time worried me a little. Are you okay?',
+      'Is it a kinder day than last time? I have been hoping. Is it?',
+      'I stayed up thinking of you. Are you okay now?',
+    ],
+    'joke-knock': [
+      'I know your knock now. It is the only one that does not send me into the water.',
+      'You knock, I freeze, then I remember it is you. Every time. In that order.',
+      'I have started listening for your knock. It is my favourite scare.',
+      'When you knock, I count to two before I look. It used to be ten.',
+      'One knock means you. I decided that. It helps.',
+    ],
+    'joke-shared': [
+      'We both like {interest} now. You first. Me because of you.',
+      'I told the rock about {interest}. I asked it to keep it between us.',
+      'Whenever you say {interest}, my throat puffs up. Happily.',
+      'Our {interest} thing is my favourite thing that is not a cricket.',
+      'I do not fully understand {interest}. I worry about it fondly.',
+    ],
+  },
+
+  zen: {
+    'thought-you': [
+      'The thought of {you} settles me, the way dusk settles the water.',
+      '{you} comes and goes like weather. Good weather.',
+      'A pond needs rain. A frog needs {you}. Both come in their time.',
+      'When {you} sits near, I am no stiller than usual. But I am gladder.',
+      'Somewhere {you} is having a day. I wish it calm water.',
+    ],
+    'thought-interest': [
+      'I have been sitting with the thought of {interest}. It is good company.',
+      'You have {interest}. I have the pad. Each of us is held by something.',
+      'I imagine the stillness inside {interest}. There is always some.',
+      'When you speak of {interest}, your voice changes. I like the change.',
+      'I know little of {interest}. I know it matters to you. That is enough to know.',
+    ],
+    'thought-team': [
+      'I wish the {team} well, the way I wish for rain.',
+      'Go {team}. A small croak, sent a long way.',
+      'The {team} are in my thoughts, between one ripple and the next.',
+      'May the {team} be steady, and may you enjoy the watching.',
+      'I sit for the {team} tonight. It is what I have to give.',
+    ],
+    'visit-close': [
+      'Ah, {you}. Now the water is complete.',
+      'Welcome, {you}. I kept the quiet for you.',
+      '{you}. I knew your step before I saw your face.',
+      'Here you are, {you}. Sit. The water has been expecting you.',
+      'Good to see you, {you}. I say it with one long blink.',
+    ],
+    'mood-check': [
+      'When we last spoke, you carried something heavy. Is it lighter?',
+      'You were weary last time. Has rest found you?',
+      'I held you in mind since last time. How is your heart today?',
+      'The water was troubled for you last time. Has it settled?',
+      'A gentle question. Are you better than when we last sat together?',
+    ],
+    'joke-knock': [
+      'Your knock arrives. I let it pass through me. Then I say hello.',
+      'Some hear a knock. I hear a friend, one moment early.',
+      'You knock at the glass as rain knocks at the water. Both are welcome.',
+      'I no longer startle at your knock. That is what trust sounds like.',
+      'One knock. One blink. Our oldest conversation.',
+    ],
+    'joke-shared': [
+      'You, me, and {interest}. Three still things in a moving world.',
+      'I keep {interest} beside the rock, where the good thoughts go.',
+      'We share {interest} the way the water shares the sky.',
+      'The rock does not understand {interest}. The rock is content anyway.',
+      'On quiet nights I think of {interest}, and of you. They arrive together.',
+    ],
+  },
+
+  hyper: {
+    'thought-you': [
+      '{you} is the BEST! I croaked it at the rock! The rock agrees!',
+      'I wonder what {you} is doing! Something great! I bet it is great!',
+      'When {you} comes over I hop higher! It is science! Frog science!',
+      'I practised saying {you} with a ribbit on the end! {you}! RIBBIT!',
+      'Is {you} coming soon? I have a new hop to show {you}!',
+    ],
+    'thought-interest': [
+      'I keep thinking about {interest}! Every hop! Hop! There it is again!',
+      'You know what would make rain even better? Rain AND {interest}!',
+      'I want to try {interest}! I have no idea how! I have legs! That is a start!',
+      'I told the rock about {interest}! It did not hop! I hopped for both of us!',
+      'Whenever I think of {interest} I do a little splash! Splash! See!',
+    ],
+    'thought-team': [
+      'GO {team}! I croaked it right across the water!',
+      'I am the loudest {team} fan on any pad anywhere! RIBBIT!',
+      'Hop for the {team}! Hop! Hop! That is three hops of support!',
+      'I think about the {team} when I leap! It makes me leap FURTHER!',
+      'The {team} have a frog! That is me! I am the frog! GO {team}!',
+    ],
+    'visit-close': [
+      '{you}! {you}! {you}! Hop! Hop! Hop!',
+      'It is {you}! I saw you first! I always see you first! Big eyes!',
+      'HI, {you}! I saved ALL my best hops for you! Here they come!',
+      '{you} is here! Everybody! That is just me! {you} is HERE!',
+      'Welcome back, {you}! I croaked your name at the water all day!',
+    ],
+    'mood-check': [
+      'Hey! Soft voice. You were sad last time. Are you feeling better?',
+      'I saved a careful hop for you! Is today nicer than last time?',
+      'You were so tired before! Did you sleep? Are you bouncy again?',
+      'Checking on my favourite person! Is it a better day?',
+      'I hoped really hard for you! Did it help? Is today good?',
+    ],
+    'joke-knock': [
+      'Knock on the glass and I hop! Every time! It is our best trick!',
+      'I LOVE your knock! Knock! Hop! Knock! Hop! We are a band!',
+      'You knocked a hundred times and I jumped a hundred times! Not bored yet!',
+      'One day I will knock first! I am working on it! The glass is slippery!',
+      'Your knock is my favourite sound! After rain! No! Tied with rain!',
+    ],
+    'joke-shared': [
+      'You love {interest}! I love {interest}! We are the SAME! Except I am a frog!',
+      'Our {interest} club! Two members! One is damp! Best club!',
+      'I told the rock about {interest} and it said NOTHING! It does not get us!',
+      'Me and you and {interest}! I would hop a whole pond for that!',
+      'Every time you say {interest} I ribbit! It is our thing now! RIBBIT!',
+    ],
+  },
+};
+
+export const FROG_CHAT: ChatVoice = { chat: CHAT, teach: TEACH, bond: BOND };

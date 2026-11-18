@@ -14,6 +14,7 @@ import {
   mountDevPanel,
   mountHud,
   mountMemorial,
+  mountPetPicker,
   mountMontage,
   mountFeederDialog,
   mountSpeech,
@@ -263,7 +264,8 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
   platform.events.on('forget-me', () => speech.forgetChat());
   const feederDialog = mountFeederDialog(ui, deps);
   const montage = mountMontage(ui, deps);
-  mountMemorial(ui, deps);
+  const petPicker = mountPetPicker(ui, deps);
+  mountMemorial(ui, deps, petPicker);
   grip.relayout();
   // Show it off (Step F2): the last few seconds as a clip, and the pet card, saved to Downloads.
   const appCanvas = app.querySelector<HTMLCanvasElement>('canvas');
@@ -317,7 +319,7 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
     );
   };
   speech.setShareHandler(shareClip);
-  wireTray({ ...deps, devPanel, feederDialog, share: { clip: shareClip, card: shareCardWithToast } });
+  wireTray({ ...deps, devPanel, feederDialog, petPicker, share: { clip: shareClip, card: shareCardWithToast } });
   installKeys({ store, devPanel });
   audio.setAmbient(initial.pet.species, true);
   audio.setMuted(initial.settings.muted);
@@ -346,8 +348,19 @@ async function boot(platform: Platform): Promise<{ store: AppStore; scene: Habit
       // HUD, speech, the resize grip, the dev panel and this very subscription, so swapping it live
       // means re-wiring six modules that each believe they own it. A reload re-runs the whole boot
       // sequence against the species now on disk, which is the same path a normal launch takes and is
-      // therefore the one path already covered by tests. `setSpecies` has flushed before we get here.
-      location.reload();
+      // therefore the one path already covered by tests.
+      //
+      // After the save, not before it. The store publishes the new pet and THEN queues its save, so a
+      // reload from inside this callback could come back to the old pet: a chick the sim had just moved
+      // to the coop would move again at every launch, and a new frog would bring the dead fish back.
+      // One turn of the event loop later the save is queued; the flush writes it; then the reload.
+      setTimeout(() => {
+        void store
+          .getState()
+          .actions.flush()
+          .catch((err: unknown) => console.warn('[main] flush before remount failed', err))
+          .finally(() => location.reload());
+      }, 0);
       return;
     }
 

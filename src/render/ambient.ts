@@ -28,7 +28,14 @@ export type AmbientEvent =
   | 'water_murky'
   | 'water_clear'
   | 'hood_on'
-  | 'hood_off';
+  | 'hood_off'
+  // Step 5
+  | 'frog_croak'
+  | 'tongue_snap'
+  | 'fireflies_out'
+  | 'hen_scratch'
+  | 'dust_bath'
+  | 'egg_laid';
 
 export const AMBIENT_EVENTS: readonly AmbientEvent[] = [
   'wheel_spin',
@@ -42,6 +49,12 @@ export const AMBIENT_EVENTS: readonly AmbientEvent[] = [
   'water_clear',
   'hood_on',
   'hood_off',
+  'frog_croak',
+  'tongue_snap',
+  'fireflies_out',
+  'hen_scratch',
+  'dust_bath',
+  'egg_laid',
 ];
 
 const TAU = Math.PI * 2;
@@ -162,6 +175,49 @@ export function mothPose(
   return { x, y, dir: vx >= 0 ? 1 : -1, gliding: Math.sin(tS * 0.6) < -0.75 };
 }
 
+// ---- fireflies -----------------------------------------------------------------------------------
+
+/** How many of the fireflies are out: none by day, a few at dusk, all of them at night. */
+export function fireflyPresence(light: Daylight): number {
+  return clamp01(smoothstep(0.35, 0.8, light.night) + 0.35 * smoothstep(0.5, 1, light.dusk));
+}
+
+/**
+ * One firefly's light at time `tS`: dark most of the time, then a slow swell and fade, each on its own
+ * period (5 to 9 s) so they never pulse together. 0..1.
+ */
+export function fireflyGlow(tS: number, phase: number): number {
+  const period = 5 + 4 * (((phase * 7.13) % 1) + 1) % 1;
+  const u = (((tS + phase * 11) / period) % 1 + 1) % 1;
+  // lit for the first quarter of its period: up fast, down slow
+  if (u > 0.26) return 0;
+  const v = u / 0.26;
+  return smoothstep(0, 0.25, v) * (1 - smoothstep(0.35, 1, v));
+}
+
+/** Where a firefly is at `tS`: a slow wandering loop inside `air`, its own for each `phase`. */
+export function fireflyPos(tS: number, phase: number, air: Rect): { x: number; y: number } {
+  const a = 0.11 + 0.07 * ((phase * 3.7) % 1);
+  const b = 0.09 + 0.06 * ((phase * 5.3) % 1);
+  const u = 0.5 + 0.36 * Math.sin(tS * a + phase * 6.1) + 0.12 * Math.sin(tS * a * 2.7 + phase * 2.3);
+  const v = 0.5 + 0.32 * Math.sin(tS * b + phase * 4.4) + 0.14 * Math.sin(tS * b * 3.1 + phase * 1.7);
+  return { x: air.x + air.w * clamp01(u), y: air.y + air.h * clamp01(v) };
+}
+
+// ---- the heat lamp, the doorway ----------------------------------------------------------------------
+
+/** The heat lamp's glow: always on (it is what keeps a chick warm), stronger against the dark. */
+export function lampGlow(light: Daylight, tS: number): number {
+  const base = 0.16 * light.day + 0.26 * (light.dawn + light.dusk) + 0.5 * light.night;
+  // an element's faint shimmer, never a flicker
+  return base * (0.96 + 0.04 * Math.sin(tS * 2.3) * Math.sin(tS * 0.71));
+}
+
+/** The coop's doorway at night: the light inside spilling out, a little more with the hen home. */
+export function doorGlow(light: Daylight, roosting: boolean): number {
+  return clamp01(0.5 * smoothstep(0.4, 0.9, light.night) + 0.12 * smoothstep(0.6, 1, light.dusk)) * (roosting ? 1 : 0.8);
+}
+
 // ---- dust ----------------------------------------------------------------------------------------
 
 /**
@@ -224,6 +280,12 @@ export interface AmbientInput {
   pet: { x: number; y: number; anim: string; act?: PetAct | string | undefined; facing: 1 | -1 };
   /** 0 when the hamster is not running the wheel; its pace (about 1) while it is. */
   wheelDrive: number;
+  /** Step 5: where the frog's tongue is reaching (null: it is in its mouth). */
+  reach?: { x: number; y: number; caught?: boolean } | null;
+  /** The bug the hen is chasing (null: none). */
+  bug?: { x: number; y: number } | null;
+  /** The pet's species counters: the nest shows `eggs`. */
+  counters?: Readonly<Record<string, number>> | undefined;
 }
 
 export interface Ambient {
@@ -253,7 +315,7 @@ interface Bit {
   vy: number;
   age: number;
   life: number;
-  kind: 'chip' | 'bubble' | 'drop';
+  kind: 'chip' | 'bubble' | 'drop' | 'puff';
   /** For a drop: still forming at the spout. */
   forming?: number;
 }
@@ -294,7 +356,31 @@ export function createAmbient(spec: AmbientSpec, textures: ReadonlyMap<string, T
     const r = Math.hypot(nx, ny);
     return [0, 0, 0, 1 - smoothstep(0.45, 1, r)];
   });
-  const made = [dotTex, ringTex, dropTex, chipTex, shadeTex];
+  // Step 5: the tongue (a soft pink bar, stretched from the mouth), an egg, a bug, a wide warm glow
+  const tongueTex = paintTexture(8, 2.4, 'ambient:tongue', (_nx, ny) => {
+    const a = 1 - smoothstep(0.55, 1, Math.abs(ny));
+    const hi = 1 - smoothstep(0, 0.6, Math.abs(ny + 0.25));
+    return [0.93 + 0.07 * hi, 0.42 + 0.2 * hi, 0.5 + 0.18 * hi, a];
+  });
+  const eggTex = paintTexture(5.2, 6.6, 'ambient:egg', (nx, ny) => {
+    // an egg: wider low down, narrower at the top
+    const w = 0.86 - 0.16 * ny;
+    const r = Math.hypot(nx / w, ny / 0.96);
+    const a = 1 - smoothstep(0.86, 1, r);
+    const lit = clamp01(0.74 + 0.26 * (1 - Math.hypot(nx + 0.35, ny + 0.4)));
+    return [0.97 * lit, 0.9 * lit, 0.78 * lit, a];
+  });
+  const bugTex = paintTexture(3.6, 2.4, 'ambient:bug', (nx, ny) => {
+    const body = 1 - smoothstep(0.7, 1, Math.hypot(nx / 0.8, ny / 0.62));
+    const legs = (1 - smoothstep(0.1, 0.3, Math.abs(Math.sin(nx * 7)))) * (Math.abs(ny) > 0.5 ? 0.7 : 0);
+    const hi = Math.exp(-(Math.pow(nx + 0.2, 2) + Math.pow(ny + 0.3, 2)) / 0.08);
+    return [0.1 + 0.25 * hi, 0.09 + 0.22 * hi, 0.08 + 0.2 * hi, Math.max(body, legs)];
+  });
+  const glowTex = paintTexture(16, 16, 'ambient:glow', (nx, ny) => {
+    const r = Math.hypot(nx, ny);
+    return [1, 1, 1, Math.pow(1 - smoothstep(0, 1, r), 2)];
+  });
+  const made = [dotTex, ringTex, dropTex, chipTex, shadeTex, tongueTex, eggTex, bugTex, glowTex];
 
   // -- the wheel
   const wheelSpec = spec.wheel;
@@ -318,14 +404,101 @@ export function createAmbient(spec: AmbientSpec, textures: ReadonlyMap<string, T
   let door: { sprite: Sprite; t: number } | null = null;
   if (spec.door) {
     const d = spec.door;
-    const sprite = new Sprite({ texture: shadeTex, label: 'ambient:door' });
+    const sprite = new Sprite({ texture: spec.doorGlow ? glowTex : shadeTex, label: 'ambient:door' });
     sprite.anchor.set(0.5);
-    sprite.position.set(d.x + d.w / 2, d.y + d.h * 0.58);
-    sprite.scale.set((d.w * 0.95) / (8 * FX_SS) * 1, (d.h * 0.85) / (8 * FX_SS));
+    if (spec.doorGlow) {
+      // The coop's doorway: light from inside, spilling round the frame and onto the ramp.
+      sprite.position.set(d.x + d.w / 2, d.y + d.h * 0.62);
+      sprite.scale.set((d.w * 2.6) / (16 * FX_SS), (d.h * 2.3) / (16 * FX_SS));
+      sprite.blendMode = 'add';
+      sprite.tint = 0xffc27a;
+    } else {
+      sprite.position.set(d.x + d.w / 2, d.y + d.h * 0.58);
+      sprite.scale.set((d.w * 0.95) / (8 * FX_SS) * 1, (d.h * 0.85) / (8 * FX_SS));
+    }
     sprite.alpha = 0;
     back.addChild(sprite);
     door = { sprite, t: 0 };
   }
+
+  // -- Step 5: the heat lamp's glow, over everything under it
+  let lamp: Sprite | null = null;
+  if (spec.lamp) {
+    lamp = new Sprite({ texture: glowTex, label: 'ambient:lamp' });
+    lamp.anchor.set(0.5);
+    lamp.position.set(spec.lamp.at[0], spec.lamp.at[1] + spec.lamp.radius * 0.55);
+    lamp.scale.set((spec.lamp.radius * 2.4) / (16 * FX_SS), (spec.lamp.radius * 2.9) / (16 * FX_SS));
+    lamp.blendMode = 'add';
+    lamp.tint = 0xff9a4d;
+    lamp.alpha = 0;
+    front.addChild(lamp);
+  }
+
+  // -- the nest: one egg per slot, shown as they are laid
+  const eggs: Array<{ sprite: Sprite; grow: number }> = [];
+  for (const [ex, ey] of spec.nest ?? []) {
+    const sprite = new Sprite({ texture: eggTex, label: 'ambient:egg' });
+    sprite.anchor.set(0.5, 0.9);
+    sprite.position.set(ex, ey);
+    sprite.rotation = (rng() - 0.5) * 0.5;
+    sprite.visible = false;
+    back.addChild(sprite);
+    eggs.push({ sprite, grow: 0 });
+  }
+  /** Eggs shown last frame; -1 until the first, so a nest that is already full does not announce itself. */
+  let eggsShown = -1;
+
+  // -- fireflies
+  const flies: Array<{ sprite: Sprite; halo: Sprite; phase: number }> = [];
+  if (spec.fireflies && spec.air) {
+    for (let i = 0; i < spec.fireflies.count; i += 1) {
+      const halo = new Sprite({ texture: glowTex, label: 'ambient:firefly-halo' });
+      halo.anchor.set(0.5);
+      halo.scale.set(14 / (16 * FX_SS));
+      halo.blendMode = 'add';
+      halo.tint = 0xc8f03c;
+      halo.alpha = 0;
+      const sprite = new Sprite({ texture: dotTex, label: 'ambient:firefly' });
+      sprite.anchor.set(0.5);
+      sprite.scale.set(2.2 / (3 * FX_SS));
+      sprite.blendMode = 'add';
+      sprite.tint = 0xf1ff9a;
+      sprite.alpha = 0;
+      top.addChild(halo);
+      top.addChild(sprite);
+      flies.push({ sprite, halo, phase: rng() });
+    }
+  }
+  let fliesOut = false;
+
+  // -- the frog's tongue, and whatever is on the end of it
+  let tongue: { bar: Sprite; tip: Sprite; len: number; to: { x: number; y: number }; caught: boolean; out: boolean } | null = null;
+  if (spec.tongue) {
+    const bar = new Sprite({ texture: tongueTex, label: 'ambient:tongue' });
+    bar.anchor.set(0, 0.5);
+    bar.visible = false;
+    const tip = new Sprite({ texture: dotTex, label: 'ambient:tongue-tip' });
+    tip.anchor.set(0.5);
+    tip.visible = false;
+    front.addChild(bar);
+    front.addChild(tip);
+    tongue = { bar, tip, len: 0, to: { x: 0, y: 0 }, caught: false, out: false };
+  }
+
+  // -- the bug the hen chases
+  let bug: Sprite | null = null;
+  if (spec.nest) {
+    bug = new Sprite({ texture: bugTex, label: 'ambient:bug' });
+    bug.anchor.set(0.5, 0.8);
+    bug.scale.set(1 / FX_SS);
+    bug.visible = false;
+    front.addChild(bug);
+  }
+  let lastBugX = 0;
+  let croaking = false;
+  let scratching = false;
+  let bathing = false;
+  let puffClock = 0;
 
   // -- dust
   const motes: Mote[] = [];
@@ -346,7 +519,7 @@ export function createAmbient(spec: AmbientSpec, textures: ReadonlyMap<string, T
   // -- bits: bubbles in the bottle, drips, bedding chips
   const bits: Bit[] = [];
   const spawn = (kind: Bit['kind'], x: number, y: number, vx: number, vy: number, life: number): Bit => {
-    const tex = kind === 'chip' ? chipTex : kind === 'bubble' ? ringTex : dropTex;
+    const tex = kind === 'chip' ? chipTex : kind === 'bubble' ? ringTex : kind === 'puff' ? glowTex : dropTex;
     const sprite = new Sprite({ texture: tex, label: `ambient:${kind}` });
     sprite.anchor.set(0.5);
     sprite.scale.set(1 / FX_SS);
@@ -416,9 +589,121 @@ export function createAmbient(spec: AmbientSpec, textures: ReadonlyMap<string, T
       if (door && spec.door) {
         const d = spec.door;
         const near = Math.abs(input.pet.x - (d.x + d.w / 2)) < d.w * 1.4;
-        const want = input.alive && input.pet.anim === 'sleep' && near ? 0.42 : 0.06;
+        const home = input.alive && input.pet.anim === 'sleep' && near;
+        const want = spec.doorGlow ? doorGlow(input.light, home) : home ? 0.42 : 0.06;
         door.t += (want - door.t) * (1 - Math.exp(-dt / 1.5));
         door.sprite.alpha = door.t;
+      }
+
+      // the heat lamp
+      if (lamp) lamp.alpha = lampGlow(input.light, clock);
+
+      // the nest: an egg appears where the next one goes, settling into the straw
+      if (eggs.length > 0) {
+        const n = Math.min(eggs.length, Math.max(0, Math.floor(input.counters?.['eggs'] ?? 0)));
+        if (eggsShown >= 0 && n > eggsShown) emit('egg_laid');
+        for (let i = 0; i < eggs.length; i += 1) {
+          const e = eggs[i]!;
+          const show = i < n;
+          if (show && !e.sprite.visible) e.grow = eggsShown < 0 ? 1 : 0;
+          e.sprite.visible = show;
+          if (!show) continue;
+          e.grow = Math.min(1, e.grow + dt / 0.45);
+          const g = 1 - Math.pow(1 - e.grow, 3);
+          e.sprite.scale.set((0.6 + 0.4 * g) / FX_SS, (0.6 + 0.4 * g + 0.12 * Math.sin(Math.PI * g)) / FX_SS);
+          e.sprite.alpha = Math.min(1, e.grow * 3);
+          e.sprite.tint = tint;
+        }
+        eggsShown = n;
+      }
+
+      // fireflies: out with the dark, each on its own slow pulse
+      if (flies.length > 0 && spec.air) {
+        const out = fireflyPresence(input.light);
+        if (out > 0.5 !== fliesOut) {
+          fliesOut = out > 0.5;
+          if (fliesOut) emit('fireflies_out');
+        }
+        flies.forEach((f, i) => {
+          // they come out one by one as it gets darker
+          const mine = clamp01(out * flies.length - i);
+          const p = fireflyPos(clock, f.phase, spec.air as Rect);
+          const g = fireflyGlow(clock, f.phase) * mine;
+          f.sprite.position.set(p.x, p.y);
+          f.halo.position.set(p.x, p.y);
+          f.sprite.alpha = 0.18 * mine + 0.82 * g;
+          f.halo.alpha = 0.7 * g;
+        });
+      }
+
+      // the tongue: out to where it reaches in a few frames, back in as fast
+      if (tongue && spec.tongue) {
+        const r = input.alive ? (input.reach ?? null) : null;
+        if (r) {
+          if (!tongue.out) emit('tongue_snap');
+          tongue.to = { x: r.x, y: r.y };
+          tongue.caught = r.caught === true;
+        }
+        tongue.out = r !== null;
+        const rate = dt / 0.07;
+        tongue.len = clamp01(tongue.len + (tongue.out ? rate : -rate));
+        if (tongue.len <= 0) tongue.caught = false;
+        const mx = input.pet.x + input.pet.facing * spec.tongue.mouth[0];
+        const my = input.pet.y + spec.tongue.mouth[1];
+        const dx = tongue.to.x - mx;
+        const dy = tongue.to.y - my;
+        const full = Math.hypot(dx, dy);
+        const show = tongue.len > 0.02 && full > 1;
+        tongue.bar.visible = show;
+        tongue.tip.visible = show;
+        if (show) {
+          const len = full * tongue.len;
+          tongue.bar.position.set(mx, my);
+          tongue.bar.rotation = Math.atan2(dy, dx);
+          tongue.bar.scale.set(len / (8 * FX_SS), 1 / FX_SS);
+          tongue.bar.tint = tint;
+          const tx = mx + (dx / full) * len;
+          const ty = my + (dy / full) * len;
+          tongue.tip.position.set(tx, ty);
+          // the sticky end; darker and larger with a cricket on it
+          tongue.tip.scale.set((tongue.caught ? 5.2 : 3.6) / (3 * FX_SS));
+          tongue.tip.tint = mulTint(tint, tongue.caught ? 0x4a3220 : 0xf07a8c);
+        }
+      }
+
+      // the bug: scuttling ahead of the hen, legs going
+      if (bug) {
+        const b = input.alive ? (input.bug ?? null) : null;
+        bug.visible = b !== null;
+        if (b) {
+          const dir = b.x >= lastBugX ? 1 : -1;
+          lastBugX = b.x;
+          bug.position.set(b.x, b.y + 0.4 * Math.sin(clock * 38));
+          bug.scale.set(dir / FX_SS, 1 / FX_SS);
+          bug.rotation = 0.12 * Math.sin(clock * 31);
+          bug.tint = tint;
+        }
+      }
+
+      // sounds for what the pet is doing
+      const nowCroaking = input.alive && input.pet.act === 'croak';
+      if (nowCroaking && !croaking) emit('frog_croak');
+      croaking = nowCroaking;
+      const nowScratching = input.alive && input.pet.act === 'scratch';
+      if (nowScratching && !scratching) emit('hen_scratch');
+      scratching = nowScratching;
+      const nowBathing = input.alive && input.pet.act === 'dustbathe';
+      if (nowBathing && !bathing) emit('dust_bath');
+      bathing = nowBathing;
+      // a dust bath: soft clouds of dust off her back
+      if (nowBathing) {
+        puffClock += dt;
+        while (puffClock >= 0.16) {
+          puffClock -= 0.16;
+          spawn('puff', input.pet.x + (rng() - 0.5) * 22, input.pet.y + 6 + rng() * 6, (rng() - 0.5) * 16, -(6 + rng() * 12), 0.9 + rng() * 0.5);
+        }
+      } else {
+        puffClock = 0;
       }
 
       // dust: drifting, lit only where a beam crosses it
@@ -473,10 +758,13 @@ export function createAmbient(spec: AmbientSpec, textures: ReadonlyMap<string, T
       const digging = input.alive && input.pet.act === 'dig';
       if (digging && !wasDigging) emit('bedding_dig');
       wasDigging = digging;
-      if (digging) {
+      // a hen scratching throws litter the same way, less of it
+      const throwing = digging || (input.alive && input.pet.act === 'scratch');
+      if (throwing) {
         digClock += dt;
-        while (digClock >= 0.09) {
-          digClock -= 0.09;
+        const every = digging ? 0.09 : 0.2;
+        while (digClock >= every) {
+          digClock -= every;
           const dir = -input.pet.facing;
           spawn('chip', input.pet.x - dir * 6, input.pet.y + 6, dir * (25 + rng() * 35), -(35 + rng() * 45), 0.6 + rng() * 0.3);
         }
@@ -511,6 +799,13 @@ export function createAmbient(spec: AmbientSpec, textures: ReadonlyMap<string, T
           a = smoothstep(0, 0.15, t) * (1 - smoothstep(0.75, 1, t));
           bit.x += Math.sin(bit.age * 14) * 0.08;
           if (spec.bottle && bit.y <= spec.bottle.water.y + 1) bit.age = bit.life;
+        } else if (bit.kind === 'puff') {
+          const t = bit.age / bit.life;
+          bit.sprite.scale.set((5 + 9 * t) / (16 * FX_SS));
+          a = 0.34 * smoothstep(0, 0.2, t) * (1 - smoothstep(0.4, 1, t));
+          bit.vx *= 1 - 1.5 * dt;
+          bit.vy *= 1 - 1.5 * dt;
+          bit.sprite.tint = mulTint(tint, 0xd9c3a0);
         } else if (bit.kind === 'chip') {
           bit.sprite.rotation += dt * 9 * (bit.vx > 0 ? 1 : -1);
           a = 1 - smoothstep(0.6, 1, bit.age / bit.life);
@@ -519,7 +814,7 @@ export function createAmbient(spec: AmbientSpec, textures: ReadonlyMap<string, T
         }
         bit.sprite.position.set(bit.x, bit.y);
         bit.sprite.alpha = a;
-        if (bit.kind !== 'bubble') bit.sprite.tint = tint;
+        if (bit.kind !== 'bubble' && bit.kind !== 'puff') bit.sprite.tint = tint;
         if (bit.age >= bit.life) {
           bit.sprite.destroy();
           bits.splice(i, 1);
@@ -570,6 +865,11 @@ export function createAmbient(spec: AmbientSpec, textures: ReadonlyMap<string, T
         bits: bits.length,
         critter: critter ? { kind: critSpec?.kind, visible: critter.sprite.visible, x: Math.round(critter.sprite.x), y: Math.round(critter.sprite.y) } : null,
         hood: hoodOn,
+        ...(lamp ? { lamp: Math.round(lamp.alpha * 100) / 100 } : {}),
+        ...(eggs.length > 0 ? { eggs: eggs.filter((e) => e.sprite.visible).length } : {}),
+        ...(flies.length > 0 ? { fireflies: flies.filter((f) => f.sprite.alpha > 0.01).length } : {}),
+        ...(tongue ? { tongue: Math.round(tongue.len * 100) / 100 } : {}),
+        ...(bug ? { bug: bug.visible } : {}),
       };
     },
     destroy() {

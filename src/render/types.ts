@@ -41,6 +41,13 @@ export interface ManifestLayer {
   /** Step 3: the same layer under first light and last light, crossfaded by the time of day. */
   dawn?: string;
   dusk?: string;
+  /**
+   * Step 5: this layer is see-through (glass on its own), so its light sets are crossfaded by plain
+   * weight, the day one fading OUT as another fades in. The default stacks the others over a day
+   * sprite that stays fully drawn, which is the exact blend for solid art and wrong for glass: the
+   * day's bright reflections stayed under the night's, as a pale smear across a dark jar.
+   */
+  translucent?: boolean;
 }
 
 /** Ellipse-ish water body: ellipse (cx, cy, rx, ry) clipped to surfaceY <= y <= floorY. Grid px. */
@@ -61,7 +68,7 @@ export interface WaterShape {
  */
 export type Domain =
   | { kind: 'water'; shape: WaterShape }
-  | { kind: 'floor'; rect: Rect; standY: number };
+  | { kind: 'floor'; rect: Rect; standY: number; /** How far below the standing line food comes to rest; the hamster's 31 when absent. */ restBelow?: number };
 
 export interface ManifestHabitat {
   /**
@@ -123,6 +130,16 @@ export interface AmbientSpec {
   hood?: [[number, number], [number, number]];
   /** The air dust drifts in. */
   air?: Rect;
+  /** Step 5. Fireflies over the water at night (the pond, the jar), drifting in `air`. */
+  fireflies?: { count: number };
+  /** The brooder's heat lamp: where its bulb is, and how far its warm glow reaches. */
+  lamp?: { at: [number, number]; radius: number };
+  /** The coop's doorway glows at night instead of darkening (the hen roosts by it). */
+  doorGlow?: boolean;
+  /** Where eggs sit in the nesting box, in the order they fill; at most this many are shown. */
+  nest?: Array<[number, number]>;
+  /** The frog's tongue: where its mouth is from the sprite's centre, facing right, grid px. */
+  tongue?: { mouth: [number, number] };
   /** The one small creature that is not a pet: a snail on the bowl's glass, a moth at the light. */
   critter?: {
     kind: 'snail' | 'moth';
@@ -253,7 +270,11 @@ export interface Manifest {
  * the habitat reacts to: `dig` (bedding flies as it makes its bed) and `drink` (a bubble rises in the
  * bottle).
  */
-export type PetAct = 'hover' | 'peck' | 'mouthful' | 'spit' | 'gulp' | 'look' | 'rest' | 'sulk' | 'dig' | 'drink' | 'run' | 'startle';
+export type PetAct =
+  | 'hover' | 'peck' | 'mouthful' | 'spit' | 'gulp' | 'look' | 'rest' | 'sulk' | 'dig' | 'drink' | 'run' | 'startle'
+  // Step 5: the frog's (a croak, a hop between its pad and its rock, the tongue's snap) and the
+  // chicken's (scratching the ground, a dust bath, roosting for the night).
+  | 'croak' | 'hop' | 'snap' | 'scratch' | 'dustbathe' | 'roost' | 'chase';
 
 export type PetAnim = 'idle' | 'walk' | 'eat' | 'hungry' | 'sleep' | 'dead' | 'excited';
 
@@ -282,6 +303,8 @@ export interface SceneView {
   night: boolean;
   /** The four light sets' weights by the local hour (`src/app/daynight.ts`); `night` is this past its midpoint. */
   daylight: Daylight;
+  /** Step 5: the pet's species counters the habitat shows (the hen's eggs in the nest). */
+  counters?: Readonly<Record<string, number>>;
   reducedMotion: boolean;
   /** night && alive */
   asleep: boolean;
@@ -460,6 +483,18 @@ export interface PetOutput {
    * coarse state a bitmap can draw. Absent means nothing in particular.
    */
   act?: PetAct;
+  /**
+   * Step 5: where the frog's tongue is reaching this tick, grid px; the renderer draws it. `caught`
+   * on the tick it comes back with a cricket on it.
+   */
+  reach?: { x: number; y: number; caught?: boolean };
+  /** Step 5: a bug the hen is chasing across the run, grid px; the renderer draws it. */
+  bug?: { x: number; y: number };
+  /**
+   * Index into input.flakes of food the pet frightened without eating it (a cricket the tongue
+   * missed, which then escapes), else absent.
+   */
+  scareFlakeIndex?: number;
   /** Index into input.flakes that was eaten this tick, else null. */
   biteFlakeIndex: number | null;
   /**

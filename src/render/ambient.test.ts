@@ -1,6 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { WHEEL_RUN_OMEGA, lightTint, moteLight, mothPresence, snailCrawlHours, snailPose, wheelFrame, wheelStep, type WheelState } from './ambient';
+import {
+  WHEEL_RUN_OMEGA, doorGlow, fireflyGlow, fireflyPos, fireflyPresence, lampGlow, lightTint, moteLight, mothPresence, snailCrawlHours, snailPose,
+  wheelFrame, wheelStep, type WheelState,
+} from './ambient';
 import { WHEEL_KM_FULL_PACE } from './scene';
 import { WHEEL_KM_PER_TICK } from '../species/hamster/behavior';
 import { easeLight } from './layers';
@@ -129,6 +132,68 @@ describe('the moth and the dust', () => {
   });
 });
 
+describe('Step 5: fireflies, the heat lamp, the doorway', () => {
+  const day = { day: 1, dawn: 0, dusk: 0, night: 0 };
+  const dusk = { day: 0, dawn: 0, dusk: 1, night: 0 };
+  const night = { day: 0, dawn: 0, dusk: 0, night: 1 };
+
+  it('fireflies are out at night, a few at dusk, none by day', () => {
+    expect(fireflyPresence(day)).toBe(0);
+    expect(fireflyPresence(night)).toBe(1);
+    expect(fireflyPresence(dusk)).toBeGreaterThan(0.1);
+    expect(fireflyPresence(dusk)).toBeLessThan(0.6);
+  });
+
+  it('a firefly is dark most of the time, pulses fully, and no two pulse together', () => {
+    const lit = (phase: number): number[] => Array.from({ length: 600 }, (_, i) => fireflyGlow(i / 10, phase));
+    for (const phase of [0.05, 0.31, 0.62, 0.9]) {
+      const g = lit(phase);
+      expect(Math.max(...g)).toBeGreaterThan(0.9);
+      expect(Math.min(...g)).toBe(0);
+      // dark at least two thirds of the time
+      expect(g.filter((v) => v === 0).length / g.length).toBeGreaterThan(0.66);
+      for (const v of g) expect(v).toBeLessThanOrEqual(1);
+    }
+    const a = lit(0.05);
+    const b = lit(0.62);
+    const both = a.filter((v, i) => v > 0.5 && (b[i] ?? 0) > 0.5).length;
+    const either = a.filter((v, i) => v > 0.5 || (b[i] ?? 0) > 0.5).length;
+    expect(both / either).toBeLessThan(0.5);
+  });
+
+  it('a firefly stays in its air and drifts slowly (never more than a few px a second)', () => {
+    const air = { x: 80, y: 20, w: 160, h: 120 };
+    for (const phase of [0.1, 0.5, 0.93]) {
+      let prev = fireflyPos(0, phase, air);
+      for (let t = 0.1; t < 300; t += 0.1) {
+        const p = fireflyPos(t, phase, air);
+        expect(p.x).toBeGreaterThanOrEqual(air.x);
+        expect(p.x).toBeLessThanOrEqual(air.x + air.w);
+        expect(p.y).toBeGreaterThanOrEqual(air.y);
+        expect(p.y).toBeLessThanOrEqual(air.y + air.h);
+        expect(Math.hypot(p.x - prev.x, p.y - prev.y)).toBeLessThan(2.5);
+        prev = p;
+      }
+    }
+  });
+
+  it('the heat lamp is always on, and shows most against the dark', () => {
+    for (let t = 0; t < 30; t += 0.37) {
+      expect(lampGlow(day, t)).toBeGreaterThan(0.1);
+      expect(lampGlow(night, t)).toBeGreaterThan(lampGlow(dusk, t));
+      expect(lampGlow(dusk, t)).toBeGreaterThan(lampGlow(day, t));
+      expect(lampGlow(night, t)).toBeLessThanOrEqual(0.55);
+    }
+  });
+
+  it('the coop doorway glows at night, more with the hen home, and not at all by day', () => {
+    expect(doorGlow(day, false)).toBe(0);
+    expect(doorGlow(day, true)).toBe(0);
+    expect(doorGlow(night, true)).toBeGreaterThan(doorGlow(night, false));
+    expect(doorGlow(night, false)).toBeGreaterThan(0.3);
+  });
+});
+
 describe('time of day as light', () => {
   it('eases toward a new light over about two seconds, the four weights always summing to one', () => {
     let l = PURE_DAY;
@@ -160,7 +225,7 @@ describe('the checked-in manifest (Step 3)', () => {
     }
   });
 
-  it('every ambient file exists, and the hamster homes have a wheel, a bottle, a light and a moth; the bowl a snail', () => {
+  it('every ambient file exists, and each home has its own life: wheel, bottle, light and moth; snail; fireflies; lamp; nest', () => {
     for (const [key, h] of Object.entries(m.habitats)) {
       const a = h.ambient;
       expect(a, key).toBeDefined();
@@ -170,6 +235,18 @@ describe('the checked-in manifest (Step 3)', () => {
         expect(a?.bottle).toBeDefined();
         expect(a?.hood).toBeDefined();
         expect(a?.critter?.kind).toBe('moth');
+      } else if (key.startsWith('frog/')) {
+        // Step 5: fireflies over the water, and a tongue to draw
+        expect(a?.fireflies?.count).toBeGreaterThanOrEqual(5);
+        expect(a?.air).toBeDefined();
+        expect(a?.tongue?.mouth).toHaveLength(2);
+      } else if (key === 'chicken/brooder') {
+        expect(a?.lamp?.radius).toBeGreaterThan(10);
+        expect(a?.critter?.kind).toBe('moth');
+      } else if (key === 'chicken/coop') {
+        expect(a?.nest).toHaveLength(7);
+        expect(a?.doorGlow).toBe(true);
+        expect(a?.door).toBeDefined();
       } else {
         expect(a?.critter?.kind).toBe('snail');
         expect(h.live?.plants && existsSync(new URL(h.live.plants, root))).toBe(true);

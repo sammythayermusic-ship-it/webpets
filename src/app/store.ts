@@ -355,7 +355,11 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
         commit(s.pet, simFill(s.pet, at), at);
       },
 
-      newPet() {
+      flush() {
+        return persist.flush();
+      },
+
+      newPet(species) {
         const s = get();
         const at = now();
         // Reconciled first, so a pet that died since the last tick is buried as dead.
@@ -364,7 +368,11 @@ export function createAppStore(platform: Platform, opts: AppStoreOptions = {}): 
           graveyard = { ...graveyard, records: [...graveyard.records, toGraveRecord(old, at)] };
           saveGraveyard();
         }
-        const pet = mintPet(at, rng);
+        // What you asked for if it is built, else another of what you had (a fish, the first time).
+        const mod = speciesModule(species ?? s.pet.species) ?? speciesModule('fish');
+        const minted = mintPet(at, rng, { species: mod?.species ?? 'fish' });
+        // In the home its species module gives a new one, which is not always the sim's default.
+        const pet = mod ? { ...minted, habitat: mod.defaultHabitat } : minted;
         set({
           pet,
           latches: freshLatches(),

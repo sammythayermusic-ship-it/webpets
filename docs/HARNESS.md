@@ -69,7 +69,7 @@ its own so the next command lands inside the clip.
 | `hide` / `show` | – | `actions.setHidden(true / false)` |
 | `devPanel` | `{ open }` | opens or closes the dev panel; data has its rect |
 | `resetClock` | – | `dev.resetClock()` |
-| `newPet` | – | `actions.newPet()`: a fresh fish in the bowl (the old pet goes to the graveyard if it died); data names it. `force` cannot revive a dead pet, this can |
+| `newPet` | `{ species? }` | `actions.newPet(species)`: a fresh pet (the old one goes to the graveyard if it died); data names it. Without `species`, another of what it was; a different species reloads the app, so poll `state` afterwards. `force` cannot revive a dead pet, this can |
 | `pointer` | `{ x, y }` or `{ x: null }` | `scene.setPointer` in window-local CSS px, without moving the real mouse |
 | `tap` | `{ x, y }` | what a real click on the glass does: `actions.poke('tap')` and `scene.tap(x, y)` (window-local CSS px), so the fish startles AND the water rings |
 | `drop` | `{ x, y }` | what a click over the open water does: a pinch of food dropped at that spot (window-local CSS px); error if the point is not over the water |

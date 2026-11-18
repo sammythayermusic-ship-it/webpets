@@ -177,7 +177,7 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
    * does not have gives its weight to day. These are excluded from the night tint (they would be lit
    * twice) but still take the starving tint.
    */
-  const lightSets: Array<{ day: Sprite; dawn: Sprite | null; dusk: Sprite | null; night: Sprite | null }> = [];
+  const lightSets: Array<{ day: Sprite; dawn: Sprite | null; dusk: Sprite | null; night: Sprite | null; fade: boolean }> = [];
   let pantryFill: Sprite | null = null;
   /** Art px per grid px for the pantry_fill texture; its crop rect addresses TEXELS, not grid px. */
   let pantryArt = 1;
@@ -249,7 +249,7 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
       const dawn = variant('dawn');
       const dusk = variant('dusk');
       const nightV = variant('night');
-      if (dawn || dusk || nightV) lightSets.push({ day: sprite, dawn, dusk, night: nightV });
+      if (dawn || dusk || nightV) lightSets.push({ day: sprite, dawn, dusk, night: nightV, fade: l.translucent === true });
       else worldSprites.push(sprite);
     }
   }
@@ -333,7 +333,10 @@ export function buildLayers(habitat: ManifestHabitat, textures: ReadonlyMap<stri
         day: 0,
       };
       w.day = Math.max(0, 1 - w.dawn - w.dusk - w.night);
-      const a = overlayAlphas(w);
+      // Solid art: the others stacked over a fully drawn day, alphas chosen so the stack is the exact
+      // weighted blend. See-through art: each at its own weight, day included (ManifestLayer.translucent).
+      const a = set.fade ? w : overlayAlphas(w);
+      if (set.fade) set.day.alpha = w.day;
       set.day.tint = starve;
       for (const [sp, alpha] of [
         [set.dawn, a.dawn],

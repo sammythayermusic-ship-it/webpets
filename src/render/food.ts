@@ -30,8 +30,8 @@ const FLOOR_DROP_HEIGHT = 28;
  * wrong for a seed underfoot).
  *
  * 31 is measured: the hamster's feet project that far below `RIG_ham_root` through `CAM_cage`. It is a
- * fact about the only floor species there is, so it lives here for now — a second floor species with a
- * different build would have to move it onto `SpeciesLayout` beside the body box.
+ * fact about the hamster, and the default: a floor species with a different build (the chick, the
+ * hen) says its own on its domain (`restBelow`).
  */
 export const FLOOR_REST_BELOW = 31;
 /** Inset from each end of the walkable span, so food never lands somewhere the pet cannot stand. */
@@ -84,6 +84,8 @@ export interface Flakes {
   /** Integer grid px of every live flake, index-aligned with remove(). */
   positions(): Array<{ x: number; y: number }>;
   remove(index: number): void;
+  /** Food that can be frightened (a cricket the tongue missed) leaves; falling food ignores it. */
+  scare?(index: number): void;
   count(): number;
   clear(): void;
   destroy(): void;
@@ -156,7 +158,7 @@ export function createFlakes(domain: Domain, bounds: MoveBounds): Flakes {
   };
 
   /** The row food comes to rest on. */
-  const restRow = domain.kind === 'water' ? bounds.floorY - 4 : domain.standY + FLOOR_REST_BELOW;
+  const restRow = domain.kind === 'water' ? bounds.floorY - 4 : domain.standY + (domain.restBelow ?? FLOOR_REST_BELOW);
 
   const draw = (f: Flake, t = 1): void => {
     // Centre, not top-left corner: the sprites are anchored 0.5 so the physics position is the flake's

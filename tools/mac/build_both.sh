@@ -9,7 +9,7 @@ echo "== install WebPets.app $(date +%T)"
 pkill -f "^/Applications/WebPets.app/Contents/MacOS/webpets" || true
 sleep 1
 ditto "$BD/WebPets.app" /Applications/WebPets.app
-open /Applications/WebPets.app
+open -g /Applications/WebPets.app
 echo "== harness build $(date +%T)"
 npm run build:harness -- --config '{"identifier":"com.sammythayer.webpets.harness","productName":"WebPets Harness"}' </dev/null
 echo "== install harness $(date +%T)"

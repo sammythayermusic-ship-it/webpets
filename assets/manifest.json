@@ -513,6 +513,445 @@
           "h": 29.4
         }
       }
+    },
+    "frog/pond": {
+      "grid": [
+        320,
+        240
+      ],
+      "layers": [
+        {
+          "name": "bg",
+          "file": "habitats/frog/pond/bg.png",
+          "z": 0,
+          "dawn": "habitats/frog/pond/bg_dawn.png",
+          "dusk": "habitats/frog/pond/bg_dusk.png",
+          "night": "habitats/frog/pond/bg_night.png"
+        },
+        {
+          "name": "memorial",
+          "file": "habitats/frog/pond/memorial.png",
+          "z": 0
+        },
+        {
+          "name": "pet",
+          "z": 0
+        },
+        {
+          "name": "food",
+          "z": 0
+        },
+        {
+          "name": "fx",
+          "z": 0
+        }
+      ],
+      "water": {
+        "x": 140,
+        "y": 111,
+        "w": 65,
+        "h": 1
+      },
+      "waterShape": {
+        "cx": 172.5,
+        "cy": 111,
+        "rx": 32.5,
+        "ry": 1,
+        "surfaceY": 111,
+        "floorY": 111
+      },
+      "petAnchor": [
+        144,
+        111
+      ],
+      "opaqueRect": {
+        "x": 46,
+        "y": 7,
+        "w": 237,
+        "h": 203
+      },
+      "ambient": {
+        "tints": {
+          "dawn": [
+            0.714,
+            0.623,
+            0.604
+          ],
+          "dusk": [
+            0.71,
+            0.524,
+            0.392
+          ],
+          "night": [
+            0.134,
+            0.359,
+            0.43
+          ]
+        },
+        "fireflies": {
+          "count": 7
+        },
+        "tongue": {
+          "mouth": [
+            16,
+            6
+          ]
+        },
+        "air": {
+          "x": 77.6,
+          "y": 18.9,
+          "w": 164.7,
+          "h": 126.3
+        }
+      }
+    },
+    "frog/jar": {
+      "grid": [
+        320,
+        240
+      ],
+      "layers": [
+        {
+          "name": "bg",
+          "file": "habitats/frog/jar/bg.png",
+          "z": 0,
+          "dawn": "habitats/frog/jar/bg_dawn.png",
+          "dusk": "habitats/frog/jar/bg_dusk.png",
+          "night": "habitats/frog/jar/bg_night.png"
+        },
+        {
+          "name": "memorial",
+          "file": "habitats/frog/jar/memorial.png",
+          "z": 0
+        },
+        {
+          "name": "pet",
+          "z": 0
+        },
+        {
+          "name": "food",
+          "z": 0
+        },
+        {
+          "name": "fx",
+          "z": 0
+        },
+        {
+          "name": "glass",
+          "file": "habitats/frog/jar/glass.png",
+          "z": 0,
+          "dawn": "habitats/frog/jar/glass_dawn.png",
+          "dusk": "habitats/frog/jar/glass_dusk.png",
+          "night": "habitats/frog/jar/glass_night.png",
+          "translucent": true
+        }
+      ],
+      "water": {
+        "x": 137,
+        "y": 126,
+        "w": 60,
+        "h": 1
+      },
+      "waterShape": {
+        "cx": 167.0,
+        "cy": 126,
+        "rx": 30.0,
+        "ry": 1,
+        "surfaceY": 126,
+        "floorY": 126
+      },
+      "petAnchor": [
+        141,
+        126
+      ],
+      "opaqueRect": {
+        "x": 92,
+        "y": 56,
+        "w": 143,
+        "h": 149
+      },
+      "ambient": {
+        "tints": {
+          "dawn": [
+            0.748,
+            0.682,
+            0.61
+          ],
+          "dusk": [
+            0.687,
+            0.535,
+            0.375
+          ],
+          "night": [
+            0.155,
+            0.364,
+            0.395
+          ]
+        },
+        "fireflies": {
+          "count": 7
+        },
+        "tongue": {
+          "mouth": [
+            16,
+            6
+          ]
+        },
+        "air": {
+          "x": 105.3,
+          "y": 71.5,
+          "w": 80.4,
+          "h": 79.1
+        }
+      }
+    },
+    "chicken/brooder": {
+      "grid": [
+        320,
+        240
+      ],
+      "layers": [
+        {
+          "name": "bg",
+          "file": "habitats/chicken/brooder/bg.png",
+          "z": 0,
+          "dawn": "habitats/chicken/brooder/bg_dawn.png",
+          "dusk": "habitats/chicken/brooder/bg_dusk.png",
+          "night": "habitats/chicken/brooder/bg_night.png"
+        },
+        {
+          "name": "memorial",
+          "file": "habitats/chicken/brooder/memorial.png",
+          "z": 0
+        },
+        {
+          "name": "pet",
+          "z": 0
+        },
+        {
+          "name": "food",
+          "z": 0
+        },
+        {
+          "name": "fx",
+          "z": 0
+        },
+        {
+          "name": "decor_front",
+          "file": "habitats/chicken/brooder/decor_front.png",
+          "z": 0,
+          "dawn": "habitats/chicken/brooder/decor_front_dawn.png",
+          "dusk": "habitats/chicken/brooder/decor_front_dusk.png",
+          "night": "habitats/chicken/brooder/decor_front_night.png"
+        }
+      ],
+      "water": {
+        "x": 73,
+        "y": 137,
+        "w": 174,
+        "h": 1
+      },
+      "waterShape": {
+        "cx": 160.0,
+        "cy": 137,
+        "rx": 87.0,
+        "ry": 1,
+        "surfaceY": 137,
+        "floorY": 137
+      },
+      "petAnchor": [
+        160,
+        137
+      ],
+      "opaqueRect": {
+        "x": 50,
+        "y": 34,
+        "w": 237,
+        "h": 156
+      },
+      "ambient": {
+        "tints": {
+          "dawn": [
+            0.733,
+            0.657,
+            0.488
+          ],
+          "dusk": [
+            0.636,
+            0.492,
+            0.248
+          ],
+          "night": [
+            0.487,
+            0.501,
+            0.421
+          ]
+        },
+        "lamp": {
+          "at": [
+            105.5,
+            73.3
+          ],
+          "radius": 34
+        },
+        "air": {
+          "x": 60,
+          "y": 60,
+          "w": 200,
+          "h": 80
+        },
+        "critter": {
+          "kind": "moth",
+          "frames": [
+            "critters/moth/f_00.png",
+            "critters/moth/f_01.png",
+            "critters/moth/f_02.png",
+            "critters/moth/f_03.png"
+          ],
+          "size": [
+            17,
+            14.4
+          ],
+          "fps": 22
+        },
+        "hood": [
+          [
+            87.5,
+            75.3
+          ],
+          [
+            123.5,
+            75.3
+          ]
+        ]
+      }
+    },
+    "chicken/coop": {
+      "grid": [
+        320,
+        240
+      ],
+      "layers": [
+        {
+          "name": "bg",
+          "file": "habitats/chicken/coop/bg.png",
+          "z": 0,
+          "dawn": "habitats/chicken/coop/bg_dawn.png",
+          "dusk": "habitats/chicken/coop/bg_dusk.png",
+          "night": "habitats/chicken/coop/bg_night.png"
+        },
+        {
+          "name": "memorial",
+          "file": "habitats/chicken/coop/memorial.png",
+          "z": 0
+        },
+        {
+          "name": "pet",
+          "z": 0
+        },
+        {
+          "name": "food",
+          "z": 0
+        },
+        {
+          "name": "fx",
+          "z": 0
+        },
+        {
+          "name": "decor_front",
+          "file": "habitats/chicken/coop/decor_front.png",
+          "z": 0,
+          "dawn": "habitats/chicken/coop/decor_front_dawn.png",
+          "dusk": "habitats/chicken/coop/decor_front_dusk.png",
+          "night": "habitats/chicken/coop/decor_front_night.png"
+        }
+      ],
+      "water": {
+        "x": 65,
+        "y": 140,
+        "w": 190,
+        "h": 1
+      },
+      "waterShape": {
+        "cx": 160.0,
+        "cy": 140,
+        "rx": 95.0,
+        "ry": 1,
+        "surfaceY": 140,
+        "floorY": 140
+      },
+      "petAnchor": [
+        170,
+        140
+      ],
+      "opaqueRect": {
+        "x": 38,
+        "y": 51,
+        "w": 249,
+        "h": 144
+      },
+      "ambient": {
+        "tints": {
+          "dawn": [
+            0.745,
+            0.68,
+            0.558
+          ],
+          "dusk": [
+            0.572,
+            0.441,
+            0.219
+          ],
+          "night": [
+            0.573,
+            0.576,
+            0.579
+          ]
+        },
+        "door": {
+          "x": 76.4,
+          "y": 108.1,
+          "w": 36.4,
+          "h": 36.4
+        },
+        "doorGlow": true,
+        "nest": [
+          [
+            223.3,
+            111.6
+          ],
+          [
+            233.4,
+            111.6
+          ],
+          [
+            243.6,
+            111.6
+          ],
+          [
+            253.8,
+            111.6
+          ],
+          [
+            228.4,
+            104.7
+          ],
+          [
+            238.6,
+            104.7
+          ],
+          [
+            248.7,
+            104.7
+          ]
+        ],
+        "air": {
+          "x": 70,
+          "y": 70,
+          "w": 190,
+          "h": 70
+        }
+      }
     }
   },
   "sprites": {
@@ -1284,6 +1723,786 @@
             7
           ],
           "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    "frog": {
+      "frame": [
+        80,
+        80
+      ],
+      "fps": 12,
+      "body": {
+        "w": 55,
+        "h": 37
+      },
+      "states": {
+        "idle": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/frog/idle/idle_0001.png",
+              "sprites/frog/idle/idle_0002.png",
+              "sprites/frog/idle/idle_0003.png",
+              "sprites/frog/idle/idle_0004.png",
+              "sprites/frog/idle/idle_0005.png",
+              "sprites/frog/idle/idle_0006.png",
+              "sprites/frog/idle/idle_0007.png",
+              "sprites/frog/idle/idle_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        },
+        "croak": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/frog/croak/croak_0001.png",
+              "sprites/frog/croak/croak_0002.png",
+              "sprites/frog/croak/croak_0003.png",
+              "sprites/frog/croak/croak_0004.png",
+              "sprites/frog/croak/croak_0005.png",
+              "sprites/frog/croak/croak_0006.png",
+              "sprites/frog/croak/croak_0007.png",
+              "sprites/frog/croak/croak_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        },
+        "hop": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/frog/hop/hop_0001.png",
+              "sprites/frog/hop/hop_0002.png",
+              "sprites/frog/hop/hop_0003.png",
+              "sprites/frog/hop/hop_0004.png",
+              "sprites/frog/hop/hop_0005.png",
+              "sprites/frog/hop/hop_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": false,
+          "anchor": [
+            0.0,
+            0.0
+          ],
+          "returnTo": "idle"
+        },
+        "snap": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/frog/snap/snap_0001.png",
+              "sprites/frog/snap/snap_0002.png",
+              "sprites/frog/snap/snap_0003.png",
+              "sprites/frog/snap/snap_0004.png"
+            ]
+          },
+          "frames": 4,
+          "sequence": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "loop": false,
+          "anchor": [
+            0.0,
+            0.0
+          ],
+          "returnTo": "idle"
+        },
+        "hungry": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/frog/hungry/hungry_0001.png",
+              "sprites/frog/hungry/hungry_0002.png",
+              "sprites/frog/hungry/hungry_0003.png",
+              "sprites/frog/hungry/hungry_0004.png",
+              "sprites/frog/hungry/hungry_0005.png",
+              "sprites/frog/hungry/hungry_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        },
+        "sleep": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/frog/sleep/sleep_0001.png",
+              "sprites/frog/sleep/sleep_0002.png",
+              "sprites/frog/sleep/sleep_0003.png",
+              "sprites/frog/sleep/sleep_0004.png",
+              "sprites/frog/sleep/sleep_0005.png",
+              "sprites/frog/sleep/sleep_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        },
+        "dead": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/frog/dead/dead_0001.png"
+            ]
+          },
+          "frames": 1,
+          "sequence": [
+            0
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ],
+          "enterVia": "die"
+        },
+        "die": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/frog/die/die_0001.png",
+              "sprites/frog/die/die_0002.png",
+              "sprites/frog/die/die_0003.png",
+              "sprites/frog/die/die_0004.png",
+              "sprites/frog/die/die_0005.png",
+              "sprites/frog/die/die_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": false,
+          "anchor": [
+            0.0,
+            0.0
+          ],
+          "returnTo": "dead"
+        },
+        "turn": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/frog/turn/turn_0001.png",
+              "sprites/frog/turn/turn_0002.png",
+              "sprites/frog/turn/turn_0003.png",
+              "sprites/frog/turn/turn_0004.png",
+              "sprites/frog/turn/turn_0005.png",
+              "sprites/frog/turn/turn_0006.png",
+              "sprites/frog/turn/turn_0007.png"
+            ]
+          },
+          "frames": 7,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "loop": false,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    "chicken": {
+      "frame": [
+        80,
+        80
+      ],
+      "fps": 12,
+      "body": {
+        "w": 33,
+        "h": 30
+      },
+      "states": {
+        "idle": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/hen/idle/idle_0001.png",
+              "sprites/chicken/hen/idle/idle_0002.png",
+              "sprites/chicken/hen/idle/idle_0003.png",
+              "sprites/chicken/hen/idle/idle_0004.png",
+              "sprites/chicken/hen/idle/idle_0005.png",
+              "sprites/chicken/hen/idle/idle_0006.png",
+              "sprites/chicken/hen/idle/idle_0007.png",
+              "sprites/chicken/hen/idle/idle_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        },
+        "walk": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/hen/walk/walk_0001.png",
+              "sprites/chicken/hen/walk/walk_0002.png",
+              "sprites/chicken/hen/walk/walk_0003.png",
+              "sprites/chicken/hen/walk/walk_0004.png",
+              "sprites/chicken/hen/walk/walk_0005.png",
+              "sprites/chicken/hen/walk/walk_0006.png",
+              "sprites/chicken/hen/walk/walk_0007.png",
+              "sprites/chicken/hen/walk/walk_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ],
+          "stridePx": 9.0
+        },
+        "eat": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/hen/eat/eat_0001.png",
+              "sprites/chicken/hen/eat/eat_0002.png",
+              "sprites/chicken/hen/eat/eat_0003.png",
+              "sprites/chicken/hen/eat/eat_0004.png",
+              "sprites/chicken/hen/eat/eat_0005.png",
+              "sprites/chicken/hen/eat/eat_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": false,
+          "anchor": [
+            0.0,
+            0.0
+          ],
+          "returnTo": "idle"
+        },
+        "sleep": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/hen/sleep/sleep_0001.png",
+              "sprites/chicken/hen/sleep/sleep_0002.png",
+              "sprites/chicken/hen/sleep/sleep_0003.png",
+              "sprites/chicken/hen/sleep/sleep_0004.png",
+              "sprites/chicken/hen/sleep/sleep_0005.png",
+              "sprites/chicken/hen/sleep/sleep_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        },
+        "hungry": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/hen/hungry/hungry_0001.png",
+              "sprites/chicken/hen/hungry/hungry_0002.png",
+              "sprites/chicken/hen/hungry/hungry_0003.png",
+              "sprites/chicken/hen/hungry/hungry_0004.png",
+              "sprites/chicken/hen/hungry/hungry_0005.png",
+              "sprites/chicken/hen/hungry/hungry_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": true,
+          "anchor": [
+            -3.0,
+            0.0
+          ]
+        },
+        "dead": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/hen/dead/dead_0001.png"
+            ]
+          },
+          "frames": 1,
+          "sequence": [
+            0
+          ],
+          "loop": true,
+          "anchor": [
+            5.0,
+            0.0
+          ],
+          "enterVia": "die"
+        },
+        "die": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/hen/die/die_0001.png",
+              "sprites/chicken/hen/die/die_0002.png",
+              "sprites/chicken/hen/die/die_0003.png",
+              "sprites/chicken/hen/die/die_0004.png",
+              "sprites/chicken/hen/die/die_0005.png",
+              "sprites/chicken/hen/die/die_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": false,
+          "anchor": [
+            0.0,
+            0.0
+          ],
+          "returnTo": "dead"
+        },
+        "turn": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/hen/turn/turn_0001.png",
+              "sprites/chicken/hen/turn/turn_0002.png",
+              "sprites/chicken/hen/turn/turn_0003.png",
+              "sprites/chicken/hen/turn/turn_0004.png",
+              "sprites/chicken/hen/turn/turn_0005.png",
+              "sprites/chicken/hen/turn/turn_0006.png",
+              "sprites/chicken/hen/turn/turn_0007.png"
+            ]
+          },
+          "frames": 7,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "loop": false,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        },
+        "scratch": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/hen/scratch/scratch_0001.png",
+              "sprites/chicken/hen/scratch/scratch_0002.png",
+              "sprites/chicken/hen/scratch/scratch_0003.png",
+              "sprites/chicken/hen/scratch/scratch_0004.png",
+              "sprites/chicken/hen/scratch/scratch_0005.png",
+              "sprites/chicken/hen/scratch/scratch_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": true,
+          "anchor": [
+            -5.0,
+            0.0
+          ]
+        },
+        "dustbathe": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/hen/dustbathe/dustbathe_0001.png",
+              "sprites/chicken/hen/dustbathe/dustbathe_0002.png",
+              "sprites/chicken/hen/dustbathe/dustbathe_0003.png",
+              "sprites/chicken/hen/dustbathe/dustbathe_0004.png",
+              "sprites/chicken/hen/dustbathe/dustbathe_0005.png",
+              "sprites/chicken/hen/dustbathe/dustbathe_0006.png",
+              "sprites/chicken/hen/dustbathe/dustbathe_0007.png",
+              "sprites/chicken/hen/dustbathe/dustbathe_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    "chicken/brooder": {
+      "frame": [
+        80,
+        80
+      ],
+      "fps": 12,
+      "body": {
+        "w": 22,
+        "h": 19
+      },
+      "states": {
+        "idle": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/chick/idle/idle_0001.png",
+              "sprites/chicken/chick/idle/idle_0002.png",
+              "sprites/chicken/chick/idle/idle_0003.png",
+              "sprites/chicken/chick/idle/idle_0004.png",
+              "sprites/chicken/chick/idle/idle_0005.png",
+              "sprites/chicken/chick/idle/idle_0006.png",
+              "sprites/chicken/chick/idle/idle_0007.png",
+              "sprites/chicken/chick/idle/idle_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        },
+        "walk": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/chick/walk/walk_0001.png",
+              "sprites/chicken/chick/walk/walk_0002.png",
+              "sprites/chicken/chick/walk/walk_0003.png",
+              "sprites/chicken/chick/walk/walk_0004.png",
+              "sprites/chicken/chick/walk/walk_0005.png",
+              "sprites/chicken/chick/walk/walk_0006.png",
+              "sprites/chicken/chick/walk/walk_0007.png",
+              "sprites/chicken/chick/walk/walk_0008.png"
+            ]
+          },
+          "frames": 8,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ],
+          "stridePx": 6.7
+        },
+        "eat": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/chick/eat/eat_0001.png",
+              "sprites/chicken/chick/eat/eat_0002.png",
+              "sprites/chicken/chick/eat/eat_0003.png",
+              "sprites/chicken/chick/eat/eat_0004.png",
+              "sprites/chicken/chick/eat/eat_0005.png",
+              "sprites/chicken/chick/eat/eat_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": false,
+          "anchor": [
+            0.0,
+            0.0
+          ],
+          "returnTo": "idle"
+        },
+        "sleep": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/chick/sleep/sleep_0001.png",
+              "sprites/chicken/chick/sleep/sleep_0002.png",
+              "sprites/chicken/chick/sleep/sleep_0003.png",
+              "sprites/chicken/chick/sleep/sleep_0004.png",
+              "sprites/chicken/chick/sleep/sleep_0005.png",
+              "sprites/chicken/chick/sleep/sleep_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        },
+        "hungry": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/chick/hungry/hungry_0001.png",
+              "sprites/chicken/chick/hungry/hungry_0002.png",
+              "sprites/chicken/chick/hungry/hungry_0003.png",
+              "sprites/chicken/chick/hungry/hungry_0004.png",
+              "sprites/chicken/chick/hungry/hungry_0005.png",
+              "sprites/chicken/chick/hungry/hungry_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ]
+        },
+        "dead": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/chick/dead/dead_0001.png"
+            ]
+          },
+          "frames": 1,
+          "sequence": [
+            0
+          ],
+          "loop": true,
+          "anchor": [
+            0.0,
+            0.0
+          ],
+          "enterVia": "die"
+        },
+        "die": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/chick/die/die_0001.png",
+              "sprites/chicken/chick/die/die_0002.png",
+              "sprites/chicken/chick/die/die_0003.png",
+              "sprites/chicken/chick/die/die_0004.png",
+              "sprites/chicken/chick/die/die_0005.png",
+              "sprites/chicken/chick/die/die_0006.png"
+            ]
+          },
+          "frames": 6,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "loop": false,
+          "anchor": [
+            0.0,
+            0.0
+          ],
+          "returnTo": "dead"
+        },
+        "turn": {
+          "source": {
+            "kind": "sequence",
+            "files": [
+              "sprites/chicken/chick/turn/turn_0001.png",
+              "sprites/chicken/chick/turn/turn_0002.png",
+              "sprites/chicken/chick/turn/turn_0003.png",
+              "sprites/chicken/chick/turn/turn_0004.png",
+              "sprites/chicken/chick/turn/turn_0005.png",
+              "sprites/chicken/chick/turn/turn_0006.png",
+              "sprites/chicken/chick/turn/turn_0007.png"
+            ]
+          },
+          "frames": 7,
+          "sequence": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "loop": false,
           "anchor": [
             0.0,
             0.0

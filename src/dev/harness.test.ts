@@ -36,6 +36,7 @@ function fakeActions(): AppActions {
     feed: vi.fn((): FeedResult => ({ ok: true, state: fresh(), events: [] })),
     fillPantry: vi.fn(),
     newPet: vi.fn(),
+    flush: vi.fn(async () => undefined),
     acknowledgeDeath: vi.fn(),
     addSpeciesData: vi.fn(),
     setScale: vi.fn(async () => undefined),

@@ -35,6 +35,11 @@ export interface SpeciesLayout {
   /** The collision box the behaviour clamps, in grid px. */
   readonly body: Readonly<{ w: number; h: number }>;
   readonly sites?: Sites;
+  /**
+   * Step 5: what feeding looks like here when it is not food falling. The frog's feed lets crickets
+   * loose on the bank: `y` is the bank's row and x0..x1 the stretch of it they hop along.
+   */
+  readonly food?: Readonly<{ kind: 'crickets'; x0: number; x1: number; y: number }>;
 }
 
 /**

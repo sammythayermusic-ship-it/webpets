@@ -129,6 +129,7 @@ function layer(v: unknown, path: string): ManifestLayer {
     if (out.file === undefined) throw new ManifestError(`${path}.${k}`, `a ${k} variant needs a day file`);
     out[k] = assetPath(v[k], `${path}.${k}`);
   }
+  if (v['translucent'] !== undefined) out.translucent = bool(v['translucent'], `${path}.translucent`);
   if (v['blend'] !== undefined) {
     const b = v['blend'];
     if (b !== 'normal' && b !== 'multiply') throw new ManifestError(`${path}.blend`, 'expected "normal" | "multiply"');
@@ -210,6 +211,27 @@ function ambientSpec(v: unknown, path: string): AmbientSpec {
   if (h !== undefined) {
     if (!Array.isArray(h) || h.length !== 2) throw new ManifestError(`${path}.hood`, 'expected two points');
     out.hood = [numPair(h[0], `${path}.hood[0]`), numPair(h[1], `${path}.hood[1]`)];
+  }
+  const ff = v['fireflies'];
+  if (ff !== undefined) {
+    if (!isRecord(ff)) throw new ManifestError(`${path}.fireflies`, 'expected an object');
+    out.fireflies = { count: int(ff['count'], `${path}.fireflies.count`) };
+  }
+  const lamp = v['lamp'];
+  if (lamp !== undefined) {
+    if (!isRecord(lamp)) throw new ManifestError(`${path}.lamp`, 'expected an object');
+    out.lamp = { at: numPair(lamp['at'], `${path}.lamp.at`), radius: positive(lamp['radius'], `${path}.lamp.radius`) };
+  }
+  if (v['doorGlow'] !== undefined) out.doorGlow = bool(v['doorGlow'], `${path}.doorGlow`);
+  const nest = v['nest'];
+  if (nest !== undefined) {
+    if (!Array.isArray(nest) || nest.length === 0) throw new ManifestError(`${path}.nest`, 'expected a list of points');
+    out.nest = nest.map((p, i) => numPair(p, `${path}.nest[${i}]`));
+  }
+  const tongue = v['tongue'];
+  if (tongue !== undefined) {
+    if (!isRecord(tongue)) throw new ManifestError(`${path}.tongue`, 'expected an object');
+    out.tongue = { mouth: numPair(tongue['mouth'], `${path}.tongue.mouth`) };
   }
   const c = v['critter'];
   if (c !== undefined) {

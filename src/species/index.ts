@@ -11,10 +11,14 @@ import type { Habitat, Species } from '../sim/types';
 import type { SpeciesLayout, SpeciesModule } from './types';
 import { FISH_MODULE } from './fish/module';
 import { HAMSTER_MODULE } from './hamster/module';
+import { FROG_MODULE } from './frog/module';
+import { CHICKEN_MODULE } from './chicken/module';
 
 const REGISTRY: Partial<Record<Species, SpeciesModule>> = {
   fish: FISH_MODULE,
   hamster: HAMSTER_MODULE,
+  frog: FROG_MODULE,
+  chicken: CHICKEN_MODULE,
 };
 
 /** The module for a species, or null when it is declared in the union but not yet built. */

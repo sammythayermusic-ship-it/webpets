@@ -1,9 +1,10 @@
 # WebPets
 
 A desktop pet for macOS. A small habitat floats in the corner of your screen, always on top and
-transparent around the glass: a fish in a bowl, or a hamster in a cage or a glass terrarium. The pet
-gets hungry on a clock that never pauses, eats when you feed it, and dies if it is neglected long
-enough. Built with Tauri 2, Vite, TypeScript and PixiJS 8; the art is soft 3D rendered from a Blender
+transparent around the art. There are four pets: a goldfish in a bowl, a hamster in a glass terrarium
+(or a cage), a frog on a pond (or in a jar), and a chicken, which starts as a chick in a brooder and
+moves to a coop as a hen after seven days. The pet gets hungry on a clock that never pauses, eats when
+you feed it, and dies if it is neglected long enough. Built with Tauri 2, Vite, TypeScript and PixiJS 8; the art is soft 3D rendered from a Blender
 scene that lives in the repo.
 
 There is no cryptocurrency, token, coin or blockchain in WebPets, and there will not be one. Food is
@@ -71,6 +72,13 @@ verification only.
 - Menu bar icon: the pet with its hunger ring. Left-click shows or hides the window; right-click opens
   the menu (Feed, Holiday feeder, Size, Mute, Notifications, Day/Night, Visible on, Launch at login, Dev panel,
   New pet, Minimize, Quit). `⌘⇧P` shows or hides the pet from any app.
+- New pet in the menu asks which of the four you would like; it takes the place of the pet you have.
+  The same question is on the memorial card after a pet has died.
+- Each pet eats its own way. Flakes sink for the fish and seed drops for the hamster and the chicken.
+  Feeding the frog lets three crickets loose on the bank: it turns, waits and takes them with its
+  tongue, and one it misses gets away. The meal counts either way.
+- A hen lays one egg for each day she is alive and never ran out of food. They collect in the nesting
+  box (it shows up to seven).
 - Day and night follow the clock (night from 19:00 to 07:00) unless you pin one in the menu.
 - The dev panel (tray menu, or `⌥⌘D` when the window has focus; `⇧⌥⌘D` if macOS claims the first):
   skip time, set hunger and the feeder's contents, force a state, switch species and habitat, see the frame

@@ -4,6 +4,7 @@ export { mountHud } from './hud';
 export { mountDevPanel, type DevPanelHandleExt } from './devPanel';
 export { mountSpeech, BRAIN_FILE, type SaidLine, type SpeechHandleExt } from './speech';
 export { mountFeederDialog, type FeederDialogHandle } from './feederDialog';
+export { mountPetPicker, type PetPickerHandle } from './petPicker';
 export { mountMontage, type MontageHandle } from './montage';
 export { mountMemorial, type MemorialHandle } from './memorial';
 export { wireTray, type TrayDeps } from './tray';
