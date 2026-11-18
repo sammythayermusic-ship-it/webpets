@@ -262,6 +262,8 @@ if (!boot) {
   process.exit(1);
 }
 let build = '?';
+// The app rewrites its boot report a moment after it first answers; read it once it has.
+await sleep(4000);
 try {
   const doc = JSON.parse(readFileSync(join(HAD, 'boot-report.json'), 'utf8'));
   const b = (doc.doc ?? doc).build ?? {};

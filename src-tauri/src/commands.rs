@@ -151,15 +151,22 @@ pub fn tray_set_menu_state(
 }
 
 /// Logs first: the notification plugin swallows delivery errors, so the log line is the only trace.
+///
+/// Sent from a thread of its own. On macOS `show()` does not return until the system has taken the
+/// notification, and when the app is not allowed to post (the user turned its notifications off, or
+/// was never asked) that is about half a minute each. This is a plain command, so it runs on the
+/// main thread: the whole app stood still for that long, twice over when "hungry" and "starving"
+/// came together. Found at checkpoint 5, where the test app, which has never been allowed to post,
+/// stopped answering for 65 s after every skip into starvation.
 #[tauri::command]
 pub fn notify(app: AppHandle, title: String, body: String) -> Result<(), String> {
     println!("[webpets] notify: {title} — {body}");
-    app.notification()
-        .builder()
-        .title(title)
-        .body(body)
-        .show()
-        .map_err(|e| e.to_string())
+    std::thread::spawn(move || {
+        if let Err(e) = app.notification().builder().title(title).body(body).show() {
+            eprintln!("[webpets] notify failed: {e}");
+        }
+    });
+    Ok(())
 }
 
 #[tauri::command]
